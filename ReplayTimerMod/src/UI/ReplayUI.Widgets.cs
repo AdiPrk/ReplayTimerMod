@@ -30,7 +30,7 @@ namespace ReplayTimerMod
         {
             var rt = go.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = new Vector2(0, 1);
-            rt.pivot     = new Vector2(0, 1);
+            rt.pivot = new Vector2(0, 1);
             rt.anchoredPosition = new Vector2(x, -y);
             rt.sizeDelta = new Vector2(w, h);
         }
@@ -57,16 +57,16 @@ namespace ReplayTimerMod
         {
             var go = MakeGO("Lbl", parent);
             var cg = go.AddComponent<CanvasGroup>();
-            cg.interactable   = false;
+            cg.interactable = false;
             cg.blocksRaycasts = false;
 
             var t = go.AddComponent<Text>();
-            t.font     = UIStyle.Arial ?? UIStyle.Trajan;
+            t.font = UIStyle.Arial ?? UIStyle.Trajan;
             t.fontSize = fontSize;
-            t.color    = color;
-            t.alignment         = anchor;
+            t.color = color;
+            t.alignment = anchor;
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
-            t.verticalOverflow   = VerticalWrapMode.Truncate;
+            t.verticalOverflow = VerticalWrapMode.Truncate;
             t.text = text;
 
             var rt = go.GetComponent<RectTransform>();
@@ -79,7 +79,7 @@ namespace ReplayTimerMod
             else
             {
                 rt.anchorMin = rt.anchorMax = new Vector2(0, 1);
-                rt.pivot     = new Vector2(0, 1);
+                rt.pivot = new Vector2(0, 1);
                 rt.anchoredPosition = new Vector2(x, -y);
                 rt.sizeDelta = new Vector2(w, h);
             }
@@ -99,12 +99,5 @@ namespace ReplayTimerMod
                 content.GetComponent<RectTransform>());
         }
 
-        private static string FormatTime(float t)
-        {
-            int ms  = (int)(t * 100) % 100;
-            int s   = (int)t % 60;
-            int min = (int)t / 60;
-            return $"{min}:{s:00}.{ms:00}";
-        }
     }
 }

@@ -87,7 +87,7 @@ namespace ReplayTimerMod
 
             playbackTime = 0f;
             playing = true;
-            Log.LogInfo($"[Ghost] Playing {currentPB.Key} ({currentPB.FrameCount} frames, {FormatTime(currentPB.TotalTime)})");
+            Log.LogInfo($"[Ghost] Playing {currentPB.Key} ({currentPB.FrameCount} frames, {TimeUtil.Format(currentPB.TotalTime)})");
         }
 
         public void StopPlayback()
@@ -257,12 +257,5 @@ namespace ReplayTimerMod
             return best;
         }
 
-        private static string FormatTime(float t)
-        {
-            int millis = (int)(t * 100) % 100;
-            int seconds = (int)t % 60;
-            int minutes = (int)t / 60;
-            return $"{minutes}:{seconds:00}.{millis:00}";
-        }
     }
 }

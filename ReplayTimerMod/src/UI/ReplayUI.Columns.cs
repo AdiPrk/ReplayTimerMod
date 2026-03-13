@@ -96,11 +96,11 @@ namespace ReplayTimerMod
 
         private void AddEntryRow(Transform parent, RoomKey key, float time, bool stripe)
         {
-            int h     = RH;
+            int h = RH;
             int xBtnW = UIStyle.W(22);
             int copyW = UIStyle.W(46);
-            int btnH  = UIStyle.H(20);
-            int btnY  = (h - btnH) / 2;
+            int btnH = UIStyle.H(20);
+            int btnY = (h - btnH) / 2;
 
             var row = MakeGO("EntryRow", parent);
             Img(row, stripe ? UIStyle.Surface : Color.clear);
@@ -128,7 +128,7 @@ namespace ReplayTimerMod
             // Time — gold, left of [Copy]
             int timeW = UIStyle.W(60);
             int timeX = RW - xBtnW - M - copyW - M - timeW - M;
-            MakeLbl(row.transform, FormatTime(time), UIStyle.FontSizeSm,
+            MakeLbl(row.transform, TimeUtil.Format(time), UIStyle.FontSizeSm,
                 UIStyle.Gold, TextAnchor.MiddleRight,
                 x: timeX, w: timeW, h: h);
 

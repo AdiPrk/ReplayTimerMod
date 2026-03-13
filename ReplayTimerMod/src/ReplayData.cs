@@ -40,6 +40,17 @@
             System.HashCode.Combine(SceneName, EntryFromScene, ExitToScene);
     }
 
+    public static class TimeUtil
+    {
+        public static string Format(float t)
+        {
+            int ms = (int)(t * 100) % 100;
+            int s = (int)t % 60;
+            int min = (int)t / 60;
+            return $"{min}:{s:00}.{ms:00}";
+        }
+    }
+
     public class RecordedRoom
     {
         public RoomKey Key { get; }

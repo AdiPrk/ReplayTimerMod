@@ -128,7 +128,7 @@ namespace ReplayTimerMod
                     string exitedTo = to.name;
                     float exitedTime = CurrentRoomTime;
 
-                    Log.LogInfo($"[RoomTracker] Exit: {exitedScene} [{exitedFromScene}→{exitedTo}] {FormatTime(exitedTime)}");
+                    Log.LogInfo($"[RoomTracker] Exit: {exitedScene} [{exitedFromScene}→{exitedTo}] {TimeUtil.Format(exitedTime)}");
 
                     IsRecording = false;
                     CurrentRoomTime = 0f;
@@ -184,12 +184,5 @@ namespace ReplayTimerMod
             catch { }
         }
 
-        private static string FormatTime(float t)
-        {
-            int millis = (int)(t * 100) % 100;
-            int seconds = (int)t % 60;
-            int minutes = (int)t / 60;
-            return $"{minutes}:{seconds:00}.{millis:00}";
-        }
     }
 }

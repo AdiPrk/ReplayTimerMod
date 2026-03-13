@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
@@ -6,24 +7,29 @@ using BepInEx.Logging;
 
 namespace ReplayTimerMod
 {
-    // ── RTM3 share format ─────────────────────────────────────────────────────
+    // ── RTM3 format ───────────────────────────────────────────────────────────
     //
-    // Chain: RecordedRoom → RTM3 binary → raw Deflate → Base64 string
+    // Single format used everywhere: on-disk storage and clipboard share strings
+    // are identical. Chain: RecordedRoom → RTM3 binary → Deflate → Base64.
     //
     // Binary layout (before Deflate):
     //   [4]     magic "RTM3"
-    //   [1]     version = 0x01
+    //   [1]     version = 0x02
     //   [2+N]   sceneName       (uint16 length prefix + UTF-8)
-    //   [2+N]   entryFromScene  (uint16 length prefix + UTF-8)
-    //   [2+N]   exitToScene     (uint16 length prefix + UTF-8)
+    //   [2+N]   entryFromScene
+    //   [2+N]   exitToScene
     //   [4]     totalTime       float32
     //   [4]     frameCount N    int32
     //   [2+xL]  x 2nd-order SVLQ stream
     //   [2+yL]  y 2nd-order SVLQ stream
     //   [⌈N/8⌉] facing bitfield  MSB-first, 1 = facingRight
+    //   [1]     clipCount C     uint8  (0 = no animation data)
+    //   if C > 0:
+    //     C × [2+N]  clipName  (uint16 len + UTF-8)
+    //     [N]  clipIndex[]     uint8  (0xFF = no clip for this frame)
+    //     [N]  animFrame[]     uint8  (saturated at 255)
     //
-    // Share strings intentionally omit animation clip data — ghost playback from
-    // an imported string falls back to the diamond renderer.
+    // SVLQ = ZigZag(n) → ULEB128. See FrameCodec.cs.
     // ─────────────────────────────────────────────────────────────────────────
 
     public static class ReplayShareEncoder
@@ -31,17 +37,17 @@ namespace ReplayTimerMod
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("ShareEncoder");
 
-        private static readonly byte[] MagicRTM3 =
+        private static readonly byte[] Magic =
             { (byte)'R', (byte)'T', (byte)'M', (byte)'3' };
 
-        private const byte Version = 0x01;
+        private const byte Version = 0x02;
 
         // ── Public API ────────────────────────────────────────────────────────
 
         public static string Encode(RecordedRoom room)
         {
             byte[] binary = WriteBinary(room);
-            byte[] compressed = DeflateCompress(binary);
+            byte[] compressed = Compress(binary);
             string result = Convert.ToBase64String(compressed);
             Log.LogInfo($"[RTM3] {room.Key}: {room.FrameCount} frames → " +
                         $"binary={binary.Length}B deflate={compressed.Length}B str={result.Length}ch");
@@ -52,16 +58,7 @@ namespace ReplayTimerMod
         {
             try
             {
-                byte[] compressed = Convert.FromBase64String(encoded);
-                byte[] raw = DeflateDecompress(compressed);
-
-                if (raw.Length >= 4 &&
-                    raw[0] == 'R' && raw[1] == 'T' && raw[2] == 'M' && raw[3] == '3')
-                    return ReadBinary(raw);
-
-                Log.LogError($"[ShareEncoder] Unrecognised payload — " +
-                             $"got '{(char)raw[0]}{(char)raw[1]}{(char)raw[2]}{(char)raw[3]}'");
-                return null;
+                return ReadBinary(Decompress(Convert.FromBase64String(encoded)));
             }
             catch (Exception ex)
             {
@@ -70,7 +67,7 @@ namespace ReplayTimerMod
             }
         }
 
-        // ── RTM3 encode ───────────────────────────────────────────────────────
+        // ── Write ─────────────────────────────────────────────────────────────
 
         private static byte[] WriteBinary(RecordedRoom room)
         {
@@ -79,10 +76,33 @@ namespace ReplayTimerMod
             byte[] yStream = FrameCodec.Encode2ndOrder(room.Frames, getX: false);
             int facingBytes = (n + 7) / 8;
 
-            using var ms = new MemoryStream(80 + n * 3 + facingBytes);
+            // Build deduplicated clip table.
+            var clipTable = new List<string>();
+            var clipIndex = new byte[n];
+            var animFrames = new byte[n];
+            bool hasAnim = false;
+
+            for (int i = 0; i < n; i++)
+            {
+                string clip = room.Frames[i].animClip ?? "";
+                if (clip.Length == 0)
+                {
+                    clipIndex[i] = 0xFF;
+                }
+                else
+                {
+                    hasAnim = true;
+                    int idx = clipTable.IndexOf(clip);
+                    if (idx < 0) { idx = clipTable.Count; clipTable.Add(clip); }
+                    clipIndex[i] = (byte)Math.Min(idx, 254); // 0xFF reserved
+                }
+                animFrames[i] = (byte)Math.Min(room.Frames[i].animFrame, 255);
+            }
+
+            using var ms = new MemoryStream();
             using (var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
             {
-                w.Write(MagicRTM3);
+                w.Write(Magic);
                 w.Write(Version);
                 FrameCodec.WriteString(w, room.Key.SceneName);
                 FrameCodec.WriteString(w, room.Key.EntryFromScene);
@@ -103,11 +123,21 @@ namespace ReplayTimerMod
                     }
                     w.Write(bits);
                 }
+
+                byte C = (byte)(hasAnim ? clipTable.Count : 0);
+                w.Write(C);
+                if (C > 0)
+                {
+                    foreach (string name in clipTable)
+                        FrameCodec.WriteString(w, name);
+                    w.Write(clipIndex);
+                    w.Write(animFrames);
+                }
             }
             return ms.ToArray();
         }
 
-        // ── RTM3 decode ───────────────────────────────────────────────────────
+        // ── Read ──────────────────────────────────────────────────────────────
 
         private static RecordedRoom ReadBinary(byte[] raw)
         {
@@ -115,10 +145,12 @@ namespace ReplayTimerMod
             using var r = new BinaryReader(ms, Encoding.UTF8, leaveOpen: true);
 
             for (int i = 0; i < 4; i++)
-                if (r.ReadByte() != MagicRTM3[i])
+                if (r.ReadByte() != Magic[i])
                     throw new InvalidDataException("Bad RTM3 magic");
 
-            r.ReadByte(); // version
+            byte ver = r.ReadByte();
+            if (ver != Version)
+                throw new InvalidDataException($"Unsupported RTM3 version 0x{ver:X2}");
 
             string sceneName = FrameCodec.ReadString(r);
             string entryFromScene = FrameCodec.ReadString(r);
@@ -130,16 +162,40 @@ namespace ReplayTimerMod
             short[] ys = FrameCodec.Decode2ndOrder(r.ReadBytes(r.ReadUInt16()), n);
             byte[] facingBits = r.ReadBytes((n + 7) / 8);
 
+            byte C = r.ReadByte();
+            string[]? clipNames = null;
+            byte[]? clipIndexes = null;
+            byte[]? animFrames = null;
+
+            if (C > 0)
+            {
+                clipNames = new string[C];
+                for (int i = 0; i < C; i++)
+                    clipNames[i] = FrameCodec.ReadString(r);
+                clipIndexes = r.ReadBytes(n);
+                animFrames = r.ReadBytes(n);
+            }
+
             var frames = new FrameData[n];
             for (int i = 0; i < n; i++)
+            {
+                string clip = "";
+                int animFrame = 0;
+                if (clipNames != null && clipIndexes![i] != 0xFF)
+                {
+                    int ci = clipIndexes[i];
+                    if (ci < clipNames.Length) clip = clipNames[ci];
+                    animFrame = animFrames![i];
+                }
                 frames[i] = new FrameData
                 {
                     x = xs[i] / FrameCodec.PosScale,
                     y = ys[i] / FrameCodec.PosScale,
                     facingRight = (facingBits[i / 8] & (0x80 >> (i % 8))) != 0,
-                    animClip = "",
-                    animFrame = 0
+                    animClip = clip,
+                    animFrame = animFrame
                 };
+            }
 
             return new RecordedRoom(
                 new RoomKey(sceneName, entryFromScene, exitToScene),
@@ -148,7 +204,7 @@ namespace ReplayTimerMod
 
         // ── Compression ───────────────────────────────────────────────────────
 
-        private static byte[] DeflateCompress(byte[] data)
+        private static byte[] Compress(byte[] data)
         {
             using var ms = new MemoryStream();
             using (var df = new DeflateStream(ms, CompressionLevel.Optimal))
@@ -156,7 +212,7 @@ namespace ReplayTimerMod
             return ms.ToArray();
         }
 
-        private static byte[] DeflateDecompress(byte[] data)
+        private static byte[] Decompress(byte[] data)
         {
             using var input = new MemoryStream(data);
             using var output = new MemoryStream();

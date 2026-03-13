@@ -46,14 +46,14 @@ namespace ReplayTimerMod
                     float improvement = existing.TotalTime - newTime;
                     pbs[run.Key] = run;
                     DataStore.SaveEntry(run);
-                    Log.LogInfo($"[PBManager] New PB! {run.Key} {FormatTime(newTime)} " +
-                                $"(was {FormatTime(existing.TotalTime)}, -{FormatTime(improvement)})");
+                    Log.LogInfo($"[PBManager] New PB! {run.Key} {TimeUtil.Format(newTime)} " +
+                                $"(was {TimeUtil.Format(existing.TotalTime)}, -{TimeUtil.Format(improvement)})");
                     return new EvaluationResult(ResultKind.NewPB, newTime, existing.TotalTime, improvement);
                 }
                 else
                 {
                     float delta = newTime - existing.TotalTime;
-                    Log.LogInfo($"[PBManager] Missed PB for {run.Key}: {FormatTime(newTime)} (+{FormatTime(delta)})");
+                    Log.LogInfo($"[PBManager] Missed PB for {run.Key}: {TimeUtil.Format(newTime)} (+{TimeUtil.Format(delta)})");
                     return new EvaluationResult(ResultKind.MissedPB, newTime, existing.TotalTime, delta);
                 }
             }
@@ -61,7 +61,7 @@ namespace ReplayTimerMod
             {
                 pbs[run.Key] = run;
                 DataStore.SaveEntry(run);
-                Log.LogInfo($"[PBManager] First run for {run.Key}: {FormatTime(newTime)}");
+                Log.LogInfo($"[PBManager] First run for {run.Key}: {TimeUtil.Format(newTime)}");
                 return new EvaluationResult(ResultKind.FirstRun, newTime, null, null);
             }
         }
@@ -73,7 +73,7 @@ namespace ReplayTimerMod
         {
             pbs[room.Key] = room;
             DataStore.SaveEntry(room);
-            Log.LogInfo($"[PBManager] Imported {room.Key} ({room.FrameCount} frames, {FormatTime(room.TotalTime)})");
+            Log.LogInfo($"[PBManager] Imported {room.Key} ({room.FrameCount} frames, {TimeUtil.Format(room.TotalTime)})");
             return true;
         }
 
@@ -104,13 +104,6 @@ namespace ReplayTimerMod
             Log.LogInfo($"[PBManager] Deleted all entries ({scenes.Count} scenes)");
         }
 
-        private static string FormatTime(float t)
-        {
-            int millis = (int)(t * 100) % 100;
-            int seconds = (int)t % 60;
-            int minutes = (int)t / 60;
-            return $"{minutes}:{seconds:00}.{millis:00}";
-        }
     }
 
     public enum ResultKind { FirstRun, NewPB, MissedPB }
