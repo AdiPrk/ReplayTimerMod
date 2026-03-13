@@ -15,8 +15,8 @@ namespace ReplayTimerMod
 
         private FrameRecorder frameRecorder = null!;
         private DebugOverlay debugOverlay = null!;
+        private GhostPlayback ghostPlayback = null!;
 
-        // Exposed for DebugOverlay to read without coupling it to FrameRecorder.
         public int RecorderFrameCount => frameRecorder.FrameCount;
 
         private int sceneCount = 0;
@@ -28,7 +28,6 @@ namespace ReplayTimerMod
 
             new Harmony(Id).PatchAll(Assembly.GetExecutingAssembly());
 
-            // DataStore needs the BepInEx data directory.
             string dataDir = Path.Combine(
                 Path.GetDirectoryName(Info.Location)!, "..", "..", "data");
             DataStore.Init(dataDir);
@@ -36,6 +35,7 @@ namespace ReplayTimerMod
 
             frameRecorder = new FrameRecorder();
             debugOverlay = new DebugOverlay();
+            ghostPlayback = new GhostPlayback();
 
             RoomTracker.Init();
 
@@ -46,14 +46,14 @@ namespace ReplayTimerMod
             SceneManager.activeSceneChanged += OnSceneChanged;
         }
 
-        private void OnSceneChanged(UnityEngine.SceneManagement.Scene from,
-                                    UnityEngine.SceneManagement.Scene to)
+        private void OnSceneChanged(Scene from, Scene to)
         {
             sceneCount++;
             if (sceneCount == 4)
             {
-                Logger.LogInfo("Scene 4 reached — setting up debug overlay");
+                Logger.LogInfo("Scene 4 — setting up UI and ghost");
                 debugOverlay.Setup();
+                ghostPlayback.Setup();
             }
         }
 
@@ -61,11 +61,14 @@ namespace ReplayTimerMod
         {
             debugOverlay.ClearLastResult();
             frameRecorder.StartRecording();
+            ghostPlayback.StartPlayback(sceneName, entryGate);
         }
 
         private void OnRoomExit(string sceneName, string entryGate,
                                  string exitToScene, float lrTime)
         {
+            ghostPlayback.StopPlayback();
+
             RoomKey key = new RoomKey(sceneName, entryGate, exitToScene);
             RecordedRoom? recording = frameRecorder.FinishRecording(key, lrTime);
 
@@ -78,6 +81,7 @@ namespace ReplayTimerMod
 
         private void OnRecordingDiscarded()
         {
+            ghostPlayback.StopPlayback();
             frameRecorder.DiscardRecording();
         }
 
@@ -85,6 +89,7 @@ namespace ReplayTimerMod
         {
             RoomTracker.Tick();
             frameRecorder.Tick();
+            ghostPlayback.Tick();
             debugOverlay.Tick();
         }
     }
