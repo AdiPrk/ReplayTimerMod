@@ -1,7 +1,9 @@
 using BepInEx;
 using HarmonyLib;
+using System.IO;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace ReplayTimerMod
 {
@@ -12,6 +14,12 @@ namespace ReplayTimerMod
         internal static ReplayTimerModPlugin Instance { get; private set; } = null!;
 
         private FrameRecorder frameRecorder = null!;
+        private DebugOverlay debugOverlay = null!;
+
+        // Exposed for DebugOverlay to read without coupling it to FrameRecorder.
+        public int RecorderFrameCount => frameRecorder.FrameCount;
+
+        private int sceneCount = 0;
 
         private void Awake()
         {
@@ -20,36 +28,51 @@ namespace ReplayTimerMod
 
             new Harmony(Id).PatchAll(Assembly.GetExecutingAssembly());
 
-            frameRecorder = new FrameRecorder();
+            // DataStore needs the BepInEx data directory.
+            string dataDir = Path.Combine(
+                Path.GetDirectoryName(Info.Location)!, "..", "..", "data");
+            DataStore.Init(dataDir);
+            PBManager.Init();
 
-            // RoomTracker.Init() must run before we subscribe to its events so
-            // that its own handlers (HandleInvalidation) are registered first.
+            frameRecorder = new FrameRecorder();
+            debugOverlay = new DebugOverlay();
+
             RoomTracker.Init();
 
             RoomTracker.OnRoomEnter += OnRoomEnter;
             RoomTracker.OnRoomExit += OnRoomExit;
             RoomTracker.OnRecordingDiscarded += OnRecordingDiscarded;
+
+            SceneManager.activeSceneChanged += OnSceneChanged;
         }
 
-        // sceneName, entryGate, entryFromScene
+        private void OnSceneChanged(UnityEngine.SceneManagement.Scene from,
+                                    UnityEngine.SceneManagement.Scene to)
+        {
+            sceneCount++;
+            if (sceneCount == 4)
+            {
+                Logger.LogInfo("Scene 4 reached — setting up debug overlay");
+                debugOverlay.Setup();
+            }
+        }
+
         private void OnRoomEnter(string sceneName, string entryGate, string entryFromScene)
         {
-            Logger.LogInfo($"[Recorder] START {sceneName} [{entryGate}] from {entryFromScene}");
+            debugOverlay.ClearLastResult();
             frameRecorder.StartRecording();
         }
 
-        // sceneName, entryGate, exitToScene, lrTime
-        private void OnRoomExit(string sceneName, string entryGate, string exitToScene, float lrTime)
+        private void OnRoomExit(string sceneName, string entryGate,
+                                 string exitToScene, float lrTime)
         {
             RoomKey key = new RoomKey(sceneName, entryGate, exitToScene);
-            Logger.LogInfo($"[Recorder] END {key} — {FormatTime(lrTime)}");
-
             RecordedRoom? recording = frameRecorder.FinishRecording(key, lrTime);
 
             if (recording != null)
             {
-                Logger.LogInfo($"[Recorder] {recording.FrameCount} frames captured");
-                // TODO: pass to PBManager
+                EvaluationResult result = PBManager.Evaluate(recording);
+                debugOverlay.SetLastResult(result);
             }
         }
 
@@ -62,14 +85,7 @@ namespace ReplayTimerMod
         {
             RoomTracker.Tick();
             frameRecorder.Tick();
-        }
-
-        private static string FormatTime(float t)
-        {
-            int millis = (int)(t * 100) % 100;
-            int seconds = (int)t % 60;
-            int minutes = (int)t / 60;
-            return $"{minutes}:{seconds:00}.{millis:00}";
+            debugOverlay.Tick();
         }
     }
 }
