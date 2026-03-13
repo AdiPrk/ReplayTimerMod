@@ -5,7 +5,7 @@ using System.Linq;
 namespace ReplayTimerMod
 {
     // In-memory PB store. Loaded from disk on Init(), persisted on every new PB.
-    // All calls happen on the Unity main thread — no thread-safety needed.
+    // All calls happen on the Unity main thread - no thread-safety needed.
     public static class PBManager
     {
         private static readonly ManualLogSource Log =

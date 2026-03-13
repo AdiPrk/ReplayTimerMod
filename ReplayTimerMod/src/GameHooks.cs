@@ -30,7 +30,7 @@ namespace ReplayTimerMod
         // savestate loads (which also use a subclass).
         //
         // Savestate loads are filtered out in RoomTracker.OnActiveSceneChanged
-        // via the DebugMod reflection check — by the time that runs,
+        // via the DebugMod reflection check - by the time that runs,
         // pendingGateTransition gets cleared before it can start a recording.
         //
         // Vanilla spawns (from.name == Menu_Title) are filtered in RoomTracker.
@@ -44,7 +44,7 @@ namespace ReplayTimerMod
 
             if (pendingDeath)
             {
-                Log.LogInfo("[GameHooks] BeginSceneTransition — death respawn, skipping");
+                Log.LogInfo("[GameHooks] BeginSceneTransition - death respawn, skipping");
                 pendingDeath = false;
                 return;
             }

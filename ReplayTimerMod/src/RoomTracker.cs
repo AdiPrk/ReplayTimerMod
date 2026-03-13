@@ -90,7 +90,7 @@ namespace ReplayTimerMod
         {
             if (IsRecording)
             {
-                Log.LogInfo($"[RoomTracker] Invalidated in {CurrentScene} — discarding");
+                Log.LogInfo($"[RoomTracker] Invalidated in {CurrentScene} - discarding");
                 IsRecording = false;
                 OnRecordingDiscarded?.Invoke();
             }
@@ -106,7 +106,7 @@ namespace ReplayTimerMod
 
             if (IsDebugModSavestateLoading())
             {
-                Log.LogInfo("[RoomTracker] Savestate detected — invalidating");
+                Log.LogInfo("[RoomTracker] Savestate detected - invalidating");
                 HandleInvalidation();
             }
 
@@ -137,9 +137,9 @@ namespace ReplayTimerMod
                 else
                 {
                     if (isOverTime())
-                        Log.LogInfo($"[RoomTracker] Over time limit in {CurrentScene} — discarding");
+                        Log.LogInfo($"[RoomTracker] Over time limit in {CurrentScene} - discarding");
                     else if (!arrivedViaGate)
-                        Log.LogInfo($"[RoomTracker] Non-gate exit from {CurrentScene} — discarding");
+                        Log.LogInfo($"[RoomTracker] Non-gate exit from {CurrentScene} - discarding");
 
                     IsRecording = false;
                     CurrentRoomTime = 0f;

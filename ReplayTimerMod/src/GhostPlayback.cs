@@ -13,7 +13,7 @@ namespace ReplayTimerMod
     //
     // Sprite rendering:
     //   We create a minimal GO while inactive so tk2dSprite.Awake() is deferred
-    //   until after we assign Collection — this prevents the pink-rectangle bug.
+    //   until after we assign Collection - this prevents the pink-rectangle bug.
     //   Clip name → spriteId is resolved via a Dictionary built once at init
     //   so the hot tick path is a single hash lookup, not GetClipByName() which
     //   does a linear scan every frame.
@@ -30,7 +30,7 @@ namespace ReplayTimerMod
         private LineRenderer? diamondLine;
         private Material? diamondMat;
 
-        // Built once at sprite init — avoids per-tick GetClipByName linear scan.
+        // Built once at sprite init - avoids per-tick GetClipByName linear scan.
         private Dictionary<string, tk2dSpriteAnimationClip>? clipCache;
 
         private bool spriteInitDone = false;
@@ -137,7 +137,7 @@ namespace ReplayTimerMod
 
         // ── Sprite init ───────────────────────────────────────────────────────
         // Creates the GO inactive so tk2dSprite.Awake() fires after Collection
-        // is assigned — this is what prevents the pink rectangle.
+        // is assigned - this is what prevents the pink rectangle.
 
         private bool TryInitSprite()
         {
@@ -149,7 +149,7 @@ namespace ReplayTimerMod
             {
                 if (HeroController.instance == null)
                 {
-                    Log.LogWarning("[Ghost] HeroController null — using diamond");
+                    Log.LogWarning("[Ghost] HeroController null - using diamond");
                     return false;
                 }
 
@@ -157,7 +157,7 @@ namespace ReplayTimerMod
                               ?? HeroController.instance.GetComponentInChildren<tk2dSprite>();
                 if (heroSprite?.Collection == null)
                 {
-                    Log.LogWarning("[Ghost] No tk2dSprite/Collection on hero — using diamond");
+                    Log.LogWarning("[Ghost] No tk2dSprite/Collection on hero - using diamond");
                     return false;
                 }
 
@@ -172,7 +172,7 @@ namespace ReplayTimerMod
                 ghostSpriteGo.SetActive(true);   // Awake fires here with Collection set
                 ghostSprite.color = GhostSettings.GhostColor;
 
-                Log.LogInfo($"[Ghost] Sprite ready — collection='{heroSprite.Collection.name}'");
+                Log.LogInfo($"[Ghost] Sprite ready - collection='{heroSprite.Collection.name}'");
 
                 var heroAnim = HeroController.instance.GetComponent<tk2dSpriteAnimator>();
                 if (heroAnim?.Library != null)
@@ -186,14 +186,14 @@ namespace ReplayTimerMod
                 }
                 else
                 {
-                    Log.LogWarning("[Ghost] No animator library — sprite will show default frame");
+                    Log.LogWarning("[Ghost] No animator library - sprite will show default frame");
                 }
 
                 return true;
             }
             catch (System.Exception ex)
             {
-                Log.LogWarning($"[Ghost] Sprite init failed: {ex.Message} — using diamond");
+                Log.LogWarning($"[Ghost] Sprite init failed: {ex.Message} - using diamond");
                 if (ghostSpriteGo != null) { Object.Destroy(ghostSpriteGo); ghostSpriteGo = null; }
                 ghostSprite = null;
                 return false;

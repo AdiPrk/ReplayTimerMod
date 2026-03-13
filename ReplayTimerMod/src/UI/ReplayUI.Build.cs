@@ -14,7 +14,7 @@ namespace ReplayTimerMod
 
             var rt = tabGO.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = Vector2.zero;
-            rt.pivot     = Vector2.zero;
+            rt.pivot = Vector2.zero;
             rt.anchoredPosition = new Vector2(M, M);
             rt.sizeDelta = new Vector2(TW, TH);
 
@@ -30,7 +30,7 @@ namespace ReplayTimerMod
 
             var rt = panelGO.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = Vector2.zero;
-            rt.pivot     = Vector2.zero;
+            rt.pivot = Vector2.zero;
             rt.anchoredPosition = new Vector2(M, M + TH + M);
             rt.sizeDelta = new Vector2(PW, PH);
 
@@ -54,7 +54,7 @@ namespace ReplayTimerMod
             BuildSettingsBar();
         }
 
-        // ── Panel header: "Replay Times"  [Clear all]  [—] ───────────────────
+        // ── Panel header: "Replay Times"  [Export all]  [Clear all]  [-] ──────
         private void BuildPanelHeader()
         {
             var hdr = MakeGO("Header", panelGO!.transform);
@@ -62,34 +62,67 @@ namespace ReplayTimerMod
             Rect(hdr, 0, 0, PW, HDR);
             HLine(panelGO.transform, 0, HDR, PW);
 
-            // [—] collapse button — far right
+            // [-] collapse button - far right
             var collBtn = MakeGO("Collapse", hdr.transform);
             Img(collBtn, UIStyle.Overlay);
             Btn(collBtn, TogglePanel);
             Rect(collBtn, PW - HDR, 0, HDR, HDR);
-            MakeLbl(collBtn.transform, "—", UIStyle.FontSizeLg,
+            MakeLbl(collBtn.transform, "-", UIStyle.FontSizeLg,
                 UIStyle.Text, TextAnchor.MiddleCenter, fill: true);
 
-            // [Clear all] — left of collapse
-            int clearW = UIStyle.W(76);
-            int btnH   = UIStyle.H(22);
-            int btnY   = (HDR - btnH) / 2;
+            int btnH = UIStyle.H(22);
+            int btnY = (HDR - btnH) / 2;
 
+            // [Clear all] - left of collapse
+            int clearW = UIStyle.W(76);
+            int clearX = PW - HDR - M - clearW;
             var clearGO = MakeGO("ClearAll", hdr.transform);
-            Rect(clearGO, PW - HDR - M - clearW, btnY, clearW, btnH);
+            Rect(clearGO, clearX, btnY, clearW, btnH);
             clearAllBtnImg = clearGO.AddComponent<Image>();
             clearAllBtnImg.color = UIStyle.Red with { a = 0.22f };
             clearGO.AddComponent<Button>().onClick.AddListener(OnClearAllClicked);
             clearAllBtnLbl = MakeLbl(clearGO.transform, "Clear all",
                 UIStyle.FontSizeSm - 2, UIStyle.Red, TextAnchor.MiddleCenter, fill: true);
 
-            // Title — fills remaining left space
+            // [Export all] - copies to clipboard
+            int exportW = UIStyle.W(76);
+            int exportX = clearX - M - exportW;
+            var exportGO = MakeGO("ExportAll", hdr.transform);
+            Rect(exportGO, exportX, btnY, exportW, btnH);
+            exportAllBtnImg = exportGO.AddComponent<Image>();
+            exportAllBtnImg.color = UIStyle.Accent with { a = 0.22f };
+            exportGO.AddComponent<Button>().onClick.AddListener(OnExportAllClicked);
+            exportAllBtnLbl = MakeLbl(exportGO.transform, "Copy all",
+                UIStyle.FontSizeSm - 2, UIStyle.Accent, TextAnchor.MiddleCenter, fill: true);
+
+            // [Download all] - saves to disk
+            int dlW = UIStyle.W(82);
+            int dlX = exportX - M - dlW;
+            var dlGO = MakeGO("DownloadAll", hdr.transform);
+            Rect(dlGO, dlX, btnY, dlW, btnH);
+            downloadAllBtnImg = dlGO.AddComponent<Image>();
+            downloadAllBtnImg.color = UIStyle.Accent with { a = 0.15f };
+            dlGO.AddComponent<Button>().onClick.AddListener(OnDownloadAllClicked);
+            downloadAllBtnLbl = MakeLbl(dlGO.transform, "Download all",
+                UIStyle.FontSizeSm - 2, UIStyle.Accent, TextAnchor.MiddleCenter, fill: true);
+
+            // [Open Folder] - small button to jump to the directory
+            int openW = UIStyle.W(82);
+            int openX = dlX - M - openW;
+            var openGO = MakeGO("OpenFolder", hdr.transform);
+            Rect(openGO, openX, btnY, openW, btnH);
+            Img(openGO, UIStyle.Overlay);
+            openGO.AddComponent<Button>().onClick.AddListener(OnOpenExportFolderClicked);
+            MakeLbl(openGO.transform, "Open Exports", UIStyle.FontSizeSm - 2,
+                UIStyle.Text, TextAnchor.MiddleCenter, fill: true);
+
+            // Title - fills remaining left space
             MakeLbl(hdr.transform, "Replay Times", UIStyle.FontSizeLg,
                 UIStyle.Text, TextAnchor.MiddleLeft,
-                x: M, w: PW - HDR - M - clearW - M - M, h: HDR);
+                x: M, w: openX - M - M, h: HDR);
         }
 
-        // ── Right sub-header: scene name | [Paste] [Clear scene] ─────────────
+        // ── Right sub-header: scene name | [Export scene] [Paste] [Clear scene]
         private void BuildRightSubHeader(int bodyY)
         {
             var rhdr = MakeGO("RightSubHeader", panelGO!.transform);
@@ -99,7 +132,7 @@ namespace ReplayTimerMod
             int btnH = UIStyle.H(20);
             int btnY = (SUBHDR - btnH) / 2;
 
-            // [Clear scene] — far right
+            // [Clear scene] - far right
             int clearW = UIStyle.W(76);
             var clearBtn = MakeGO("ClearScene", rhdr.transform);
             Img(clearBtn, UIStyle.Red with { a = 0.25f });
@@ -108,23 +141,34 @@ namespace ReplayTimerMod
             MakeLbl(clearBtn.transform, "Clear scene", UIStyle.FontSizeSm - 2,
                 UIStyle.Red, TextAnchor.MiddleCenter, fill: true);
 
-            // [Paste] — left of [Clear scene]
+            // [Paste] - left of [Clear scene]
             int pasteW = UIStyle.W(52);
+            int pasteX = RW - clearW - M - pasteW - M;
             var pasteBtn = MakeGO("Paste", rhdr.transform);
             Img(pasteBtn, UIStyle.Accent with { a = 0.25f });
             Btn(pasteBtn, OnPasteClicked);
-            Rect(pasteBtn, RW - clearW - M - pasteW - M, btnY, pasteW, btnH);
+            Rect(pasteBtn, pasteX, btnY, pasteW, btnH);
             MakeLbl(pasteBtn.transform, "Paste", UIStyle.FontSizeSm - 2,
                 UIStyle.Accent, TextAnchor.MiddleCenter, fill: true);
 
-            // Status label — brief paste feedback, left of [Paste]
-            int statusW = UIStyle.W(130);
-            int statusX = RW - clearW - M - pasteW - M - statusW - M;
+            // [Copy scene] - left of [Paste]
+            int expW = UIStyle.W(72);
+            int expX = pasteX - M - expW;
+            var expBtn = MakeGO("ExportScene", rhdr.transform);
+            Img(expBtn, UIStyle.Accent with { a = 0.20f });
+            Btn(expBtn, OnExportSceneClicked);
+            Rect(expBtn, expX, btnY, expW, btnH);
+            MakeLbl(expBtn.transform, "Copy scene", UIStyle.FontSizeSm - 2,
+                UIStyle.Accent, TextAnchor.MiddleCenter, fill: true);
+
+            // Status label - brief feedback, left of all buttons
+            int statusW = UIStyle.W(110);
+            int statusX = expX - M - statusW;
             pasteStatus = MakeLbl(rhdr.transform, "", UIStyle.FontSizeSm - 2,
                 UIStyle.Subtext, TextAnchor.MiddleRight,
                 x: statusX, w: statusW, h: SUBHDR);
 
-            // Scene name — fills remaining left space
+            // Scene name - fills remaining left space
             rightHeader = MakeLbl(rhdr.transform, "Select a room",
                 UIStyle.FontSizeSm, UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: M, w: statusX - M, h: SUBHDR);
@@ -137,11 +181,11 @@ namespace ReplayTimerMod
             Img(bar, UIStyle.Surface);
             Rect(bar, 0, PH - STGSH, PW, STGSH);
 
-            int btnH  = UIStyle.H(22);
-            int btnY  = (STGSH - btnH) / 2;
-            int lblW  = UIStyle.W(38);
+            int btnH = UIStyle.H(22);
+            int btnY = (STGSH - btnH) / 2;
+            int lblW = UIStyle.W(38);
             int stepW = UIStyle.W(22);
-            int x     = M;
+            int x = M;
 
             // Ghost: [ON/OFF]
             MakeLbl(bar.transform, "Ghost:", UIStyle.FontSizeSm - 1,
@@ -237,34 +281,34 @@ namespace ReplayTimerMod
             vpRT.anchorMax = Vector2.one;
             vpRT.offsetMin = vpRT.offsetMax = Vector2.zero;
 
-            var ct   = MakeGO("Content", vp.transform);
+            var ct = MakeGO("Content", vp.transform);
             var ctRT = ct.GetComponent<RectTransform>();
             ctRT.anchorMin = new Vector2(0, 1);
             ctRT.anchorMax = new Vector2(1, 1);
-            ctRT.pivot     = new Vector2(0.5f, 1f);
+            ctRT.pivot = new Vector2(0.5f, 1f);
             ctRT.offsetMin = ctRT.offsetMax = Vector2.zero;
             ctRT.sizeDelta = Vector2.zero;
 
             var csf = ct.AddComponent<ContentSizeFitter>();
-            csf.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
+            csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
 
             var vlg = ct.AddComponent<VerticalLayoutGroup>();
-            vlg.childAlignment        = TextAnchor.UpperLeft;
-            vlg.childControlWidth     = true;
-            vlg.childControlHeight    = true;
-            vlg.childForceExpandWidth  = true;
+            vlg.childAlignment = TextAnchor.UpperLeft;
+            vlg.childControlWidth = true;
+            vlg.childControlHeight = true;
+            vlg.childForceExpandWidth = true;
             vlg.childForceExpandHeight = false;
             vlg.spacing = 1;
 
             var scroll = sr.AddComponent<ScrollRect>();
-            scroll.content          = ctRT;
-            scroll.viewport         = vpRT;
-            scroll.horizontal       = false;
-            scroll.vertical         = true;
+            scroll.content = ctRT;
+            scroll.viewport = vpRT;
+            scroll.horizontal = false;
+            scroll.vertical = true;
             scroll.scrollSensitivity = 30f;
-            scroll.movementType     = ScrollRect.MovementType.Clamped;
-            scroll.inertia          = false;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.inertia = false;
 
             return ct.transform;
         }

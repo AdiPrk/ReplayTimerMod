@@ -5,7 +5,7 @@ namespace ReplayTimerMod
 {
     // Records Hornet's position at a fixed LR-time rate of RECORD_FPS,
     // regardless of actual frame rate. At 200fps actual, we still only
-    // store 30 frames per second of gameplay — 1800 max for a 60s run.
+    // store 30 frames per second of gameplay - 1800 max for a 60s run.
     public class FrameRecorder
     {
         public const float RECORD_FPS = 30f;
@@ -60,7 +60,7 @@ namespace ReplayTimerMod
             Vector3 pos = HeroController.instance.transform.position;
 
             // Capture animation state. tk2dSpriteAnimator.CurrentFrame is an
-            // integer index into CurrentClip.frames[] — no normalisation required.
+            // integer index into CurrentClip.frames[] - no normalisation required.
             string clipName = "";
             int clipFrame = 0;
             try

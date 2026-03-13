@@ -6,7 +6,7 @@ namespace ReplayTimerMod
 {
     public partial class ReplayUI
     {
-        // ── Left column — scene list ──────────────────────────────────────────
+        // ── Left column - scene list ──────────────────────────────────────────
 
         private void RebuildLeft()
         {
@@ -54,7 +54,7 @@ namespace ReplayTimerMod
             RebuildRight(scene);
         }
 
-        // ── Right column — entries for selected scene ─────────────────────────
+        // ── Right column - entries for selected scene ─────────────────────────
 
         private void RebuildRight(string scene)
         {
@@ -107,7 +107,7 @@ namespace ReplayTimerMod
             var le = row.AddComponent<LayoutElement>();
             le.minHeight = le.preferredHeight = h;
 
-            // [✕] delete — far right
+            // [✕] delete - far right
             var xBtn = MakeGO("Delete", row.transform);
             Img(xBtn, UIStyle.Red with { a = 0.20f });
             RoomKey dk = key;
@@ -116,7 +116,7 @@ namespace ReplayTimerMod
             MakeLbl(xBtn.transform, "✕", UIStyle.FontSizeSm - 2,
                 UIStyle.Red, TextAnchor.MiddleCenter, fill: true);
 
-            // [Copy] — left of [✕]
+            // [Copy] - left of [✕]
             var copyBtn = MakeGO("Copy", row.transform);
             Img(copyBtn, UIStyle.Accent with { a = 0.22f });
             RoomKey ck = key;
@@ -125,14 +125,14 @@ namespace ReplayTimerMod
             MakeLbl(copyBtn.transform, "Copy", UIStyle.FontSizeSm - 2,
                 UIStyle.Accent, TextAnchor.MiddleCenter, fill: true);
 
-            // Time — gold, left of [Copy]
+            // Time - gold, left of [Copy]
             int timeW = UIStyle.W(60);
             int timeX = RW - xBtnW - M - copyW - M - timeW - M;
             MakeLbl(row.transform, TimeUtil.Format(time), UIStyle.FontSizeSm,
                 UIStyle.Gold, TextAnchor.MiddleRight,
                 x: timeX, w: timeW, h: h);
 
-            // Route label — fills remaining left space
+            // Route label - fills remaining left space
             string from = string.IsNullOrEmpty(key.EntryFromScene) ? "spawn" : key.EntryFromScene;
             MakeLbl(row.transform, $"{from} → {key.ExitToScene}",
                 UIStyle.FontSizeSm, UIStyle.Subtext, TextAnchor.MiddleLeft,

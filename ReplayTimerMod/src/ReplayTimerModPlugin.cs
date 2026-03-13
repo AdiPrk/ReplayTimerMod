@@ -49,7 +49,7 @@ namespace ReplayTimerMod
             sceneCount++;
             if (sceneCount == 4)
             {
-                Logger.LogInfo("Scene 4 — setting up UI and ghost");
+                Logger.LogInfo("Scene 4 - setting up UI and ghost");
                 ghostPlayback.Setup();
                 replayUI.Setup();
             }

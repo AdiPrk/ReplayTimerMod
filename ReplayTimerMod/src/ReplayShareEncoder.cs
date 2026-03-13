@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Text;
 using BepInEx.Logging;
 
@@ -200,6 +201,80 @@ namespace ReplayTimerMod
             return new RecordedRoom(
                 new RoomKey(sceneName, entryFromScene, exitToScene),
                 totalTime, frames);
+        }
+
+        // ── Collection API ────────────────────────────────────────────────────
+        //
+        // RTMC1 binary layout (before Deflate):
+        //   [4]  magic "RTMC"
+        //   [1]  version = 0x01
+        //   [4]  count N   int32
+        //   N ×  [4] blobLength + RTM3 binary blob (uncompressed)
+        //
+        // The collection is Deflate-compressed as a whole, so repeated clips
+        // and similar motion patterns across rooms compress well together.
+
+        private static readonly byte[] MagicCollection =
+            { (byte)'R', (byte)'T', (byte)'M', (byte)'C' };
+        private const byte VersionCollection = 0x01;
+
+        public static string EncodeCollection(IEnumerable<RecordedRoom> rooms)
+        {
+            var list = rooms.ToList();
+            using var ms = new MemoryStream();
+            using (var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
+            {
+                w.Write(MagicCollection);
+                w.Write(VersionCollection);
+                w.Write(list.Count);
+                foreach (var room in list)
+                {
+                    byte[] blob = WriteBinary(room);
+                    w.Write(blob.Length);
+                    w.Write(blob);
+                }
+            }
+            string result = Convert.ToBase64String(Compress(ms.ToArray()));
+            Log.LogInfo($"[RTMC1] Encoded {list.Count} rooms → {result.Length} chars");
+            return result;
+        }
+
+        public static List<RecordedRoom>? DecodeCollection(string encoded)
+        {
+            try
+            {
+                byte[] raw = Decompress(Convert.FromBase64String(encoded));
+                using var ms = new MemoryStream(raw);
+                using var r = new BinaryReader(ms, Encoding.UTF8, leaveOpen: true);
+
+                for (int i = 0; i < 4; i++)
+                    if (r.ReadByte() != MagicCollection[i])
+                        throw new InvalidDataException("Bad RTMC magic");
+
+                byte ver = r.ReadByte();
+                if (ver != VersionCollection)
+                    throw new InvalidDataException($"Unsupported RTMC version 0x{ver:X2}");
+
+                int count = r.ReadInt32();
+                if (count < 0 || count > 100000)
+                    throw new InvalidDataException($"Implausible count: {count}");
+
+                var rooms = new List<RecordedRoom>(count);
+                for (int i = 0; i < count; i++)
+                {
+                    int blobLen = r.ReadInt32();
+                    byte[] blob = r.ReadBytes(blobLen);
+                    rooms.Add(ReadBinary(blob));
+                }
+
+                Log.LogInfo($"[RTMC1] Decoded {rooms.Count} rooms");
+                return rooms;
+            }
+            catch (Exception ex)
+            {
+                Log.LogError($"[RTMC1] Decode failed: {ex.Message}");
+                return null;
+            }
         }
 
         // ── Compression ───────────────────────────────────────────────────────

@@ -8,22 +8,22 @@ using UnityEngine.UI;
 namespace ReplayTimerMod
 {
     // ─────────────────────────────────────────────────────────────────────────
-    // ReplayUI — pause-only two-column replay browser.
+    // ReplayUI - pause-only two-column replay browser.
     //
     // Left column  : alphabetical scene list. Click to populate right column.
     // Right column : routes for the selected scene.
     //   Sub-header : scene name | [Paste] [Clear scene]
     //   Each row   : route  time  [Copy]  [✕]
-    // Header       : "Replay Times" | [Clear all / Are you sure?] [—]
-    // Bottom strip : Ghost [ON/OFF]  Alpha [−] 0.40 [+]  Color
+    // Header       : "Replay Times" | [Clear all / Are you sure?] [-]
+    // Bottom strip : Ghost [ON/OFF]  Alpha [−] 0.40 [+]  Color ■ ■ ■ ■ ■ ■
     //
-    // [Clear all]  — two-click confirm; first click shows "Are you sure?",
+    // [Clear all]  - two-click confirm; first click shows "Are you sure?",
     //               second click deletes every replay across all scenes.
     //               Resets to default state whenever the panel is closed.
-    // [Clear scene]— immediately deletes all entries for the selected scene.
-    // [Paste]      — reads clipboard, decodes RTM3 string, imports replay.
-    // [Copy]       — encodes entry to RTM3 string, writes to clipboard.
-    // [✕]          — deletes that single entry.
+    // [Clear scene]- immediately deletes all entries for the selected scene.
+    // [Paste]      - reads clipboard, decodes RTM3 string, imports replay.
+    // [Copy]       - encodes entry to RTM3 string, writes to clipboard.
+    // [✕]          - deletes that single entry.
     //
     // Canvas is enabled only while the game is paused.
     // ─────────────────────────────────────────────────────────────────────────
@@ -41,6 +41,12 @@ namespace ReplayTimerMod
         private bool clearAllPending = false;
         private Image? clearAllBtnImg;
         private Text? clearAllBtnLbl;
+
+        // Export button feedback refs.
+        private Image? exportAllBtnImg;
+        private Text? exportAllBtnLbl;
+        private Image? downloadAllBtnImg;
+        private Text? downloadAllBtnLbl;
 
         // ── Unity objects ─────────────────────────────────────────────────────
         private GameObject? canvasGO;

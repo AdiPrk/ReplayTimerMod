@@ -12,7 +12,7 @@ namespace ReplayTimerMod
     // JSON: { "entries": [ { sceneName, entryFromScene, exitToScene,
     //                         totalTime, data }, ... ] }
     //
-    // "data" is an RTM3 string — identical to what [Copy] puts on the clipboard.
+    // "data" is an RTM3 string - identical to what [Copy] puts on the clipboard.
     // Loading or saving a replay goes through ReplayShareEncoder exclusively.
 
     [Serializable]
