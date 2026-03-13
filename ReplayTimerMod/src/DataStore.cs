@@ -240,7 +240,6 @@ namespace ReplayTimerMod
                     x = xs[i] / PosScale,
                     y = ys[i] / PosScale,
                     facingRight = (facingBits[i / 8] & (0x80 >> (i % 8))) != 0,
-                    deltaTime = FrameRecorder.RECORD_INTERVAL,
                     animClip = clip,
                     animFrame = animFrame
                 };

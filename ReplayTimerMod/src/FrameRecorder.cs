@@ -6,9 +6,6 @@ namespace ReplayTimerMod
     // Records Hornet's position at a fixed LR-time rate of RECORD_FPS,
     // regardless of actual frame rate. At 200fps actual, we still only
     // store 30 frames per second of gameplay — 1800 max for a 60s run.
-    //
-    // deltaTime stored per frame is always 1/RECORD_FPS (constant), but
-    // we keep it in the struct for future flexibility (e.g. variable rate).
     public class FrameRecorder
     {
         public const float RECORD_FPS = 30f;
@@ -86,7 +83,6 @@ namespace ReplayTimerMod
                 x = pos.x,
                 y = pos.y,
                 facingRight = facingRight,
-                deltaTime = RECORD_INTERVAL,
                 animClip = clipName,
                 animFrame = clipFrame
             });

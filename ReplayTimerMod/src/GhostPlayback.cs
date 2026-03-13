@@ -25,8 +25,8 @@ namespace ReplayTimerMod
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("GhostPlayback");
 
-        private const float GHOST_ALPHA = 0.5f;
-        private static readonly Color GHOST_COLOR = new Color(0.4f, 0.8f, 1f, GHOST_ALPHA);
+        private const float GHOST_ALPHA = 0.4f;
+        private static readonly Color GHOST_COLOR = new Color(1f, 1f, 1f, GHOST_ALPHA);
 
         // ── Ghost objects ─────────────────────────────────────────────────────
         private GameObject? ghostSpriteGo;
