@@ -12,11 +12,8 @@ namespace ReplayTimerMod
     //   RoomTracker.OnRoomExit / OnRecordingDiscarded → StopPlayback()
     //
     // Sprite rendering:
-    //   We create a minimal GO (inactive at AddComponent time so tk2dSprite's
-    //   Awake is deferred), assign Collection before activation, then activate.
-    //   This is the only safe way to set Collection before the mesh is built —
-    //   Instantiate drags in all hero scripts and causes fights.
-    //
+    //   We create a minimal GO while inactive so tk2dSprite.Awake() is deferred
+    //   until after we assign Collection — this prevents the pink-rectangle bug.
     //   Clip name → spriteId is resolved via a Dictionary built once at init
     //   so the hot tick path is a single hash lookup, not GetClipByName() which
     //   does a linear scan every frame.
@@ -25,27 +22,25 @@ namespace ReplayTimerMod
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("GhostPlayback");
 
-        private const float GHOST_ALPHA = 0.4f;
-        private static readonly Color GHOST_COLOR = new Color(1f, 1f, 1f, GHOST_ALPHA);
-
         // ── Ghost objects ─────────────────────────────────────────────────────
         private GameObject? ghostSpriteGo;
         private tk2dSprite? ghostSprite;
 
         private GameObject? diamondGo;
         private LineRenderer? diamondLine;
+        private Material? diamondMat;
 
         // Built once at sprite init — avoids per-tick GetClipByName linear scan.
-        // Key = clip name, Value = the clip (contains frames[].spriteId).
         private Dictionary<string, tk2dSpriteAnimationClip>? clipCache;
 
-        private bool spriteInitDone = false; // attempted at least once this session
+        private bool spriteInitDone = false;
 
         private RecordedRoom? currentPB;
         private float playbackTime = 0f;
         private bool playing = false;
 
         // ── Setup ─────────────────────────────────────────────────────────────
+
         public void Setup()
         {
             diamondGo = new GameObject("ReplayGhost_Diamond");
@@ -61,9 +56,11 @@ namespace ReplayTimerMod
             diamondLine.numCapVertices = 2;
             diamondLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             diamondLine.receiveShadows = false;
+
             var mat = new Material(Shader.Find("Sprites/Default"));
-            mat.color = GHOST_COLOR;
+            mat.color = GhostSettings.GhostColor;
             diamondLine.material = mat;
+            diamondMat = mat;
 
             Log.LogInfo("[Ghost] Setup complete");
         }
@@ -72,6 +69,13 @@ namespace ReplayTimerMod
 
         public void StartPlayback(string sceneName, string entryFromScene)
         {
+            if (!GhostSettings.GhostEnabled)
+            {
+                HideAll();
+                playing = false;
+                return;
+            }
+
             currentPB = GetBestPB(sceneName, entryFromScene);
             if (currentPB == null)
             {
@@ -83,8 +87,7 @@ namespace ReplayTimerMod
 
             playbackTime = 0f;
             playing = true;
-            Log.LogInfo($"[Ghost] Playing {currentPB.Key} " +
-                        $"({currentPB.FrameCount} frames, {FormatTime(currentPB.TotalTime)})");
+            Log.LogInfo($"[Ghost] Playing {currentPB.Key} ({currentPB.FrameCount} frames, {FormatTime(currentPB.TotalTime)})");
         }
 
         public void StopPlayback()
@@ -94,12 +97,12 @@ namespace ReplayTimerMod
             HideAll();
         }
 
-        public bool IsPlaying => playing;
-
         // ── Tick ──────────────────────────────────────────────────────────────
+
         public void Tick()
         {
             if (!playing || currentPB == null) return;
+            if (!GhostSettings.GhostEnabled) { HideAll(); return; }
             try { if (!LoadRemover.ShouldTick()) return; }
             catch { return; }
 
@@ -133,9 +136,9 @@ namespace ReplayTimerMod
         }
 
         // ── Sprite init ───────────────────────────────────────────────────────
-        // Creates a minimal GO while inactive so tk2dSprite.Awake() is deferred
-        // until after we assign Collection — this is what prevents the pink rect.
-        // Builds the clip cache from the hero's animator library in the same pass.
+        // Creates the GO inactive so tk2dSprite.Awake() fires after Collection
+        // is assigned — this is what prevents the pink rectangle.
+
         private bool TryInitSprite()
         {
             if (ghostSprite != null) return true;
@@ -158,23 +161,19 @@ namespace ReplayTimerMod
                     return false;
                 }
 
-                // Create GO *inactive* so AddComponent defers Awake.
                 ghostSpriteGo = new GameObject("ReplayGhost_Sprite");
                 ghostSpriteGo.SetActive(false);
                 Object.DontDestroyOnLoad(ghostSpriteGo);
 
                 ghostSprite = ghostSpriteGo.AddComponent<tk2dSprite>();
-                // Assign Collection before activation so Awake has it.
                 ghostSprite.Collection = heroSprite.Collection;
                 ghostSprite.spriteId = heroSprite.spriteId;
 
                 ghostSpriteGo.SetActive(true);   // Awake fires here with Collection set
-                ghostSprite.color = GHOST_COLOR; // set after activation
+                ghostSprite.color = GhostSettings.GhostColor;
 
-                Log.LogInfo($"[Ghost] Sprite ready — collection='{heroSprite.Collection.name}' " +
-                            $"spriteId={ghostSprite.spriteId}");
+                Log.LogInfo($"[Ghost] Sprite ready — collection='{heroSprite.Collection.name}'");
 
-                // Build clip cache from the hero's animator library.
                 var heroAnim = HeroController.instance.GetComponent<tk2dSpriteAnimator>();
                 if (heroAnim?.Library != null)
                 {
@@ -187,7 +186,7 @@ namespace ReplayTimerMod
                 }
                 else
                 {
-                    Log.LogWarning("[Ghost] No animator library — clip lookup will be skipped");
+                    Log.LogWarning("[Ghost] No animator library — sprite will show default frame");
                 }
 
                 return true;
@@ -202,6 +201,7 @@ namespace ReplayTimerMod
         }
 
         // ── Rendering ─────────────────────────────────────────────────────────
+
         private void RenderSprite(Vector3 pos, FrameData fd)
         {
             if (ghostSprite == null || ghostSpriteGo == null) return;
@@ -212,6 +212,7 @@ namespace ReplayTimerMod
                 ghostSprite.spriteId = clip.frames[fd.animFrame % clip.frames.Length].spriteId;
             }
 
+            ghostSprite.color = GhostSettings.GhostColor;
             ghostSpriteGo.transform.position = pos;
 
             Vector3 s = ghostSpriteGo.transform.localScale;
@@ -226,6 +227,7 @@ namespace ReplayTimerMod
         {
             ghostSpriteGo?.SetActive(false);
             if (diamondGo == null || diamondLine == null) return;
+            if (diamondMat != null) diamondMat.color = GhostSettings.GhostColor;
             diamondGo.SetActive(true);
             const float s = 0.25f;
             diamondLine.SetPosition(0, center + new Vector3(0, s, 0));
@@ -241,6 +243,7 @@ namespace ReplayTimerMod
         }
 
         // ── Ghost selection ───────────────────────────────────────────────────
+
         private static RecordedRoom? GetBestPB(string scene, string entryFromScene)
         {
             RecordedRoom? best = null;

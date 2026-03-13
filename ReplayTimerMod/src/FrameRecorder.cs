@@ -13,7 +13,7 @@ namespace ReplayTimerMod
 
         private readonly List<FrameData> frames = new List<FrameData>();
         private bool recording = false;
-        private float accumulatedTime = 0f; // LR time since last recorded frame
+        private float accumulatedTime = 0f;
 
         public void StartRecording()
         {
@@ -44,9 +44,8 @@ namespace ReplayTimerMod
             return result;
         }
 
-        // Called every LateUpdate.
-        // Only advances when LoadRemover.ShouldTick() — accumulates LR time
-        // and writes a frame once a full RECORD_INTERVAL has elapsed.
+        // Called every LateUpdate. Accumulates LR time and writes a frame
+        // once a full RECORD_INTERVAL has elapsed.
         public void Tick()
         {
             if (!recording) return;
@@ -54,7 +53,6 @@ namespace ReplayTimerMod
             if (!LoadRemover.ShouldTick()) return;
 
             accumulatedTime += Time.unscaledDeltaTime;
-
             if (accumulatedTime < RECORD_INTERVAL) return;
             accumulatedTime -= RECORD_INTERVAL;
 
@@ -62,14 +60,12 @@ namespace ReplayTimerMod
             Vector3 pos = HeroController.instance.transform.position;
 
             // Capture animation state. tk2dSpriteAnimator.CurrentFrame is an
-            // integer index into CurrentClip.frames[], exactly what we need for
-            // playback — no normalisation required.
+            // integer index into CurrentClip.frames[] — no normalisation required.
             string clipName = "";
             int clipFrame = 0;
             try
             {
-                var anim = HeroController.instance
-                    .GetComponent<tk2dSpriteAnimator>();
+                var anim = HeroController.instance.GetComponent<tk2dSpriteAnimator>();
                 if (anim?.CurrentClip != null)
                 {
                     clipName = anim.CurrentClip.name;

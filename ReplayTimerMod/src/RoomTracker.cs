@@ -20,29 +20,24 @@ namespace ReplayTimerMod
         // ── Public state ─────────────────────────────────────────────────────
         public static bool IsRecording { get; private set; } = false;
         public static string CurrentScene { get; private set; } = "";
-        public static string EntryGateName { get; private set; } = "";
         public static string EntryFromScene { get; private set; } = "";
         public static float CurrentRoomTime { get; private set; } = 0f;
 
         // ── Events ───────────────────────────────────────────────────────────
-        // sceneName, entryGate, entryFromScene
-        public static event Action<string, string, string>? OnRoomEnter;
+        // sceneName, entryFromScene
+        public static event Action<string, string>? OnRoomEnter;
 
-        // sceneName, entryGate, exitToScene, lrTime
+        // sceneName, entryFromScene, exitToScene, lrTime
         public static event Action<string, string, string, float>? OnRoomExit;
 
         public static event Action? OnRecordingDiscarded;
 
-        // ── Private state ─────────────────────────────────────────────────────
+        // ── Private state ────────────────────────────────────────────────────
         private static int sceneCount = 0;
         private static bool isReady = false;
 
-        // Set by OnGateTransitionBegin when a real gate fires.
-        // Consumed immediately in OnActiveSceneChanged.
-        // We use a boolean rather than matching scene names — the name in
-        // SceneLoadInfo is not guaranteed to match to.name in all cases.
+        // Set by OnGateTransitionBegin; consumed and cleared in OnActiveSceneChanged.
         private static bool pendingGateTransition = false;
-        private static string pendingGateEntryGate = "";
 
         // ── Savestate reflection ──────────────────────────────────────────────
         private static PropertyInfo? _savestateLoadingProp;
@@ -74,7 +69,8 @@ namespace ReplayTimerMod
             catch { return false; }
         }
 
-        // ── Init ─────────────────────────────────────────────────────────────
+        // ── Init ──────────────────────────────────────────────────────────────
+
         public static void Init()
         {
             SceneManager.activeSceneChanged += OnActiveSceneChanged;
@@ -83,10 +79,10 @@ namespace ReplayTimerMod
         }
 
         // ── Handlers ─────────────────────────────────────────────────────────
+
         private static void HandleGateTransitionBegin(string destScene, string entryGate)
         {
             pendingGateTransition = true;
-            pendingGateEntryGate = entryGate;
             Log.LogDebug($"[Gate] pending → {destScene} via '{entryGate}'");
         }
 
@@ -100,7 +96,6 @@ namespace ReplayTimerMod
             }
             CurrentRoomTime = 0f;
             pendingGateTransition = false;
-            pendingGateEntryGate = "";
         }
 
         private static void OnActiveSceneChanged(Scene from, Scene to)
@@ -109,40 +104,27 @@ namespace ReplayTimerMod
             if (sceneCount >= 4) isReady = true;
             if (!isReady) return;
 
-            // Savestate fallback — if DebugMod is mid-load, treat as invalidation
             if (IsDebugModSavestateLoading())
             {
-                Log.LogInfo("[RoomTracker] Savestate detected via reflection — invalidating");
+                Log.LogInfo("[RoomTracker] Savestate detected — invalidating");
                 HandleInvalidation();
-                // pendingGateTransition already cleared by HandleInvalidation
             }
 
-            // Consume the pending gate flag — regardless of what we decide below,
-            // it must be cleared before we return.
             bool arrivedViaGate = pendingGateTransition;
-            string arrivedViaGateEntryGate = pendingGateEntryGate;
             pendingGateTransition = false;
-            pendingGateEntryGate = "";
 
-            // Transitions from Menu_Title are always spawns, never real gates,
-            // even if BeginSceneTransition was called with a vanilla SceneLoadInfo.
             if (from.name == MENU_TITLE || from.name == QUIT_TO_MENU)
                 arrivedViaGate = false;
 
-            // Menu destinations are never gameplay rooms.
             bool toMenu = to.name == MENU_TITLE || to.name == QUIT_TO_MENU;
 
             // ── Close out current recording ───────────────────────────────────
             if (IsRecording)
             {
-                bool isTurnaround = arrivedViaGate && (to.name == EntryFromScene);
-                bool isOverTime = CurrentRoomTime > MAX_ROOM_TIME;
-
-                if (arrivedViaGate /*&& !isTurnaround*/ && !isOverTime && !toMenu)
+                if (arrivedViaGate && !isOverTime() && !toMenu)
                 {
-                    // Valid natural exit.
                     string exitedScene = CurrentScene;
-                    string exitedFromScene = EntryFromScene;   // where we entered from
+                    string exitedFromScene = EntryFromScene;
                     string exitedTo = to.name;
                     float exitedTime = CurrentRoomTime;
 
@@ -154,7 +136,7 @@ namespace ReplayTimerMod
                 }
                 else
                 {
-                    if (isOverTime)
+                    if (isOverTime())
                         Log.LogInfo($"[RoomTracker] Over time limit in {CurrentScene} — discarding");
                     else if (!arrivedViaGate)
                         Log.LogInfo($"[RoomTracker] Non-gate exit from {CurrentScene} — discarding");
@@ -169,28 +151,28 @@ namespace ReplayTimerMod
             if (arrivedViaGate && !toMenu)
             {
                 CurrentScene = to.name;
-                EntryGateName = arrivedViaGateEntryGate;
                 EntryFromScene = from.name;
                 CurrentRoomTime = 0f;
                 IsRecording = true;
 
-                Log.LogInfo($"[RoomTracker] Enter: {CurrentScene} via '{EntryGateName}' from {EntryFromScene}");
-                OnRoomEnter?.Invoke(CurrentScene, EntryGateName, EntryFromScene);
+                Log.LogInfo($"[RoomTracker] Enter: {CurrentScene} from {EntryFromScene}");
+                OnRoomEnter?.Invoke(CurrentScene, EntryFromScene);
             }
             else
             {
-                // Spawn, death respawn, savestate, menu — go/stay IDLE.
                 CurrentScene = to.name;
-                EntryGateName = "";
                 EntryFromScene = "";
                 CurrentRoomTime = 0f;
                 IsRecording = false;
 
-                Log.LogInfo($"[RoomTracker] IDLE in {to.name} (not a gate transition)");
+                Log.LogInfo($"[RoomTracker] IDLE in {to.name}");
             }
+
+            bool isOverTime() => CurrentRoomTime > MAX_ROOM_TIME;
         }
 
-        // ── Tick ─────────────────────────────────────────────────────────────
+        // ── Tick ──────────────────────────────────────────────────────────────
+
         public static void Tick()
         {
             if (!isReady || !IsRecording) return;

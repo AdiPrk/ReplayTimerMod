@@ -18,18 +18,12 @@ namespace ReplayTimerMod
     //   [2+N]   exitToScene     (uint16 length prefix + UTF-8)
     //   [4]     totalTime       float32
     //   [4]     frameCount N    int32
-    //   [2]     xStreamLen      uint16
-    //   [xStreamLen] x 2nd-order SVLQ stream:
-    //               [2]   int16  anchor x[0]  (world × 100)
-    //               [var] SVLQ   x[1]-x[0]    (1st-order delta, frame 1 only)
-    //               [var] SVLQ   x[i]-2x[i-1]+x[i-2]  for i ≥ 2  (acceleration)
-    //   [2]     yStreamLen      uint16
-    //   [yStreamLen] y 2nd-order SVLQ stream  (same structure)
+    //   [2+xL]  x 2nd-order SVLQ stream
+    //   [2+yL]  y 2nd-order SVLQ stream
     //   [⌈N/8⌉] facing bitfield  MSB-first, 1 = facingRight
     //
-    // SVLQ = ZigZag(n) → ULEB128.
-    // Note: share strings do not include animation clip data — ghost playback
-    // from imported strings falls back to the diamond renderer.
+    // Share strings intentionally omit animation clip data — ghost playback from
+    // an imported string falls back to the diamond renderer.
     // ─────────────────────────────────────────────────────────────────────────
 
     public static class ReplayShareEncoder
@@ -41,7 +35,6 @@ namespace ReplayTimerMod
             { (byte)'R', (byte)'T', (byte)'M', (byte)'3' };
 
         private const byte Version = 0x01;
-        private const float PosScale = 100f;
 
         // ── Public API ────────────────────────────────────────────────────────
 
@@ -66,7 +59,7 @@ namespace ReplayTimerMod
                     raw[0] == 'R' && raw[1] == 'T' && raw[2] == 'M' && raw[3] == '3')
                     return ReadBinary(raw);
 
-                Log.LogError("[ShareEncoder] Unrecognised payload format — " +
+                Log.LogError($"[ShareEncoder] Unrecognised payload — " +
                              $"got '{(char)raw[0]}{(char)raw[1]}{(char)raw[2]}{(char)raw[3]}'");
                 return null;
             }
@@ -82,8 +75,8 @@ namespace ReplayTimerMod
         private static byte[] WriteBinary(RecordedRoom room)
         {
             int n = room.FrameCount;
-            byte[] xStream = Encode2ndOrder(room.Frames, getX: true);
-            byte[] yStream = Encode2ndOrder(room.Frames, getX: false);
+            byte[] xStream = FrameCodec.Encode2ndOrder(room.Frames, getX: true);
+            byte[] yStream = FrameCodec.Encode2ndOrder(room.Frames, getX: false);
             int facingBytes = (n + 7) / 8;
 
             using var ms = new MemoryStream(80 + n * 3 + facingBytes);
@@ -91,9 +84,9 @@ namespace ReplayTimerMod
             {
                 w.Write(MagicRTM3);
                 w.Write(Version);
-                WriteString(w, room.Key.SceneName);
-                WriteString(w, room.Key.EntryFromScene);
-                WriteString(w, room.Key.ExitToScene);
+                FrameCodec.WriteString(w, room.Key.SceneName);
+                FrameCodec.WriteString(w, room.Key.EntryFromScene);
+                FrameCodec.WriteString(w, room.Key.ExitToScene);
                 w.Write(room.TotalTime);
                 w.Write(n);
                 w.Write((ushort)xStream.Length); w.Write(xStream);
@@ -127,117 +120,33 @@ namespace ReplayTimerMod
 
             r.ReadByte(); // version
 
-            string sceneName = ReadString(r);
-            string entryFromScene = ReadString(r);
-            string exitToScene = ReadString(r);
+            string sceneName = FrameCodec.ReadString(r);
+            string entryFromScene = FrameCodec.ReadString(r);
+            string exitToScene = FrameCodec.ReadString(r);
             float totalTime = r.ReadSingle();
             int n = r.ReadInt32();
 
-            byte[] xBytes = r.ReadBytes(r.ReadUInt16());
-            byte[] yBytes = r.ReadBytes(r.ReadUInt16());
+            short[] xs = FrameCodec.Decode2ndOrder(r.ReadBytes(r.ReadUInt16()), n);
+            short[] ys = FrameCodec.Decode2ndOrder(r.ReadBytes(r.ReadUInt16()), n);
             byte[] facingBits = r.ReadBytes((n + 7) / 8);
-
-            short[] xs = Decode2ndOrder(xBytes, n);
-            short[] ys = Decode2ndOrder(yBytes, n);
 
             var frames = new FrameData[n];
             for (int i = 0; i < n; i++)
-            {
                 frames[i] = new FrameData
                 {
-                    x = xs[i] / PosScale,
-                    y = ys[i] / PosScale,
+                    x = xs[i] / FrameCodec.PosScale,
+                    y = ys[i] / FrameCodec.PosScale,
                     facingRight = (facingBits[i / 8] & (0x80 >> (i % 8))) != 0,
+                    animClip = "",
+                    animFrame = 0
                 };
-            }
 
             return new RecordedRoom(
                 new RoomKey(sceneName, entryFromScene, exitToScene),
                 totalTime, frames);
         }
 
-        // ── 2nd-order DPCM streams ────────────────────────────────────────────
-
-        private static byte[] Encode2ndOrder(FrameData[] frames, bool getX)
-        {
-            int n = frames.Length;
-            if (n == 0) return Array.Empty<byte>();
-
-            using var ms = new MemoryStream(2 + n * 3);
-            using var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true);
-
-            short x0 = ToShort(getX ? frames[0].x : frames[0].y);
-            w.Write(x0);
-            if (n == 1) return ms.ToArray();
-
-            short x1 = ToShort(getX ? frames[1].x : frames[1].y);
-            WriteSVLQ(w, x1 - x0);
-
-            short prev2 = x0, prev1 = x1;
-            for (int i = 2; i < n; i++)
-            {
-                short cur = ToShort(getX ? frames[i].x : frames[i].y);
-                WriteSVLQ(w, cur - 2 * prev1 + prev2);
-                prev2 = prev1;
-                prev1 = cur;
-            }
-            return ms.ToArray();
-        }
-
-        private static short[] Decode2ndOrder(byte[] stream, int n)
-        {
-            if (n == 0) return Array.Empty<short>();
-
-            using var ms = new MemoryStream(stream);
-            using var r = new BinaryReader(ms, Encoding.UTF8, leaveOpen: true);
-
-            var result = new short[n];
-            result[0] = r.ReadInt16();
-            if (n == 1) return result;
-
-            result[1] = (short)(result[0] + ReadSVLQ(r));
-            for (int i = 2; i < n; i++)
-                result[i] = (short)(ReadSVLQ(r) + 2 * result[i - 1] - result[i - 2]);
-
-            return result;
-        }
-
-        // ── ZigZag + ULEB128 (SVLQ) ───────────────────────────────────────────
-
-        private static void WriteSVLQ(BinaryWriter w, int v)
-        {
-            // ZigZag: map signed → unsigned preserving small magnitudes
-            // 0→0  -1→1  1→2  -2→3 …
-            uint u = v >= 0 ? (uint)(v << 1) : (uint)((-v << 1) - 1);
-            // ULEB128: 7 bits per byte, MSB of each byte = "more bytes follow"
-            do
-            {
-                byte b = (byte)(u & 0x7F);
-                u >>= 7;
-                if (u != 0) b |= 0x80;
-                w.Write(b);
-            } while (u != 0);
-        }
-
-        private static int ReadSVLQ(BinaryReader r)
-        {
-            uint u = 0; int shift = 0; byte b;
-            do { b = r.ReadByte(); u |= (uint)(b & 0x7F) << shift; shift += 7; }
-            while ((b & 0x80) != 0);
-            return (u & 1) == 0 ? (int)(u >> 1) : -(int)(u >> 1) - 1;
-        }
-
-        // ── String + misc helpers ─────────────────────────────────────────────
-
-        private static void WriteString(BinaryWriter w, string s)
-        {
-            byte[] b = Encoding.UTF8.GetBytes(s);
-            w.Write((ushort)b.Length);
-            w.Write(b);
-        }
-
-        private static string ReadString(BinaryReader r) =>
-            Encoding.UTF8.GetString(r.ReadBytes(r.ReadUInt16()));
+        // ── Compression ───────────────────────────────────────────────────────
 
         private static byte[] DeflateCompress(byte[] data)
         {
@@ -255,10 +164,5 @@ namespace ReplayTimerMod
                 df.CopyTo(output);
             return output.ToArray();
         }
-
-        private static short ToShort(float world) =>
-            (short)Math.Max(short.MinValue,
-                   Math.Min(short.MaxValue, (int)Math.Round(world * PosScale)));
-
     }
 }

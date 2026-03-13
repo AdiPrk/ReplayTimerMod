@@ -11,8 +11,8 @@ namespace ReplayTimerMod
     // ── On-disk format RTM1v3 ─────────────────────────────────────────────────
     //
     // One JSON file per scene: <scene>.json
-    // JSON structure: { "entries": [ { sceneName, entryFromScene, exitToScene,
-    //                                   totalTime, data }, ... ] }
+    // JSON: { "entries": [ { sceneName, entryFromScene, exitToScene,
+    //                         totalTime, data }, ... ] }
     //
     // "data" = base64( GZip( RTM1v3-binary ) )
     //
@@ -25,11 +25,14 @@ namespace ReplayTimerMod
     //   [⌈N/8⌉] facing bitfield  (MSB-first, 1 = facingRight)
     //   [1]     clipCount C  (uint8; 0 = no animation data)
     //   if C > 0:
-    //     for i in 0..C-1:  [2+N] clipName[i]  (uint16 len + UTF-8)
-    //     [N]  clipIndex[]   (uint8 per frame; 0xFF = no clip)
-    //     [N]  animFrame[]   (uint8 per frame; saturated at 255)
+    //     C × [2+N] clipName  (uint16 len + UTF-8)
+    //     [N]  clipIndex[]    (uint8; 0xFF = no clip for this frame)
+    //     [N]  animFrame[]    (uint8; saturated at 255)
     //
-    // SVLQ = ZigZag(n) → ULEB128.
+    // SVLQ = ZigZag(n) → ULEB128.  See FrameCodec.cs.
+    //
+    // Backward compat: RTM1v2 entries (no animation data) are decoded as-is
+    // and upgraded to RTM1v3 on the next write.
     // ─────────────────────────────────────────────────────────────────────────
 
     [Serializable]
@@ -58,12 +61,13 @@ namespace ReplayTimerMod
 
         private static string DataDirectory = "";
 
-        private const float PosScale = 100f;
-
         private static readonly byte[] MagicV3 =
             { (byte)'R', (byte)'T', (byte)'M', (byte)'1', (byte)'v', (byte)'3' };
+        private static readonly byte[] MagicV2 =
+            { (byte)'R', (byte)'T', (byte)'M', (byte)'1', (byte)'v', (byte)'2' };
 
         // ── Init ──────────────────────────────────────────────────────────────
+
         public static void Init(string baseDirectory)
         {
             DataDirectory = Path.Combine(baseDirectory, "ReplayMod");
@@ -72,10 +76,12 @@ namespace ReplayTimerMod
         }
 
         // ── File path ─────────────────────────────────────────────────────────
+
         private static string FilePath(string sceneName) =>
             Path.Combine(DataDirectory, $"{sceneName}.json");
 
         // ── Index I/O ─────────────────────────────────────────────────────────
+
         private static SceneIndex LoadIndex(string path)
         {
             if (!File.Exists(path)) return new SceneIndex();
@@ -110,15 +116,16 @@ namespace ReplayTimerMod
         }
 
         // ── RTM1v3 encode ─────────────────────────────────────────────────────
+
         private static string EncodeFrames(RecordedRoom room)
         {
             int n = room.FrameCount;
 
-            byte[] xStream = Encode2ndOrderStream(room.Frames, getX: true);
-            byte[] yStream = Encode2ndOrderStream(room.Frames, getX: false);
+            byte[] xStream = FrameCodec.Encode2ndOrder(room.Frames, getX: true);
+            byte[] yStream = FrameCodec.Encode2ndOrder(room.Frames, getX: false);
             int facingBytes = (n + 7) / 8;
 
-            // Build clip name table (deduplicated, insertion-ordered).
+            // Build deduplicated clip name table.
             var clipTable = new List<string>();
             var clipIndex = new byte[n];
             var animFrames = new byte[n];
@@ -147,7 +154,6 @@ namespace ReplayTimerMod
                 w.Write(MagicV3);
                 w.Write(room.TotalTime);
                 w.Write(n);
-
                 w.Write((ushort)xStream.Length); w.Write(xStream);
                 w.Write((ushort)yStream.Length); w.Write(yStream);
 
@@ -163,13 +169,12 @@ namespace ReplayTimerMod
                     w.Write(bits);
                 }
 
-                // Animation section.
                 byte C = (byte)(hasAnimData ? clipTable.Count : 0);
                 w.Write(C);
                 if (C > 0)
                 {
                     foreach (string name in clipTable)
-                        WriteString(w, name);
+                        FrameCodec.WriteString(w, name);
                     w.Write(clipIndex);
                     w.Write(animFrames);
                 }
@@ -179,19 +184,18 @@ namespace ReplayTimerMod
         }
 
         // ── Decode ────────────────────────────────────────────────────────────
+
         private static FrameData[] DecodeFrames(string b64)
         {
             byte[] raw = GZipDecompress(Convert.FromBase64String(b64));
 
-            if (raw.Length >= 6 &&
-                raw[0] == 'R' && raw[1] == 'T' && raw[2] == 'M' &&
-                raw[3] == '1' && raw[4] == 'v' && raw[5] == '3')
-                return DecodeRTM1v3(raw);
+            if (raw.Length >= 6 && raw[0] == 'R' && raw[1] == 'T' && raw[2] == 'M' && raw[3] == '1')
+            {
+                if (raw[4] == 'v' && raw[5] == '3') return DecodeRTM1v3(raw);
+                if (raw[4] == 'v' && raw[5] == '2') return DecodeRTM1v2Legacy(raw);
+            }
 
-            throw new InvalidDataException(
-                $"Unrecognised frame format — " +
-                $"got '{(char)raw[0]}{(char)raw[1]}{(char)raw[2]}{(char)raw[3]}'." +
-                " Delete old save files.");
+            throw new InvalidDataException("Unknown frame format — delete old save files.");
         }
 
         private static FrameData[] DecodeRTM1v3(byte[] raw)
@@ -203,11 +207,10 @@ namespace ReplayTimerMod
             r.ReadSingle();   // totalTime (already in EntryIndex)
             int n = r.ReadInt32();
 
-            short[] xs = Decode2ndOrderStream(r.ReadBytes(r.ReadUInt16()), n);
-            short[] ys = Decode2ndOrderStream(r.ReadBytes(r.ReadUInt16()), n);
+            short[] xs = FrameCodec.Decode2ndOrder(r.ReadBytes(r.ReadUInt16()), n);
+            short[] ys = FrameCodec.Decode2ndOrder(r.ReadBytes(r.ReadUInt16()), n);
             byte[] facingBits = r.ReadBytes((n + 7) / 8);
 
-            // Animation section.
             byte clipCount = r.ReadByte();
             string[]? clipNames = null;
             byte[]? clipIndexes = null;
@@ -217,7 +220,7 @@ namespace ReplayTimerMod
             {
                 clipNames = new string[clipCount];
                 for (int i = 0; i < clipCount; i++)
-                    clipNames[i] = ReadString(r);
+                    clipNames[i] = FrameCodec.ReadString(r);
                 clipIndexes = r.ReadBytes(n);
                 animFrameBytes = r.ReadBytes(n);
             }
@@ -230,15 +233,14 @@ namespace ReplayTimerMod
                 if (clipNames != null && clipIndexes![i] != 0xFF)
                 {
                     int ci = clipIndexes[i];
-                    if (ci < clipNames.Length)
-                        clip = clipNames[ci];
+                    if (ci < clipNames.Length) clip = clipNames[ci];
                     animFrame = animFrameBytes![i];
                 }
 
                 frames[i] = new FrameData
                 {
-                    x = xs[i] / PosScale,
-                    y = ys[i] / PosScale,
+                    x = xs[i] / FrameCodec.PosScale,
+                    y = ys[i] / FrameCodec.PosScale,
                     facingRight = (facingBits[i / 8] & (0x80 >> (i % 8))) != 0,
                     animClip = clip,
                     animFrame = animFrame
@@ -247,99 +249,32 @@ namespace ReplayTimerMod
             return frames;
         }
 
-        // ── 2nd-order DPCM stream helpers ─────────────────────────────────────
-        //
-        // Mirror of the implementation in ReplayShareEncoder.
-        // If you change one, change both.
-
-        private static byte[] Encode2ndOrderStream(FrameData[] frames, bool getX)
+        // Decodes RTM1v2 saves (no animation data). Upgraded to v3 on next write.
+        private static FrameData[] DecodeRTM1v2Legacy(byte[] raw)
         {
-            int n = frames.Length;
-            if (n == 0) return Array.Empty<byte>();
-
-            using var ms = new MemoryStream(2 + n * 3);
-            using var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true);
-
-            short x0 = ToShort(getX ? frames[0].x : frames[0].y);
-            w.Write(x0);
-            if (n == 1) return ms.ToArray();
-
-            short x1 = ToShort(getX ? frames[1].x : frames[1].y);
-            WriteSVLQ(w, x1 - x0);
-
-            short prev2 = x0, prev1 = x1;
-            for (int i = 2; i < n; i++)
-            {
-                short cur = ToShort(getX ? frames[i].x : frames[i].y);
-                WriteSVLQ(w, cur - 2 * prev1 + prev2);
-                prev2 = prev1;
-                prev1 = cur;
-            }
-            return ms.ToArray();
-        }
-
-        private static short[] Decode2ndOrderStream(byte[] stream, int n)
-        {
-            if (n == 0) return Array.Empty<short>();
-
-            using var ms = new MemoryStream(stream);
+            using var ms = new MemoryStream(raw);
             using var r = new BinaryReader(ms, Encoding.UTF8, leaveOpen: true);
 
-            var result = new short[n];
-            result[0] = r.ReadInt16();
-            if (n == 1) return result;
+            ms.Seek(MagicV2.Length, SeekOrigin.Begin);
+            r.ReadSingle();   // totalTime
+            int n = r.ReadInt32();
 
-            result[1] = (short)(result[0] + ReadSVLQ(r));
-            for (int i = 2; i < n; i++)
-                result[i] = (short)(ReadSVLQ(r) + 2 * result[i - 1] - result[i - 2]);
+            short[] xs = FrameCodec.Decode2ndOrder(r.ReadBytes(r.ReadUInt16()), n);
+            short[] ys = FrameCodec.Decode2ndOrder(r.ReadBytes(r.ReadUInt16()), n);
+            byte[] facingBits = r.ReadBytes((n + 7) / 8);
 
-            return result;
+            var frames = new FrameData[n];
+            for (int i = 0; i < n; i++)
+                frames[i] = new FrameData
+                {
+                    x = xs[i] / FrameCodec.PosScale,
+                    y = ys[i] / FrameCodec.PosScale,
+                    facingRight = (facingBits[i / 8] & (0x80 >> (i % 8))) != 0,
+                    animClip = "",
+                    animFrame = 0
+                };
+            return frames;
         }
-
-        // ── ZigZag + ULEB128 (SVLQ) ───────────────────────────────────────────
-
-        private static uint ZigZag(int n) =>
-            n >= 0 ? (uint)(n << 1) : (uint)((-n << 1) - 1);
-
-        private static int ZigZagDecode(uint u) =>
-            (u & 1) == 0 ? (int)(u >> 1) : -(int)(u >> 1) - 1;
-
-        private static void WriteULEB128(BinaryWriter w, uint v)
-        {
-            do
-            {
-                byte b = (byte)(v & 0x7F);
-                v >>= 7;
-                if (v != 0) b |= 0x80;
-                w.Write(b);
-            } while (v != 0);
-        }
-
-        private static uint ReadULEB128(BinaryReader r)
-        {
-            uint result = 0; int shift = 0; byte b;
-            do { b = r.ReadByte(); result |= (uint)(b & 0x7F) << shift; shift += 7; }
-            while ((b & 0x80) != 0);
-            return result;
-        }
-
-        private static void WriteSVLQ(BinaryWriter w, int v) =>
-            WriteULEB128(w, ZigZag(v));
-
-        private static int ReadSVLQ(BinaryReader r) =>
-            ZigZagDecode(ReadULEB128(r));
-
-        // ── String helpers ─────────────────────────────────────────────────────
-
-        private static void WriteString(BinaryWriter w, string s)
-        {
-            byte[] b = Encoding.UTF8.GetBytes(s);
-            w.Write((ushort)b.Length);
-            w.Write(b);
-        }
-
-        private static string ReadString(BinaryReader r) =>
-            Encoding.UTF8.GetString(r.ReadBytes(r.ReadUInt16()));
 
         // ── Compression ───────────────────────────────────────────────────────
 
@@ -359,10 +294,6 @@ namespace ReplayTimerMod
                 gz.CopyTo(output);
             return output.ToArray();
         }
-
-        private static short ToShort(float world) =>
-            (short)Math.Max(short.MinValue,
-                   Math.Min(short.MaxValue, (int)Math.Round(world * PosScale)));
 
         // ── Public API ────────────────────────────────────────────────────────
 
@@ -391,8 +322,7 @@ namespace ReplayTimerMod
                 else idx.entries.Add(ei);
 
                 WriteIndex(path, idx);
-                Log.LogInfo($"[DataStore] Saved {room.Key} " +
-                            $"({room.FrameCount} frames, {encoded.Length} chars)");
+                Log.LogInfo($"[DataStore] Saved {room.Key} ({room.FrameCount} frames, {encoded.Length} chars)");
             }
             catch (Exception ex)
             {
@@ -406,12 +336,12 @@ namespace ReplayTimerMod
             try
             {
                 var idx = LoadIndex(path);
-                int removed = idx.entries.RemoveAll(e =>
+                idx.entries.RemoveAll(e =>
                     e.sceneName == key.SceneName &&
                     e.entryFromScene == key.EntryFromScene &&
                     e.exitToScene == key.ExitToScene);
                 WriteIndex(path, idx);
-                Log.LogInfo($"[DataStore] DeleteEntry {key} — removed {removed}");
+                Log.LogInfo($"[DataStore] Deleted {key}");
             }
             catch (Exception ex)
             {
@@ -436,7 +366,7 @@ namespace ReplayTimerMod
             }
         }
 
-        public static List<RecordedRoom> LoadScene(string sceneName)
+        private static List<RecordedRoom> LoadScene(string sceneName)
         {
             string path = FilePath(sceneName);
             var result = new List<RecordedRoom>();
@@ -455,11 +385,9 @@ namespace ReplayTimerMod
                     }
                     catch (Exception ex)
                     {
-                        Log.LogWarning($"[DataStore] Skipping corrupt entry " +
-                                       $"in {sceneName}: {ex.Message}");
+                        Log.LogWarning($"[DataStore] Skipping corrupt entry in {sceneName}: {ex.Message}");
                     }
                 }
-                Log.LogInfo($"[DataStore] Loaded {result.Count} for {sceneName}");
             }
             catch (Exception ex)
             {

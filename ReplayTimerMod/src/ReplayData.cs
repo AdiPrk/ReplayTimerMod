@@ -5,14 +5,15 @@
         public float x;
         public float y;
         public bool facingRight;
+
+        // Animation state — populated at record time, empty string when unavailable.
         public string animClip;   // tk2dSpriteAnimationClip.name
         public int animFrame;     // integer frame index within that clip
     }
 
     // Uniquely identifies a route through a room.
-    // EntryFromScene (not EntryGate) is used as the entry discriminator —
-    // it's unambiguous: the same gate name may appear on both sides of a
-    // boundary, but the source scene is always unique.
+    // EntryFromScene (not gate name) is the entry discriminator — the same gate
+    // name can appear on both sides of a boundary, but the source scene is unique.
     public readonly struct RoomKey
     {
         public readonly string SceneName;
