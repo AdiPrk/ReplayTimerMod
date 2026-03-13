@@ -16,6 +16,7 @@ namespace ReplayTimerMod
         private FrameRecorder frameRecorder = null!;
         private DebugOverlay debugOverlay = null!;
         private GhostPlayback ghostPlayback = null!;
+        private ReplayUI replayUI = null!;
 
         public int RecorderFrameCount => frameRecorder.FrameCount;
 
@@ -36,9 +37,9 @@ namespace ReplayTimerMod
             frameRecorder = new FrameRecorder();
             debugOverlay = new DebugOverlay();
             ghostPlayback = new GhostPlayback();
+            replayUI = new ReplayUI();
 
             RoomTracker.Init();
-
             RoomTracker.OnRoomEnter += OnRoomEnter;
             RoomTracker.OnRoomExit += OnRoomExit;
             RoomTracker.OnRecordingDiscarded += OnRecordingDiscarded;
@@ -51,9 +52,10 @@ namespace ReplayTimerMod
             sceneCount++;
             if (sceneCount == 4)
             {
-                Logger.LogInfo("Scene 4 — setting up UI and ghost");
+                Logger.LogInfo("Scene 4 — setting up UI, ghost, overlay");
                 debugOverlay.Setup();
                 ghostPlayback.Setup();
+                replayUI.Setup();
             }
         }
 
@@ -62,6 +64,7 @@ namespace ReplayTimerMod
             debugOverlay.ClearLastResult();
             frameRecorder.StartRecording();
             ghostPlayback.StartPlayback(sceneName, entryGate);
+            // ReplayUI hides itself every frame when not paused — nothing to do here
         }
 
         private void OnRoomExit(string sceneName, string entryGate,
@@ -69,13 +72,14 @@ namespace ReplayTimerMod
         {
             ghostPlayback.StopPlayback();
 
-            RoomKey key = new RoomKey(sceneName, entryGate, exitToScene);
-            RecordedRoom? recording = frameRecorder.FinishRecording(key, lrTime);
+            var key = new RoomKey(sceneName, entryGate, exitToScene);
+            var recording = frameRecorder.FinishRecording(key, lrTime);
 
             if (recording != null)
             {
-                EvaluationResult result = PBManager.Evaluate(recording);
+                var result = PBManager.Evaluate(recording);
                 debugOverlay.SetLastResult(result);
+                replayUI.OnPBUpdated();
             }
         }
 
@@ -91,6 +95,7 @@ namespace ReplayTimerMod
             frameRecorder.Tick();
             ghostPlayback.Tick();
             debugOverlay.Tick();
+            replayUI.Tick();
         }
     }
 }

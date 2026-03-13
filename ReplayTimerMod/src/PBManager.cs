@@ -1,5 +1,6 @@
 ﻿using BepInEx.Logging;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace ReplayTimerMod
 {
@@ -16,7 +17,7 @@ namespace ReplayTimerMod
 
         public static int Count => pbs.Count;
 
-        // Used by DebugOverlay to scan PBs mid-run (no exit known yet).
+        // Used by DebugOverlay / ReplayUI to iterate all PBs.
         public static IEnumerable<KeyValuePair<RoomKey, RecordedRoom>> AllPBs() => pbs;
 
         public static void Init()
@@ -28,7 +29,7 @@ namespace ReplayTimerMod
             Log.LogInfo($"[PBManager] Loaded {pbs.Count} PBs from disk");
         }
 
-        // Returns the current PB for a route, or null if none exists.
+        // ── Read ──────────────────────────────────────────────────────────────
         public static RecordedRoom? GetPB(RoomKey key)
         {
             pbs.TryGetValue(key, out var pb);
@@ -41,9 +42,8 @@ namespace ReplayTimerMod
             return pb?.TotalTime;
         }
 
-        // Compares the incoming run against the stored PB.
-        // Saves to disk and updates memory if it's a new PB.
-        // Returns the result so callers (debug UI, future UI) can react.
+        // ── Evaluate (called after a live run) ────────────────────────────────
+        // Saves to disk and updates memory only if it's a new PB.
         public static EvaluationResult Evaluate(RecordedRoom run)
         {
             float newTime = run.TotalTime;
@@ -72,12 +72,47 @@ namespace ReplayTimerMod
             }
             else
             {
-                // First recorded run for this route — always a PB.
                 pbs[run.Key] = run;
                 DataStore.SaveEntry(run);
                 Log.LogInfo($"[PBManager] First run for {run.Key}: {FormatTime(newTime)}");
                 return new EvaluationResult(ResultKind.FirstRun, newTime, null, null);
             }
+        }
+
+        // ── Import (paste from clipboard) ─────────────────────────────────────
+        // Unconditionally stores a decoded replay, overwriting any existing PB
+        // for that route. Used when the user explicitly pastes a shared replay.
+        // Returns true if the import succeeded and the caller should refresh UI.
+        public static bool ImportPB(RecordedRoom room)
+        {
+            pbs[room.Key] = room;
+            DataStore.SaveEntry(room);
+            Log.LogInfo($"[PBManager] Imported {room.Key} " +
+                        $"({room.FrameCount} frames, {FormatTime(room.TotalTime)})");
+            return true;
+        }
+
+        // ── Delete single entry ───────────────────────────────────────────────
+        // Removes one route from memory and disk.
+        // Returns true if something was actually removed.
+        public static bool DeletePB(RoomKey key)
+        {
+            if (!pbs.Remove(key)) return false;
+            DataStore.DeleteEntry(key);
+            Log.LogInfo($"[PBManager] Deleted {key}");
+            return true;
+        }
+
+        // ── Delete all entries for a scene ────────────────────────────────────
+        // Removes every route whose SceneName matches, from memory and disk.
+        // Returns the number of entries removed.
+        public static int DeleteScene(string sceneName)
+        {
+            var keys = pbs.Keys.Where(k => k.SceneName == sceneName).ToList();
+            foreach (var k in keys) pbs.Remove(k);
+            DataStore.DeleteScene(sceneName);
+            Log.LogInfo($"[PBManager] Deleted {keys.Count} entries for scene {sceneName}");
+            return keys.Count;
         }
 
         private static string FormatTime(float t)
@@ -96,7 +131,7 @@ namespace ReplayTimerMod
         public ResultKind Kind { get; }
         public float NewTime { get; }
         public float? OldPBTime { get; }
-        public float? Delta { get; } // negative = improvement, positive = missed by
+        public float? Delta { get; }
 
         public EvaluationResult(ResultKind kind, float newTime,
                                  float? oldPBTime, float? delta)

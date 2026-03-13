@@ -97,27 +97,55 @@ namespace ReplayTimerMod
                 e.totalTime, frames);
         }
 
-        // ── Public API ────────────────────────────────────────────────────────
+        // ── Helpers ───────────────────────────────────────────────────────────
         private static string FilePath(string sceneName) =>
             Path.Combine(DataDirectory, $"{sceneName}.json");
 
+        // Load the raw SerializedScene from disk (or return empty if missing).
+        private static SerializedScene LoadRaw(string path)
+        {
+            if (!File.Exists(path)) return new SerializedScene();
+            try
+            {
+                return JsonConvert.DeserializeObject<SerializedScene>(
+                           File.ReadAllText(path), JsonSettings)
+                       ?? new SerializedScene();
+            }
+            catch (Exception e)
+            {
+                Log.LogError($"[DataStore] Failed to read {path}: {e.Message}");
+                return new SerializedScene();
+            }
+        }
+
+        // Write a SerializedScene back to disk, or delete the file if it's empty.
+        private static void WriteRaw(string path, SerializedScene data)
+        {
+            try
+            {
+                if (data.entries == null || data.entries.Count == 0)
+                {
+                    if (File.Exists(path)) File.Delete(path);
+                    return;
+                }
+                File.WriteAllText(path, JsonConvert.SerializeObject(data, JsonSettings));
+            }
+            catch (Exception e)
+            {
+                Log.LogError($"[DataStore] Failed to write {path}: {e.Message}");
+            }
+        }
+
+        // ── Public API ────────────────────────────────────────────────────────
+
+        // Save (or overwrite) a single entry.
         public static void SaveEntry(RecordedRoom room)
         {
             string path = FilePath(room.Key.SceneName);
             try
             {
-                SerializedScene data;
-                if (File.Exists(path))
-                {
-                    data = JsonConvert.DeserializeObject<SerializedScene>(
-                               File.ReadAllText(path), JsonSettings)
-                           ?? new SerializedScene();
-                    data.entries ??= new List<SerializedEntry>();
-                }
-                else
-                {
-                    data = new SerializedScene();
-                }
+                var data = LoadRaw(path);
+                data.entries ??= new List<SerializedEntry>();
 
                 int idx = data.entries.FindIndex(e =>
                     e.sceneName == room.Key.SceneName &&
@@ -128,11 +156,8 @@ namespace ReplayTimerMod
                 if (idx >= 0) data.entries[idx] = serialized;
                 else data.entries.Add(serialized);
 
-                string json = JsonConvert.SerializeObject(data, JsonSettings);
-                File.WriteAllText(path, json);
-
-                Log.LogInfo($"[DataStore] Saved {room.Key} " +
-                            $"({room.FrameCount} frames, {json.Length} bytes)");
+                WriteRaw(path, data);
+                Log.LogInfo($"[DataStore] Saved {room.Key} ({room.FrameCount} frames)");
             }
             catch (Exception e)
             {
@@ -140,6 +165,48 @@ namespace ReplayTimerMod
             }
         }
 
+        // Delete a single route entry. If the file becomes empty, deletes it.
+        public static void DeleteEntry(RoomKey key)
+        {
+            string path = FilePath(key.SceneName);
+            try
+            {
+                var data = LoadRaw(path);
+                data.entries ??= new List<SerializedEntry>();
+
+                int removed = data.entries.RemoveAll(e =>
+                    e.sceneName == key.SceneName &&
+                    e.entryGate == key.EntryGate &&
+                    e.exitToScene == key.ExitToScene);
+
+                WriteRaw(path, data); // deletes file if entries now empty
+                Log.LogInfo($"[DataStore] DeleteEntry {key} — removed {removed}");
+            }
+            catch (Exception e)
+            {
+                Log.LogError($"[DataStore] DeleteEntry failed for {key}: {e.Message}");
+            }
+        }
+
+        // Delete every entry for a scene (deletes the whole JSON file).
+        public static void DeleteScene(string sceneName)
+        {
+            string path = FilePath(sceneName);
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                    Log.LogInfo($"[DataStore] Deleted scene file for {sceneName}");
+                }
+            }
+            catch (Exception e)
+            {
+                Log.LogError($"[DataStore] DeleteScene failed for {sceneName}: {e.Message}");
+            }
+        }
+
+        // Load all entries for one scene.
         public static List<RecordedRoom> LoadScene(string sceneName)
         {
             string path = FilePath(sceneName);
@@ -171,6 +238,7 @@ namespace ReplayTimerMod
             return result;
         }
 
+        // Load every entry across all scene files.
         public static Dictionary<RoomKey, RecordedRoom> LoadAll()
         {
             var result = new Dictionary<RoomKey, RecordedRoom>();
