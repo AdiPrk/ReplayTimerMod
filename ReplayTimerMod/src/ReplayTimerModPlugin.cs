@@ -19,8 +19,6 @@ namespace ReplayTimerMod
         private GhostPlayback ghostPlayback = null!;
         private ReplayUI replayUI = null!;
 
-        private ConfigEntry<KeyboardShortcut> toggleUIKey = null!;
-
         public int RecorderFrameCount => frameRecorder.FrameCount;
 
         private int sceneCount = 0;
@@ -38,14 +36,9 @@ namespace ReplayTimerMod
             PBManager.Init();
 
             frameRecorder = new FrameRecorder();
-            debugOverlay = new DebugOverlay();
+            // debugOverlay = new DebugOverlay(); // disabling this for release
             ghostPlayback = new GhostPlayback();
             replayUI = new ReplayUI();
-
-            toggleUIKey = Config.Bind(
-                "Shortcuts", "ToggleUI",
-                new KeyboardShortcut(KeyCode.F1),
-                "Open / close the replay browser");
 
             RoomTracker.Init();
 
@@ -62,7 +55,7 @@ namespace ReplayTimerMod
             if (sceneCount == 4)
             {
                 Logger.LogInfo("Scene 4 — setting up UI, ghost, overlay");
-                debugOverlay.Setup();
+                // debugOverlay.Setup();
                 ghostPlayback.Setup();
                 replayUI.Setup();
             }
@@ -71,7 +64,7 @@ namespace ReplayTimerMod
         private void OnRoomEnter(string sceneName, string entryGate,
                                   string entryFromScene)
         {
-            debugOverlay.ClearLastResult();
+            // debugOverlay.ClearLastResult();
             frameRecorder.StartRecording();
             ghostPlayback.StartPlayback(sceneName, entryFromScene);
 
@@ -91,7 +84,7 @@ namespace ReplayTimerMod
             if (recording != null)
             {
                 EvaluationResult result = PBManager.Evaluate(recording);
-                debugOverlay.SetLastResult(result);
+                // debugOverlay.SetLastResult(result);
                 replayUI.OnPBUpdated();
             }
         }
@@ -104,14 +97,10 @@ namespace ReplayTimerMod
 
         private void LateUpdate()
         {
-            // F1 toggles the replay browser
-            if (toggleUIKey.Value.IsDown())
-                replayUI.Toggle();
-
             RoomTracker.Tick();
             frameRecorder.Tick();
             ghostPlayback.Tick();
-            debugOverlay.Tick();
+            // debugOverlay.Tick();
             replayUI.Tick();
         }
     }

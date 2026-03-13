@@ -1,4 +1,5 @@
-﻿using BepInEx.Logging;
+﻿using System.Collections.Generic;
+using BepInEx.Logging;
 using UnityEngine;
 
 namespace ReplayTimerMod
@@ -10,23 +11,35 @@ namespace ReplayTimerMod
     //   LateUpdate               → Tick() advances playback in LR time
     //   RoomTracker.OnRoomExit / OnRecordingDiscarded → StopPlayback()
     //
-    // Ghost selection:
-    //   RoomKey is now (SceneName, EntryFromScene, ExitToScene).
-    //   We know SceneName and EntryFromScene on entry, but not ExitToScene yet.
-    //   So we match on (SceneName, EntryFromScene) and pick the fastest exit.
-    //   This is unambiguous — EntryFromScene uniquely identifies direction.
+    // Sprite rendering:
+    //   We create a minimal GO (inactive at AddComponent time so tk2dSprite's
+    //   Awake is deferred), assign Collection before activation, then activate.
+    //   This is the only safe way to set Collection before the mesh is built —
+    //   Instantiate drags in all hero scripts and causes fights.
+    //
+    //   Clip name → spriteId is resolved via a Dictionary built once at init
+    //   so the hot tick path is a single hash lookup, not GetClipByName() which
+    //   does a linear scan every frame.
     public class GhostPlayback
     {
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("GhostPlayback");
 
-        private const float DIAMOND_SIZE = 0.25f;
         private const float GHOST_ALPHA = 0.5f;
-        private static readonly Color GHOST_COLOR =
-            new Color(0.4f, 0.8f, 1f, GHOST_ALPHA);
+        private static readonly Color GHOST_COLOR = new Color(0.4f, 0.8f, 1f, GHOST_ALPHA);
 
-        private GameObject? ghostObj;
-        private LineRenderer? line;
+        // ── Ghost objects ─────────────────────────────────────────────────────
+        private GameObject? ghostSpriteGo;
+        private tk2dSprite? ghostSprite;
+
+        private GameObject? diamondGo;
+        private LineRenderer? diamondLine;
+
+        // Built once at sprite init — avoids per-tick GetClipByName linear scan.
+        // Key = clip name, Value = the clip (contains frames[].spriteId).
+        private Dictionary<string, tk2dSpriteAnimationClip>? clipCache;
+
+        private bool spriteInitDone = false; // attempted at least once this session
 
         private RecordedRoom? currentPB;
         private float playbackTime = 0f;
@@ -35,47 +48,41 @@ namespace ReplayTimerMod
         // ── Setup ─────────────────────────────────────────────────────────────
         public void Setup()
         {
-            ghostObj = new GameObject("ReplayGhost");
-            Object.DontDestroyOnLoad(ghostObj);
+            diamondGo = new GameObject("ReplayGhost_Diamond");
+            Object.DontDestroyOnLoad(diamondGo);
+            diamondGo.SetActive(false);
 
-            line = ghostObj.AddComponent<LineRenderer>();
-            line.useWorldSpace = true;
-            line.loop = true;
-            line.positionCount = 4;
-            line.startWidth = 0.06f;
-            line.endWidth = 0.06f;
-            line.numCapVertices = 2;
-            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            line.receiveShadows = false;
-
+            diamondLine = diamondGo.AddComponent<LineRenderer>();
+            diamondLine.useWorldSpace = true;
+            diamondLine.loop = true;
+            diamondLine.positionCount = 4;
+            diamondLine.startWidth = 0.06f;
+            diamondLine.endWidth = 0.06f;
+            diamondLine.numCapVertices = 2;
+            diamondLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            diamondLine.receiveShadows = false;
             var mat = new Material(Shader.Find("Sprites/Default"));
             mat.color = GHOST_COLOR;
-            line.material = mat;
+            diamondLine.material = mat;
 
-            ghostObj.SetActive(false);
             Log.LogInfo("[Ghost] Setup complete");
         }
 
         // ── Public API ────────────────────────────────────────────────────────
 
-        // sceneName     — room we just entered
-        // entryFromScene — room we came from (the direction discriminator)
         public void StartPlayback(string sceneName, string entryFromScene)
         {
             currentPB = GetBestPB(sceneName, entryFromScene);
-
             if (currentPB == null)
             {
-                Log.LogInfo($"[Ghost] No PB for {sceneName} ← {entryFromScene}");
-                ghostObj?.SetActive(false);
+                Log.LogInfo($"[Ghost] No PB for {sceneName} <- {entryFromScene}");
+                HideAll();
                 playing = false;
                 return;
             }
 
             playbackTime = 0f;
             playing = true;
-            ghostObj?.SetActive(true);
-
             Log.LogInfo($"[Ghost] Playing {currentPB.Key} " +
                         $"({currentPB.FrameCount} frames, {FormatTime(currentPB.TotalTime)})");
         }
@@ -84,7 +91,7 @@ namespace ReplayTimerMod
         {
             playing = false;
             currentPB = null;
-            ghostObj?.SetActive(false);
+            HideAll();
         }
 
         public bool IsPlaying => playing;
@@ -92,8 +99,7 @@ namespace ReplayTimerMod
         // ── Tick ──────────────────────────────────────────────────────────────
         public void Tick()
         {
-            if (!playing || currentPB == null || line == null) return;
-
+            if (!playing || currentPB == null) return;
             try { if (!LoadRemover.ShouldTick()) return; }
             catch { return; }
 
@@ -110,52 +116,142 @@ namespace ReplayTimerMod
 
             FrameData a = currentPB.Frames[frameIdx];
             FrameData b = currentPB.Frames[frameIdx + 1];
-
-            float t = Mathf.Clamp01(
-                (playbackTime - frameIdx * interval) / interval);
+            float t = Mathf.Clamp01((playbackTime - frameIdx * interval) / interval);
 
             float x = Mathf.LerpUnclamped(a.x, b.x, t);
             float y = Mathf.LerpUnclamped(a.y, b.y, t);
             float z = HeroController.instance != null
-                ? HeroController.instance.transform.position.z
-                : 0f;
+                ? HeroController.instance.transform.position.z : 0f;
 
-            DrawDiamond(new Vector3(x, y, z));
+            FrameData animFrame = t < 0.5f ? a : b;
+            var pos = new Vector3(x, y, z);
+
+            if (!string.IsNullOrEmpty(animFrame.animClip) && TryInitSprite())
+                RenderSprite(pos, animFrame);
+            else
+                RenderDiamond(pos);
+        }
+
+        // ── Sprite init ───────────────────────────────────────────────────────
+        // Creates a minimal GO while inactive so tk2dSprite.Awake() is deferred
+        // until after we assign Collection — this is what prevents the pink rect.
+        // Builds the clip cache from the hero's animator library in the same pass.
+        private bool TryInitSprite()
+        {
+            if (ghostSprite != null) return true;
+            if (spriteInitDone) return false;
+            spriteInitDone = true;
+
+            try
+            {
+                if (HeroController.instance == null)
+                {
+                    Log.LogWarning("[Ghost] HeroController null — using diamond");
+                    return false;
+                }
+
+                var heroSprite = HeroController.instance.GetComponent<tk2dSprite>()
+                              ?? HeroController.instance.GetComponentInChildren<tk2dSprite>();
+                if (heroSprite?.Collection == null)
+                {
+                    Log.LogWarning("[Ghost] No tk2dSprite/Collection on hero — using diamond");
+                    return false;
+                }
+
+                // Create GO *inactive* so AddComponent defers Awake.
+                ghostSpriteGo = new GameObject("ReplayGhost_Sprite");
+                ghostSpriteGo.SetActive(false);
+                Object.DontDestroyOnLoad(ghostSpriteGo);
+
+                ghostSprite = ghostSpriteGo.AddComponent<tk2dSprite>();
+                // Assign Collection before activation so Awake has it.
+                ghostSprite.Collection = heroSprite.Collection;
+                ghostSprite.spriteId = heroSprite.spriteId;
+
+                ghostSpriteGo.SetActive(true);   // Awake fires here with Collection set
+                ghostSprite.color = GHOST_COLOR; // set after activation
+
+                Log.LogInfo($"[Ghost] Sprite ready — collection='{heroSprite.Collection.name}' " +
+                            $"spriteId={ghostSprite.spriteId}");
+
+                // Build clip cache from the hero's animator library.
+                var heroAnim = HeroController.instance.GetComponent<tk2dSpriteAnimator>();
+                if (heroAnim?.Library != null)
+                {
+                    clipCache = new Dictionary<string, tk2dSpriteAnimationClip>(
+                        heroAnim.Library.clips.Length);
+                    foreach (var clip in heroAnim.Library.clips)
+                        if (!string.IsNullOrEmpty(clip.name))
+                            clipCache[clip.name] = clip;
+                    Log.LogInfo($"[Ghost] Clip cache: {clipCache.Count} clips");
+                }
+                else
+                {
+                    Log.LogWarning("[Ghost] No animator library — clip lookup will be skipped");
+                }
+
+                return true;
+            }
+            catch (System.Exception ex)
+            {
+                Log.LogWarning($"[Ghost] Sprite init failed: {ex.Message} — using diamond");
+                if (ghostSpriteGo != null) { Object.Destroy(ghostSpriteGo); ghostSpriteGo = null; }
+                ghostSprite = null;
+                return false;
+            }
+        }
+
+        // ── Rendering ─────────────────────────────────────────────────────────
+        private void RenderSprite(Vector3 pos, FrameData fd)
+        {
+            if (ghostSprite == null || ghostSpriteGo == null) return;
+
+            if (clipCache != null && clipCache.TryGetValue(fd.animClip, out var clip)
+                && clip.frames.Length > 0)
+            {
+                ghostSprite.spriteId = clip.frames[fd.animFrame % clip.frames.Length].spriteId;
+            }
+
+            ghostSpriteGo.transform.position = pos;
+
+            Vector3 s = ghostSpriteGo.transform.localScale;
+            ghostSpriteGo.transform.localScale = new Vector3(
+                fd.facingRight ? Mathf.Abs(s.x) : -Mathf.Abs(s.x), s.y, s.z);
+
+            ghostSpriteGo.SetActive(true);
+            diamondGo?.SetActive(false);
+        }
+
+        private void RenderDiamond(Vector3 center)
+        {
+            ghostSpriteGo?.SetActive(false);
+            if (diamondGo == null || diamondLine == null) return;
+            diamondGo.SetActive(true);
+            const float s = 0.25f;
+            diamondLine.SetPosition(0, center + new Vector3(0, s, 0));
+            diamondLine.SetPosition(1, center + new Vector3(s, 0, 0));
+            diamondLine.SetPosition(2, center + new Vector3(0, -s, 0));
+            diamondLine.SetPosition(3, center + new Vector3(-s, 0, 0));
+        }
+
+        private void HideAll()
+        {
+            ghostSpriteGo?.SetActive(false);
+            diamondGo?.SetActive(false);
         }
 
         // ── Ghost selection ───────────────────────────────────────────────────
-        // Match on (SceneName, EntryFromScene) — both known on entry.
-        // ExitToScene is unknown until we leave, so if there are multiple
-        // saved exits from this direction, pick the fastest.
-        // In practice most room→direction combos have exactly one recorded exit.
         private static RecordedRoom? GetBestPB(string scene, string entryFromScene)
         {
             RecordedRoom? best = null;
             foreach (var pair in PBManager.AllPBs())
             {
                 var key = pair.Key;
-                if (key.SceneName != scene || key.EntryFromScene != entryFromScene)
-                    continue;
-
-                if (best == null || pair.Value.TotalTime < best.TotalTime)
-                    best = pair.Value;
+                if (key.SceneName != scene || key.EntryFromScene != entryFromScene) continue;
+                if (best == null || pair.Value.TotalTime < best.TotalTime) best = pair.Value;
             }
-
-            if (best != null)
-                Log.LogInfo($"[Ghost] Matched {best.Key}");
-
+            if (best != null) Log.LogInfo($"[Ghost] Matched {best.Key}");
             return best;
-        }
-
-        // ── Drawing ───────────────────────────────────────────────────────────
-        private void DrawDiamond(Vector3 center)
-        {
-            if (line == null) return;
-            float s = DIAMOND_SIZE;
-            line.SetPosition(0, center + new Vector3(0, s, 0));
-            line.SetPosition(1, center + new Vector3(s, 0, 0));
-            line.SetPosition(2, center + new Vector3(0, -s, 0));
-            line.SetPosition(3, center + new Vector3(-s, 0, 0));
         }
 
         private static string FormatTime(float t)

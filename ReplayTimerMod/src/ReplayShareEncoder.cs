@@ -3,7 +3,6 @@ using System.IO;
 using System.IO.Compression;
 using System.Text;
 using BepInEx.Logging;
-using Newtonsoft.Json;
 
 namespace ReplayTimerMod
 {
@@ -29,21 +28,8 @@ namespace ReplayTimerMod
     //   [⌈N/8⌉] facing bitfield  MSB-first, 1 = facingRight
     //
     // SVLQ = ZigZag(n) → ULEB128.
-    // During constant-velocity motion the 2nd-order residual is 0 every frame,
-    // encoding as a single 0x00 byte — maximally compressible by Deflate.
-    //
-    // Why this beats RTM2:
-    //   RTM2 had double base64 (binary→b64→JSON→Deflate→b64), making Deflate
-    //   compress printable ASCII rather than raw binary, and used 1st-order
-    //   deltas (repeating velocity values) instead of 2nd-order (near-zero
-    //   acceleration). Both problems are fixed here.
-    //
-    // Measured sizes (Python simulation, realistic platformer movement):
-    //   5 s straight:        RTM2 = 148 ch  →  RTM3 = 48 ch
-    //   30 s complex room:   RTM2 = 424 ch  →  RTM3 = 124 ch
-    //   60 s complex room:   RTM2 = 480 ch  →  RTM3 = 160 ch
-    //
-    // Decode() also accepts legacy RTM2 strings automatically.
+    // Note: share strings do not include animation clip data — ghost playback
+    // from imported strings falls back to the diamond renderer.
     // ─────────────────────────────────────────────────────────────────────────
 
     public static class ReplayShareEncoder
@@ -53,8 +39,6 @@ namespace ReplayTimerMod
 
         private static readonly byte[] MagicRTM3 =
             { (byte)'R', (byte)'T', (byte)'M', (byte)'3' };
-        private static readonly byte[] MagicRTM2 =
-            { (byte)'R', (byte)'T', (byte)'M', (byte)'2' };
 
         private const byte Version = 0x01;
         private const float PosScale = 100f;
@@ -82,13 +66,8 @@ namespace ReplayTimerMod
                     raw[0] == 'R' && raw[1] == 'T' && raw[2] == 'M' && raw[3] == '3')
                     return ReadBinary(raw);
 
-                if (raw.Length >= 1 && raw[0] == '{')
-                {
-                    Log.LogWarning("[ShareEncoder] Decoding legacy RTM2 string");
-                    return DecodeRTM2Legacy(raw);
-                }
-
-                Log.LogError("[ShareEncoder] Unrecognised payload format");
+                Log.LogError("[ShareEncoder] Unrecognised payload format — " +
+                             $"got '{(char)raw[0]}{(char)raw[1]}{(char)raw[2]}{(char)raw[3]}'");
                 return null;
             }
             catch (Exception ex)
@@ -282,83 +261,5 @@ namespace ReplayTimerMod
             (short)Math.Max(short.MinValue,
                    Math.Min(short.MaxValue, (int)Math.Round(world * PosScale)));
 
-        // ── RTM2 legacy decoder ───────────────────────────────────────────────
-        // Old format: base64( Deflate( JSON{ frames: base64(RTM2 binary) } ) )
-        // jsonBytes is already the Deflate-decompressed JSON at this point.
-
-        [Serializable]
-        private class Rtm2Envelope
-        {
-            public string sceneName = "";
-            public string entryFromScene = "";
-            public string exitToScene = "";
-            public float totalTime = 0f;
-            public string frames = "";
-        }
-
-        private static RecordedRoom? DecodeRTM2Legacy(byte[] jsonBytes)
-        {
-            try
-            {
-                var env = JsonConvert.DeserializeObject<Rtm2Envelope>(
-                    Encoding.UTF8.GetString(jsonBytes));
-                if (env == null) return null;
-
-                byte[] blob = Convert.FromBase64String(env.frames);
-
-                using var ms = new MemoryStream(blob);
-                using var r = new BinaryReader(ms, Encoding.UTF8, leaveOpen: true);
-
-                for (int i = 0; i < 4; i++)
-                    if (r.ReadByte() != MagicRTM2[i])
-                        throw new InvalidDataException("Not an RTM2 blob");
-
-                r.ReadSingle();
-                int n = r.ReadInt32();
-                int xLen = r.ReadUInt16();
-                int yLen = r.ReadUInt16();
-                byte[] xStream = r.ReadBytes(xLen);
-                byte[] yStream = r.ReadBytes(yLen);
-                byte[] facingBits = r.ReadBytes((n + 7) / 8);
-
-                short[] xs = DecodeRTM2Stream(xStream, n);
-                short[] ys = DecodeRTM2Stream(yStream, n);
-
-                var frames = new FrameData[n];
-                for (int i = 0; i < n; i++)
-                    frames[i] = new FrameData
-                    {
-                        x = xs[i] / PosScale,
-                        y = ys[i] / PosScale,
-                        facingRight = (facingBits[i / 8] & (0x80 >> (i % 8))) != 0,
-                        deltaTime = FrameRecorder.RECORD_INTERVAL
-                    };
-
-                return new RecordedRoom(
-                    new RoomKey(env.sceneName, env.entryFromScene, env.exitToScene),
-                    env.totalTime, frames);
-            }
-            catch (Exception ex)
-            {
-                Log.LogError($"[RTM2] Legacy decode failed: {ex.Message}");
-                return null;
-            }
-        }
-
-        private static short[] DecodeRTM2Stream(byte[] stream, int n)
-        {
-            var result = new short[n];
-            using var ms = new MemoryStream(stream);
-            using var r = new BinaryReader(ms, Encoding.UTF8, leaveOpen: true);
-            short prev = r.ReadInt16();
-            result[0] = prev;
-            for (int i = 1; i < n; i++)
-            {
-                byte b = r.ReadByte();
-                prev = b == 0x7F ? r.ReadInt16() : (short)(prev + (sbyte)b);
-                result[i] = prev;
-            }
-            return result;
-        }
     }
 }

@@ -6,6 +6,10 @@
         public float y;
         public bool facingRight;
         public float deltaTime;
+
+        // Animation state — populated at record time, empty string on old recordings.
+        public string animClip;   // tk2dSpriteAnimationClip.name
+        public int animFrame;     // integer frame index within that clip
     }
 
     // Uniquely identifies a route through a room.

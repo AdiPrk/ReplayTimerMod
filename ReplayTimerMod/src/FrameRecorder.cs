@@ -64,12 +64,31 @@ namespace ReplayTimerMod
             bool facingRight = HeroController.instance.transform.localScale.x > 0f;
             Vector3 pos = HeroController.instance.transform.position;
 
+            // Capture animation state. tk2dSpriteAnimator.CurrentFrame is an
+            // integer index into CurrentClip.frames[], exactly what we need for
+            // playback — no normalisation required.
+            string clipName = "";
+            int clipFrame = 0;
+            try
+            {
+                var anim = HeroController.instance
+                    .GetComponent<tk2dSpriteAnimator>();
+                if (anim?.CurrentClip != null)
+                {
+                    clipName = anim.CurrentClip.name;
+                    clipFrame = anim.CurrentFrame;
+                }
+            }
+            catch { }
+
             frames.Add(new FrameData
             {
                 x = pos.x,
                 y = pos.y,
                 facingRight = facingRight,
-                deltaTime = RECORD_INTERVAL
+                deltaTime = RECORD_INTERVAL,
+                animClip = clipName,
+                animFrame = clipFrame
             });
         }
 
