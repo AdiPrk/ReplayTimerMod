@@ -1,0 +1,226 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|c:\\users\\adity\\onedrive\\desktop\\code\\replaytimermod\\replaytimermod\\src\\replaytimermodplugin.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|solutionrelative:replaytimermod\\src\\replaytimermodplugin.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|c:\\users\\adity\\onedrive\\desktop\\code\\replaytimermod\\replaytimermod\\src\\replaydata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|solutionrelative:replaytimermod\\src\\replaydata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|c:\\users\\adity\\onedrive\\desktop\\code\\replaytimermod\\replaytimermod\\src\\roomtracker.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|solutionrelative:replaytimermod\\src\\roomtracker.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|c:\\users\\adity\\onedrive\\desktop\\code\\replaytimermod\\replaytimermod\\src\\gamehooks.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|solutionrelative:replaytimermod\\src\\gamehooks.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|c:\\users\\adity\\onedrive\\desktop\\code\\replaytimermod\\replaytimermod\\src\\framerecorder.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|solutionrelative:replaytimermod\\src\\framerecorder.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|c:\\users\\adity\\onedrive\\desktop\\code\\replaytimermod\\replaytimermod\\src\\loadremover.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|solutionrelative:replaytimermod\\src\\loadremover.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|c:\\users\\adity\\onedrive\\desktop\\code\\replaytimermod\\replaytimermod\\loadremover.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|solutionrelative:replaytimermod\\loadremover.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|c:\\users\\adity\\onedrive\\desktop\\code\\replaytimermod\\replaytimermod\\replaytimermod.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|solutionrelative:replaytimermod\\replaytimermod.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|c:\\users\\adity\\onedrive\\desktop\\code\\replaytimermod\\replaytimermod\\nuget.config||{FA3CD31E-987B-443A-9B81-186104E8DAC1}",
+      "RelativeMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|solutionrelative:replaytimermod\\nuget.config||{FA3CD31E-987B-443A-9B81-186104E8DAC1}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|c:\\users\\adity\\onedrive\\desktop\\code\\replaytimermod\\replaytimermod\\readme.md||{24510B54-A648-4D69-A6C5-F68CBDF07546}",
+      "RelativeMoniker": "D:0:0:{6B58DC2D-1103-44EF-8B95-35934216D394}|ReplayTimerMod\\ReplayTimerMod.csproj|solutionrelative:replaytimermod\\readme.md||{24510B54-A648-4D69-A6C5-F68CBDF07546}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 16,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:6:0:{dcc4ea97-1c0c-482b-b205-e541c0df9728}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:4:0:{dcc4ea97-1c0c-482b-b205-e541c0df9728}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{dcc4ea97-1c0c-482b-b205-e541c0df9728}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:129:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{75188d03-9892-4ae2-abf1-207126247ce5}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "LoadRemover.cs",
+              "DocumentMoniker": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\src\\LoadRemover.cs",
+              "RelativeDocumentMoniker": "ReplayTimerMod\\src\\LoadRemover.cs",
+              "ToolTip": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\src\\LoadRemover.cs",
+              "RelativeToolTip": "ReplayTimerMod\\src\\LoadRemover.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAD0AAAA1AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-12T23:54:22.948Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "GameHooks.cs",
+              "DocumentMoniker": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\src\\GameHooks.cs",
+              "RelativeDocumentMoniker": "ReplayTimerMod\\src\\GameHooks.cs",
+              "ToolTip": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\src\\GameHooks.cs",
+              "RelativeToolTip": "ReplayTimerMod\\src\\GameHooks.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAQwBEAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-12T23:54:15.191Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "ReplayData.cs",
+              "DocumentMoniker": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\src\\ReplayData.cs",
+              "RelativeDocumentMoniker": "ReplayTimerMod\\src\\ReplayData.cs",
+              "ToolTip": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\src\\ReplayData.cs",
+              "RelativeToolTip": "ReplayTimerMod\\src\\ReplayData.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACAAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-12T23:54:05.277Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "FrameRecorder.cs",
+              "DocumentMoniker": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\src\\FrameRecorder.cs",
+              "RelativeDocumentMoniker": "ReplayTimerMod\\src\\FrameRecorder.cs",
+              "ToolTip": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\src\\FrameRecorder.cs",
+              "RelativeToolTip": "ReplayTimerMod\\src\\FrameRecorder.cs",
+              "ViewState": "AgIAAD4AAAAAAAAAAAAowF0AAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-12T23:53:47.455Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "RoomTracker.cs",
+              "DocumentMoniker": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\src\\RoomTracker.cs",
+              "RelativeDocumentMoniker": "ReplayTimerMod\\src\\RoomTracker.cs",
+              "ToolTip": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\src\\RoomTracker.cs",
+              "RelativeToolTip": "ReplayTimerMod\\src\\RoomTracker.cs",
+              "ViewState": "AgIAAIYAAAAAAAAAAAAowKUAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-12T23:53:37.591Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{c6f34f0d-7ae5-4f3a-be61-fe0c21ae9eb8}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "ReplayTimerMod",
+              "DocumentMoniker": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\ReplayTimerMod.csproj",
+              "RelativeDocumentMoniker": "ReplayTimerMod\\ReplayTimerMod.csproj",
+              "ToolTip": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\ReplayTimerMod.csproj",
+              "RelativeToolTip": "ReplayTimerMod\\ReplayTimerMod.csproj",
+              "ViewState": "AgIAABAAAAAAAAAAAAAEwB0AAABiAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2026-03-12T23:15:45.369Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "LoadRemover.cs",
+              "DocumentMoniker": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\LoadRemover.cs",
+              "RelativeDocumentMoniker": "ReplayTimerMod\\LoadRemover.cs",
+              "ToolTip": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\LoadRemover.cs",
+              "RelativeToolTip": "ReplayTimerMod\\LoadRemover.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-12T23:11:48.865Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "ReplayTimerModPlugin.cs",
+              "DocumentMoniker": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\src\\ReplayTimerModPlugin.cs",
+              "RelativeDocumentMoniker": "ReplayTimerMod\\src\\ReplayTimerModPlugin.cs",
+              "ToolTip": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\src\\ReplayTimerModPlugin.cs",
+              "RelativeToolTip": "ReplayTimerMod\\src\\ReplayTimerModPlugin.cs",
+              "ViewState": "AgIAAD0AAAAAAAAAAAAowFwAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-12T23:10:45.516Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "nuget.config",
+              "DocumentMoniker": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\nuget.config",
+              "RelativeDocumentMoniker": "ReplayTimerMod\\nuget.config",
+              "ToolTip": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\nuget.config",
+              "RelativeToolTip": "ReplayTimerMod\\nuget.config",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000601|",
+              "WhenOpened": "2026-03-12T23:10:41.54Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "README.md",
+              "DocumentMoniker": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\README.md",
+              "RelativeDocumentMoniker": "ReplayTimerMod\\README.md",
+              "ToolTip": "C:\\Users\\adity\\OneDrive\\Desktop\\Code\\ReplayTimerMod\\ReplayTimerMod\\README.md",
+              "RelativeToolTip": "ReplayTimerMod\\README.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-03-12T23:10:36.071Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
