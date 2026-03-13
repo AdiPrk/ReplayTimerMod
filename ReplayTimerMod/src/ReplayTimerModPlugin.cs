@@ -9,9 +9,9 @@ namespace ReplayTimerMod
     [BepInAutoPlugin(id: "io.github.adiprk.replaytimermod")]
     public partial class ReplayTimerModPlugin : BaseUnityPlugin
     {
-        internal static ReplayTimerModPlugin Instance { get; private set; }
+        internal static ReplayTimerModPlugin Instance { get; private set; } = null!;
 
-        private FrameRecorder frameRecorder;
+        private FrameRecorder frameRecorder = null!;
 
         private void Awake()
         {
@@ -22,57 +22,39 @@ namespace ReplayTimerMod
 
             frameRecorder = new FrameRecorder();
 
-            // RoomTracker.Init() subscribes to activeSceneChanged,
-            // OnPlayerDead, and OnSavestateLoad — must happen before we
-            // subscribe below so its state is cleaned up first.
+            // RoomTracker.Init() must run before we subscribe to its events so
+            // that its own handlers (HandleInvalidation) are registered first.
             RoomTracker.Init();
 
             RoomTracker.OnRoomEnter += OnRoomEnter;
             RoomTracker.OnRoomExit += OnRoomExit;
-
-            // Both death and savestate loads should discard the recording.
-            // RoomTracker has already cleared its own state by the time these fire.
-            GameHooks.OnPlayerDead += OnRecordingInvalidated;
+            RoomTracker.OnRecordingDiscarded += OnRecordingDiscarded;
         }
 
-        private void OnRoomEnter(string sceneName)
+        // sceneName, entryGate, entryFromScene
+        private void OnRoomEnter(string sceneName, string entryGate, string entryFromScene)
         {
-            Logger.LogInfo($"[RoomTracker] Entered room: {sceneName}");
+            Logger.LogInfo($"[Recorder] START {sceneName} [{entryGate}] from {entryFromScene}");
             frameRecorder.StartRecording();
         }
 
-        private void OnRoomExit(string sceneName, float lrTime, bool wasNaturalExit)
+        // sceneName, entryGate, exitToScene, lrTime
+        private void OnRoomExit(string sceneName, string entryGate, string exitToScene, float lrTime)
         {
-            Logger.LogInfo($"[RoomTracker] Exited room: {sceneName} | LR time: {FormatTime(lrTime)} | Natural: {wasNaturalExit}");
+            RoomKey key = new RoomKey(sceneName, entryGate, exitToScene);
+            Logger.LogInfo($"[Recorder] END {key} — {FormatTime(lrTime)}");
 
-            RecordedRoom? recording = frameRecorder.FinishRecording(sceneName, lrTime);
+            RecordedRoom? recording = frameRecorder.FinishRecording(key, lrTime);
 
             if (recording != null)
             {
-                Logger.LogInfo($"[FrameRecorder] Captured {recording.FrameCount} frames for {sceneName}");
-
-                if (wasNaturalExit)
-                {
-                    // TODO: pass to PBManager once implemented
-                    Logger.LogInfo($"[PBManager] Would evaluate PB for {sceneName}: {FormatTime(lrTime)}");
-                }
-                else
-                {
-                    Logger.LogInfo($"[PBManager] Discarding — quit to menu mid-room");
-                }
-            }
-            else
-            {
-                Logger.LogInfo($"[FrameRecorder] No valid recording for {sceneName} (discarded or empty)");
+                Logger.LogInfo($"[Recorder] {recording.FrameCount} frames captured");
+                // TODO: pass to PBManager
             }
         }
 
-        private void OnRecordingInvalidated()
+        private void OnRecordingDiscarded()
         {
-            // Covers both death and savestate loads.
-            // FinishRecording will return null since DiscardRecording clears the
-            // frames — this is intentional, no PB evaluation happens.
-            Logger.LogInfo("[ReplayMod] Recording invalidated (death or savestate) — discarding");
             frameRecorder.DiscardRecording();
         }
 
