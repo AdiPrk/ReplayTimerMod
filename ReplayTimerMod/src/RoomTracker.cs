@@ -138,7 +138,7 @@ namespace ReplayTimerMod
                 bool isTurnaround = arrivedViaGate && (to.name == EntryFromScene);
                 bool isOverTime = CurrentRoomTime > MAX_ROOM_TIME;
 
-                if (arrivedViaGate && !isTurnaround && !isOverTime && !toMenu)
+                if (arrivedViaGate /*&& !isTurnaround*/ && !isOverTime && !toMenu)
                 {
                     // Valid natural exit.
                     string exitedScene = CurrentScene;
@@ -154,9 +154,7 @@ namespace ReplayTimerMod
                 }
                 else
                 {
-                    if (isTurnaround)
-                        Log.LogInfo($"[RoomTracker] Turnaround in {CurrentScene} — discarding");
-                    else if (isOverTime)
+                    if (isOverTime)
                         Log.LogInfo($"[RoomTracker] Over time limit in {CurrentScene} — discarding");
                     else if (!arrivedViaGate)
                         Log.LogInfo($"[RoomTracker] Non-gate exit from {CurrentScene} — discarding");
