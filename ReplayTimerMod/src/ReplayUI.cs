@@ -131,6 +131,7 @@ namespace ReplayTimerMod
         }
 
         public void Hide() { /* kept for plugin compatibility */ }
+        public void Toggle() => TogglePanel();
 
         // ═════════════════════════════════════════════════════════════════════
         // BUILD — tab button (bottom-left ≡)
@@ -370,7 +371,7 @@ namespace ReplayTimerMod
 
             var entries = PBManager.AllPBs()
                 .Where(p => p.Key.SceneName == scene)
-                .OrderBy(p => p.Key.EntryGate)
+                .OrderBy(p => p.Key.EntryFromScene)
                 .ThenBy(p => p.Key.ExitToScene)
                 .ToList();
 
@@ -439,7 +440,7 @@ namespace ReplayTimerMod
                 TextAnchor.MiddleRight, x: timeX, w: timeW, h: h);
 
             // Route label — fills remaining left space
-            string entry = string.IsNullOrEmpty(key.EntryGate) ? "spawn" : key.EntryGate;
+            string entry = string.IsNullOrEmpty(key.EntryFromScene) ? "spawn" : key.EntryFromScene;
             MakeLbl(row.transform, $"{entry} → {key.ExitToScene}",
                 UIStyle.FontSizeSm, UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: M, w: timeX - M * 2, h: h);

@@ -88,12 +88,12 @@ namespace ReplayTimerMod
             if (RoomTracker.IsRecording)
             {
                 stateText.color = new Color(0.4f, 1f, 0.4f);
-                stateText.text = "● RECORDING";
+                stateText.text = "RECORDING";
             }
             else
             {
                 stateText.color = new Color(0.7f, 0.7f, 0.7f);
-                stateText.text = "○ IDLE";
+                stateText.text = "IDLE";
             }
 
             roomText!.text = RoomTracker.IsRecording
@@ -108,7 +108,7 @@ namespace ReplayTimerMod
                 // We don't know the exit yet, so look up by scene+entry only —
                 // show the best PB we have for any exit from this entry.
                 float? pb = GetBestPBForEntry(RoomTracker.CurrentScene,
-                                              RoomTracker.EntryGateName);
+                                              RoomTracker.EntryFromScene);
 
                 timeText!.color = (pb.HasValue && cur > pb.Value)
                     ? new Color(1f, 0.5f, 0.5f)
@@ -155,14 +155,13 @@ namespace ReplayTimerMod
 
         private static float? GetBestPBForEntry(string scene, string entryGate)
         {
-            // Ask PBManager for all PBs and find the best time where
-            // scene and entry gate match (exit is unknown mid-run).
-            // This is a lightweight scan — PB counts are small.
+            // Match on EntryFromScene (= RoomTracker.EntryFromScene) since
+            // RoomKey no longer stores EntryGate.
+            string entryFromScene = entryGate; // param reused — caller passes EntryFromScene
             float? best = null;
-            // We iterate keys manually since Dictionary has no LINQ-free filter.
             foreach (var pair in PBManager.AllPBs())
             {
-                if (pair.Key.SceneName == scene && pair.Key.EntryGate == entryGate)
+                if (pair.Key.SceneName == scene && pair.Key.EntryFromScene == entryFromScene)
                 {
                     if (!best.HasValue || pair.Value.TotalTime < best.Value)
                         best = pair.Value.TotalTime;

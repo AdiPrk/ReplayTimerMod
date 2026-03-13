@@ -1,4 +1,5 @@
 using BepInEx;
+using BepInEx.Configuration;
 using HarmonyLib;
 using System.IO;
 using System.Reflection;
@@ -17,6 +18,8 @@ namespace ReplayTimerMod
         private DebugOverlay debugOverlay = null!;
         private GhostPlayback ghostPlayback = null!;
         private ReplayUI replayUI = null!;
+
+        private ConfigEntry<KeyboardShortcut> toggleUIKey = null!;
 
         public int RecorderFrameCount => frameRecorder.FrameCount;
 
@@ -39,7 +42,13 @@ namespace ReplayTimerMod
             ghostPlayback = new GhostPlayback();
             replayUI = new ReplayUI();
 
+            toggleUIKey = Config.Bind(
+                "Shortcuts", "ToggleUI",
+                new KeyboardShortcut(KeyCode.F1),
+                "Open / close the replay browser");
+
             RoomTracker.Init();
+
             RoomTracker.OnRoomEnter += OnRoomEnter;
             RoomTracker.OnRoomExit += OnRoomExit;
             RoomTracker.OnRecordingDiscarded += OnRecordingDiscarded;
@@ -59,25 +68,29 @@ namespace ReplayTimerMod
             }
         }
 
-        private void OnRoomEnter(string sceneName, string entryGate, string entryFromScene)
+        private void OnRoomEnter(string sceneName, string entryGate,
+                                  string entryFromScene)
         {
             debugOverlay.ClearLastResult();
             frameRecorder.StartRecording();
-            ghostPlayback.StartPlayback(sceneName, entryGate);
-            // ReplayUI hides itself every frame when not paused — nothing to do here
+            ghostPlayback.StartPlayback(sceneName, entryFromScene);
+
+            // Always hide the replay browser when active gameplay begins —
+            // it shouldn't be blocking the screen during a run.
+            replayUI.Hide();
         }
 
-        private void OnRoomExit(string sceneName, string entryGate,
+        private void OnRoomExit(string sceneName, string entryFromScene,
                                  string exitToScene, float lrTime)
         {
             ghostPlayback.StopPlayback();
 
-            var key = new RoomKey(sceneName, entryGate, exitToScene);
-            var recording = frameRecorder.FinishRecording(key, lrTime);
+            RoomKey key = new RoomKey(sceneName, entryFromScene, exitToScene);
+            RecordedRoom? recording = frameRecorder.FinishRecording(key, lrTime);
 
             if (recording != null)
             {
-                var result = PBManager.Evaluate(recording);
+                EvaluationResult result = PBManager.Evaluate(recording);
                 debugOverlay.SetLastResult(result);
                 replayUI.OnPBUpdated();
             }
@@ -91,6 +104,10 @@ namespace ReplayTimerMod
 
         private void LateUpdate()
         {
+            // F1 toggles the replay browser
+            if (toggleUIKey.Value.IsDown())
+                replayUI.Toggle();
+
             RoomTracker.Tick();
             frameRecorder.Tick();
             ghostPlayback.Tick();

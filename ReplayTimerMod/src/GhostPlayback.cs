@@ -1,5 +1,4 @@
 ﻿using BepInEx.Logging;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace ReplayTimerMod
@@ -7,23 +6,24 @@ namespace ReplayTimerMod
     // Plays back a previously recorded PB run as a ghost in world space.
     //
     // Lifecycle:
-    //   RoomTracker.OnRoomEnter  → StartPlayback() with best PB for this entry
+    //   RoomTracker.OnRoomEnter  → StartPlayback(scene, entryFromScene)
     //   LateUpdate               → Tick() advances playback in LR time
     //   RoomTracker.OnRoomExit / OnRecordingDiscarded → StopPlayback()
     //
-    // The ghost is a small diamond shape made from a LineRenderer so it
-    // works in world space without needing any sprites or assets.
-    // It is semi-transparent to not obstruct gameplay.
+    // Ghost selection:
+    //   RoomKey is now (SceneName, EntryFromScene, ExitToScene).
+    //   We know SceneName and EntryFromScene on entry, but not ExitToScene yet.
+    //   So we match on (SceneName, EntryFromScene) and pick the fastest exit.
+    //   This is unambiguous — EntryFromScene uniquely identifies direction.
     public class GhostPlayback
     {
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("GhostPlayback");
 
-        // Size of the diamond in world units.
         private const float DIAMOND_SIZE = 0.25f;
         private const float GHOST_ALPHA = 0.5f;
         private static readonly Color GHOST_COLOR =
-            new Color(0.4f, 0.8f, 1f, GHOST_ALPHA); // light blue
+            new Color(0.4f, 0.8f, 1f, GHOST_ALPHA);
 
         private GameObject? ghostObj;
         private LineRenderer? line;
@@ -48,7 +48,6 @@ namespace ReplayTimerMod
             line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             line.receiveShadows = false;
 
-            // Use the Sprites/Default shader which works without any asset setup.
             var mat = new Material(Shader.Find("Sprites/Default"));
             mat.color = GHOST_COLOR;
             line.material = mat;
@@ -58,15 +57,16 @@ namespace ReplayTimerMod
         }
 
         // ── Public API ────────────────────────────────────────────────────────
-        // Find and start the best PB for this (sceneName, entryGate) combo.
-        // We don't know the exit yet so we pick the fastest across all exits.
-        public void StartPlayback(string sceneName, string entryGate)
+
+        // sceneName     — room we just entered
+        // entryFromScene — room we came from (the direction discriminator)
+        public void StartPlayback(string sceneName, string entryFromScene)
         {
-            currentPB = GetBestPBForEntry(sceneName, entryGate);
+            currentPB = GetBestPB(sceneName, entryFromScene);
 
             if (currentPB == null)
             {
-                Log.LogInfo($"[Ghost] No PB found for {sceneName} [{entryGate}]");
+                Log.LogInfo($"[Ghost] No PB for {sceneName} ← {entryFromScene}");
                 ghostObj?.SetActive(false);
                 playing = false;
                 return;
@@ -76,7 +76,7 @@ namespace ReplayTimerMod
             playing = true;
             ghostObj?.SetActive(true);
 
-            Log.LogInfo($"[Ghost] Playing back {currentPB.Key} " +
+            Log.LogInfo($"[Ghost] Playing {currentPB.Key} " +
                         $"({currentPB.FrameCount} frames, {FormatTime(currentPB.TotalTime)})");
         }
 
@@ -87,7 +87,9 @@ namespace ReplayTimerMod
             ghostObj?.SetActive(false);
         }
 
-        // Called every LateUpdate. Only advances when ShouldTick().
+        public bool IsPlaying => playing;
+
+        // ── Tick ──────────────────────────────────────────────────────────────
         public void Tick()
         {
             if (!playing || currentPB == null || line == null) return;
@@ -97,32 +99,23 @@ namespace ReplayTimerMod
 
             playbackTime += Time.unscaledDeltaTime;
 
-            // Find the two frames that bracket the current playback time.
-            // Frame timestamps are implicit: frame[i] starts at i * RECORD_INTERVAL.
             float interval = FrameRecorder.RECORD_INTERVAL;
             int frameIdx = Mathf.FloorToInt(playbackTime / interval);
 
             if (frameIdx >= currentPB.FrameCount - 1)
             {
-                // Playback finished — hold last position briefly then hide.
-                if (frameIdx >= currentPB.FrameCount)
-                {
-                    StopPlayback();
-                    return;
-                }
+                if (frameIdx >= currentPB.FrameCount) { StopPlayback(); return; }
                 frameIdx = currentPB.FrameCount - 2;
             }
 
             FrameData a = currentPB.Frames[frameIdx];
             FrameData b = currentPB.Frames[frameIdx + 1];
 
-            float t = (playbackTime - frameIdx * interval) / interval;
-            t = Mathf.Clamp01(t);
+            float t = Mathf.Clamp01(
+                (playbackTime - frameIdx * interval) / interval);
 
             float x = Mathf.LerpUnclamped(a.x, b.x, t);
             float y = Mathf.LerpUnclamped(a.y, b.y, t);
-
-            // Keep ghost at same Z as Hornet to ensure correct render order.
             float z = HeroController.instance != null
                 ? HeroController.instance.transform.position.z
                 : 0f;
@@ -130,31 +123,39 @@ namespace ReplayTimerMod
             DrawDiamond(new Vector3(x, y, z));
         }
 
-        public bool IsPlaying => playing;
-
-        // ── Helpers ───────────────────────────────────────────────────────────
-        private void DrawDiamond(Vector3 center)
-        {
-            if (line == null) return;
-            float s = DIAMOND_SIZE;
-            line.SetPosition(0, center + new Vector3(0, s, 0)); // top
-            line.SetPosition(1, center + new Vector3(s, 0, 0)); // right
-            line.SetPosition(2, center + new Vector3(0, -s, 0)); // bottom
-            line.SetPosition(3, center + new Vector3(-s, 0, 0)); // left
-        }
-
-        private static RecordedRoom? GetBestPBForEntry(string scene, string entryGate)
+        // ── Ghost selection ───────────────────────────────────────────────────
+        // Match on (SceneName, EntryFromScene) — both known on entry.
+        // ExitToScene is unknown until we leave, so if there are multiple
+        // saved exits from this direction, pick the fastest.
+        // In practice most room→direction combos have exactly one recorded exit.
+        private static RecordedRoom? GetBestPB(string scene, string entryFromScene)
         {
             RecordedRoom? best = null;
             foreach (var pair in PBManager.AllPBs())
             {
-                if (pair.Key.SceneName == scene && pair.Key.EntryGate == entryGate)
-                {
-                    if (best == null || pair.Value.TotalTime < best.TotalTime)
-                        best = pair.Value;
-                }
+                var key = pair.Key;
+                if (key.SceneName != scene || key.EntryFromScene != entryFromScene)
+                    continue;
+
+                if (best == null || pair.Value.TotalTime < best.TotalTime)
+                    best = pair.Value;
             }
+
+            if (best != null)
+                Log.LogInfo($"[Ghost] Matched {best.Key}");
+
             return best;
+        }
+
+        // ── Drawing ───────────────────────────────────────────────────────────
+        private void DrawDiamond(Vector3 center)
+        {
+            if (line == null) return;
+            float s = DIAMOND_SIZE;
+            line.SetPosition(0, center + new Vector3(0, s, 0));
+            line.SetPosition(1, center + new Vector3(s, 0, 0));
+            line.SetPosition(2, center + new Vector3(0, -s, 0));
+            line.SetPosition(3, center + new Vector3(-s, 0, 0));
         }
 
         private static string FormatTime(float t)

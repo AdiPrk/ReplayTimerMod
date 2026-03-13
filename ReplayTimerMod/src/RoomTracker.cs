@@ -142,15 +142,15 @@ namespace ReplayTimerMod
                 {
                     // Valid natural exit.
                     string exitedScene = CurrentScene;
-                    string exitedEntry = EntryGateName;
+                    string exitedFromScene = EntryFromScene;   // where we entered from
                     string exitedTo = to.name;
                     float exitedTime = CurrentRoomTime;
 
-                    Log.LogInfo($"[RoomTracker] Exit: {exitedScene} [{exitedEntry}→{exitedTo}] {FormatTime(exitedTime)}");
+                    Log.LogInfo($"[RoomTracker] Exit: {exitedScene} [{exitedFromScene}→{exitedTo}] {FormatTime(exitedTime)}");
 
                     IsRecording = false;
                     CurrentRoomTime = 0f;
-                    OnRoomExit?.Invoke(exitedScene, exitedEntry, exitedTo, exitedTime);
+                    OnRoomExit?.Invoke(exitedScene, exitedFromScene, exitedTo, exitedTime);
                 }
                 else
                 {
