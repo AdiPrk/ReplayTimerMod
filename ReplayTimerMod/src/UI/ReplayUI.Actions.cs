@@ -71,7 +71,7 @@ namespace ReplayTimerMod
             }
             else
             {
-                ShowDownloadFeedback("Folder not found", UIStyle.Red);
+                ShowDownloadFeedback("Nothing Exported", UIStyle.Red);
             }
         }
 

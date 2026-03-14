@@ -9,7 +9,7 @@ namespace ReplayTimerMod
 {
     public static class RoomTracker
     {
-        public const float MAX_ROOM_TIME = 120f;
+        public const float MAX_ROOM_TIME = 180f;
 
         private const string MENU_TITLE = "Menu_Title";
         private const string QUIT_TO_MENU = "Quit_To_Menu";
