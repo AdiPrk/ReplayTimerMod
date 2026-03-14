@@ -39,6 +39,9 @@ namespace ReplayTimerMod
         private bool expanded = false;
         private string? selectedScene = null;
 
+        // Set by OnPBUpdated() whenever a new PB is recorded
+        private bool rebuildPending = false;
+
         // Two-click confirm for the global clear-all button.
         private bool clearAllPending = false;
         private Image? clearAllBtnImg;
@@ -60,12 +63,10 @@ namespace ReplayTimerMod
         private Text? rightHeader;          // scene name in right sub-header
         private Text? pasteStatus;          // brief feedback next to [Paste]
 
-        // Left column scroll control - used by ScrollToScene() to programmatically
-        // reposition the list when jumping to the current room.
+        // Left column scroll control
         private ScrollRect? leftScrollRect;
 
-        // "Go to current room" button label - updated to show feedback when the
-        // current room has no recorded PBs.
+        // "Go to current room" button label
         private Text? jumpToCurrentBtnLbl;
         private Image? jumpToCurrentBtnImg;
 
@@ -138,6 +139,13 @@ namespace ReplayTimerMod
 
             tabGO!.SetActive(true);
             panelGO!.SetActive(expanded);
+
+            if (expanded && rebuildPending)
+            {
+                rebuildPending = false;
+                RebuildLeft();
+                if (selectedScene != null) RebuildRight(selectedScene);
+            }
         }
 
         private static bool IsPaused()
@@ -156,9 +164,7 @@ namespace ReplayTimerMod
         // ─────────────────────────────────────────────────────────────────────
         public void OnPBUpdated()
         {
-            if (!expanded || !IsPaused()) return;
-            RebuildLeft();
-            if (selectedScene != null) RebuildRight(selectedScene);
+            rebuildPending = true;
         }
 
         // ─────────────────────────────────────────────────────────────────────

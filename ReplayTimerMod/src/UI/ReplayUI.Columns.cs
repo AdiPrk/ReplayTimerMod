@@ -39,11 +39,6 @@ namespace ReplayTimerMod
             bool selected = scene == selectedScene;
             bool isCurrent = scene == RoomTracker.CurrentScene;
 
-            // Visual priority: current room > selected.
-            // current + selected  → brighter gold tint to show both states at once.
-            // current only        → subtle gold tint.
-            // selected only       → standard overlay/accent.
-            // neither             → transparent.
             Color bgColor = isCurrent
                 ? UIStyle.Gold with { a = selected ? 0.28f : 0.14f }
                 : (selected ? UIStyle.Overlay : Color.clear);
@@ -52,7 +47,6 @@ namespace ReplayTimerMod
                 ? UIStyle.Gold
                 : (selected ? UIStyle.Accent : UIStyle.Text);
 
-            // ● prefix makes the current room scannable without reading every label.
             string label = isCurrent ? $"● {scene}" : scene;
 
             var row = MakeGO("SceneRow", parent);
@@ -71,13 +65,7 @@ namespace ReplayTimerMod
             RebuildRight(scene);
         }
 
-        // Programmatically scrolls the left list so the given scene row is
-        // centred in the viewport. Called by OnJumpToCurrentClicked().
-        //
-        // The VerticalLayoutGroup places rows in sorted order with 1px spacing,
-        // so the top of row[idx] is always idx * (RH + 1) from the content top.
-        // We compute the normalised scroll position from that offset and the
-        // measured content / viewport heights.
+        // Scrolls to given scene
         private void ScrollToScene(string scene)
         {
             if (leftScrollRect == null || leftContent == null) return;

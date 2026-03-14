@@ -15,15 +15,15 @@ namespace ReplayTimerMod
         private bool recording = false;
         private float accumulatedTime = 0f;
 
+        // Cached animator reference
+        private tk2dSpriteAnimator? cachedAnim = null;
+
         public void StartRecording()
         {
             frames.Clear();
             recording = true;
-            // Pre-fill the accumulator so the very first Tick() captures a frame
-            // immediately (on the first LateUpdate after room entry). Without this,
-            // frame 0 isn't stored until a full RECORD_INTERVAL has elapsed, which
-            // means playback begins at the position Hornet was ~33 ms into the room
-            // rather than at the room-entry position - making the ghost appear ahead.
+            cachedAnim = null;
+            // Pre-fill the accumulator so the very first Tick() captures a frame immediately
             accumulatedTime = RECORD_INTERVAL;
         }
 
@@ -32,6 +32,7 @@ namespace ReplayTimerMod
             frames.Clear();
             recording = false;
             accumulatedTime = 0f;
+            cachedAnim = null;
         }
 
         public RecordedRoom? FinishRecording(RoomKey key, float totalLRTime)
@@ -40,29 +41,25 @@ namespace ReplayTimerMod
             {
                 frames.Clear();
                 recording = false;
+                cachedAnim = null;
                 return null;
             }
 
             recording = false;
+            cachedAnim = null;
             var result = new RecordedRoom(key, totalLRTime, frames.ToArray());
             frames.Clear();
             return result;
         }
 
-        // Called every LateUpdate with the pre-computed shouldTick value from
-        // the plugin (LoadRemover.ShouldTick() is stateful and must only be
-        // called once per frame - see ReplayTimerModPlugin.LateUpdate).
+        // Called every LateUpdate if LoadRemover.ShouldTick() 
         public void Tick(bool shouldTick)
         {
             if (!recording) return;
             if (HeroController.instance == null) return;
             if (!shouldTick) return;
 
-            // Use Time.deltaTime (scaled) to match the playback cursor, so that
-            // recording and playback always advance at the same rate regardless of
-            // timeScale. At 0.5x both sides accumulate half as fast, keeping the
-            // ghost in sync. RoomTracker.CurrentRoomTime stays on unscaledDeltaTime
-            // so PB times remain valid wall-clock comparisons.
+            // Use Time.deltaTime (scaled) to match the playback cursor
             accumulatedTime += Time.deltaTime;
             if (accumulatedTime < RECORD_INTERVAL) return;
             accumulatedTime -= RECORD_INTERVAL;
@@ -70,20 +67,20 @@ namespace ReplayTimerMod
             bool facingRight = HeroController.instance.transform.localScale.x > 0f;
             Vector3 pos = HeroController.instance.transform.position;
 
-            // Capture animation state. tk2dSpriteAnimator.CurrentFrame is an
-            // integer index into CurrentClip.frames[] - no normalisation required.
+            if (cachedAnim == null)
+                cachedAnim = HeroController.instance.GetComponent<tk2dSpriteAnimator>();
+
             string clipName = "";
             int clipFrame = 0;
             try
             {
-                var anim = HeroController.instance.GetComponent<tk2dSpriteAnimator>();
-                if (anim?.CurrentClip != null)
+                if (cachedAnim?.CurrentClip != null)
                 {
-                    clipName = anim.CurrentClip.name;
-                    clipFrame = anim.CurrentFrame;
+                    clipName = cachedAnim.CurrentClip.name;
+                    clipFrame = cachedAnim.CurrentFrame;
                 }
             }
-            catch { }
+            catch { cachedAnim = null; } // guh
 
             frames.Add(new FrameData
             {

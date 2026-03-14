@@ -16,7 +16,7 @@ namespace ReplayTimerMod
                 return;
             }
             GUIUtility.systemCopyBuffer = ReplayShareEncoder.EncodeCollection(all);
-            ShowExportFeedback($"✓ {all.Count} copied", UIStyle.Accent);
+            ShowExportFeedback($"{all.Count} copied", UIStyle.Accent);
             Log.LogInfo($"[ReplayUI] Copied {all.Count} replays to clipboard");
         }
 
@@ -110,7 +110,7 @@ namespace ReplayTimerMod
                 return;
             }
             GUIUtility.systemCopyBuffer = ReplayShareEncoder.EncodeCollection(entries);
-            ShowPasteStatus($"✓ {entries.Count} routes copied", UIStyle.Accent);
+            ShowPasteStatus($"{entries.Count} routes copied", UIStyle.Accent);
             Log.LogInfo($"[ReplayUI] Exported {entries.Count} routes for {selectedScene}");
         }
 
@@ -193,7 +193,7 @@ namespace ReplayTimerMod
                 if (collection.Count > 0) selectedScene = collection[0].Key.SceneName;
                 RebuildLeft();
                 if (selectedScene != null) RebuildRight(selectedScene);
-                ShowPasteStatus($"✓ {collection.Count} replays", UIStyle.Gold);
+                ShowPasteStatus($"{collection.Count} replays", UIStyle.Gold);
                 Log.LogInfo($"[ReplayUI] Pasted collection: {collection.Count} replays");
                 return;
             }
@@ -212,7 +212,7 @@ namespace ReplayTimerMod
             selectedScene = room.Key.SceneName;
             RebuildLeft();
             RebuildRight(selectedScene);
-            ShowPasteStatus($"✓ {room.Key.SceneName}", UIStyle.Gold);
+            ShowPasteStatus($"{room.Key.SceneName}", UIStyle.Gold);
             Log.LogInfo($"[ReplayUI] Pasted {room.Key}");
         }
 
