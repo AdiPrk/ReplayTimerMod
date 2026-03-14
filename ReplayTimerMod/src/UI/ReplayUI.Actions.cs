@@ -144,7 +144,7 @@ namespace ReplayTimerMod
         }
 
         // ── Global clear-all (header) - two-click confirm ─────────────────────
-        // First click: button text → "Are you sure?" and background brightens.
+        // First click: button text -> "Are you sure?" and background brightens.
         // Second click: deletes all replays and resets.
         // Resets to default whenever the panel is closed or game unpauses.
 

@@ -19,7 +19,7 @@ namespace ReplayTimerMod
         {
             frames.Clear();
             recording = true;
-            accumulatedTime = 0f;
+            accumulatedTime = RECORD_INTERVAL;
         }
 
         public void DiscardRecording()
@@ -44,13 +44,14 @@ namespace ReplayTimerMod
             return result;
         }
 
-        // Called every LateUpdate. Accumulates LR time and writes a frame
-        // once a full RECORD_INTERVAL has elapsed.
-        public void Tick()
+        // Called every LateUpdate with the pre-computed shouldTick value from
+        // the plugin (LoadRemover.ShouldTick() is stateful and must only be
+        // called once per frame - see ReplayTimerModPlugin.LateUpdate).
+        public void Tick(bool shouldTick)
         {
             if (!recording) return;
             if (HeroController.instance == null) return;
-            if (!LoadRemover.ShouldTick()) return;
+            if (!shouldTick) return;
 
             accumulatedTime += Time.unscaledDeltaTime;
             if (accumulatedTime < RECORD_INTERVAL) return;

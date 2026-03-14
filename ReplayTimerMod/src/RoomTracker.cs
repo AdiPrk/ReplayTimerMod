@@ -83,7 +83,7 @@ namespace ReplayTimerMod
         private static void HandleGateTransitionBegin(string destScene, string entryGate)
         {
             pendingGateTransition = true;
-            Log.LogDebug($"[Gate] pending → {destScene} via '{entryGate}'");
+            Log.LogDebug($"[Gate] pending -> {destScene} via '{entryGate}'");
         }
 
         private static void HandleInvalidation()
@@ -128,7 +128,7 @@ namespace ReplayTimerMod
                     string exitedTo = to.name;
                     float exitedTime = CurrentRoomTime;
 
-                    Log.LogInfo($"[RoomTracker] Exit: {exitedScene} [{exitedFromScene}→{exitedTo}] {TimeUtil.Format(exitedTime)}");
+                    Log.LogInfo($"[RoomTracker] Exit: {exitedScene} [{exitedFromScene}->{exitedTo}] {TimeUtil.Format(exitedTime)}");
 
                     IsRecording = false;
                     CurrentRoomTime = 0f;
@@ -172,16 +172,11 @@ namespace ReplayTimerMod
         }
 
         // ── Tick ──────────────────────────────────────────────────────────────
-
-        public static void Tick()
+        public static void Tick(bool shouldTick)
         {
             if (!isReady || !IsRecording) return;
-            try
-            {
-                if (LoadRemover.ShouldTick())
-                    CurrentRoomTime += Time.unscaledDeltaTime;
-            }
-            catch { }
+            if (shouldTick)
+                CurrentRoomTime += Time.unscaledDeltaTime;
         }
 
     }

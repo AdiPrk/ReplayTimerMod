@@ -134,7 +134,7 @@ namespace ReplayTimerMod
 
             // Route label - fills remaining left space
             string from = string.IsNullOrEmpty(key.EntryFromScene) ? "spawn" : key.EntryFromScene;
-            MakeLbl(row.transform, $"{from} → {key.ExitToScene}",
+            MakeLbl(row.transform, $"{from} -> {key.ExitToScene}",
                 UIStyle.FontSizeSm, UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: M, w: timeX - M * 2, h: h);
         }

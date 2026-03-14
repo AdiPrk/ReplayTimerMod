@@ -11,7 +11,7 @@ namespace ReplayTimerMod
     // ── RTM3 format ───────────────────────────────────────────────────────────
     //
     // Single format used everywhere: on-disk storage and clipboard share strings
-    // are identical. Chain: RecordedRoom → RTM3 binary → Deflate → Base64.
+    // are identical. Chain: RecordedRoom -> RTM3 binary -> Deflate -> Base64.
     //
     // Binary layout (before Deflate):
     //   [4]     magic "RTM3"
@@ -30,7 +30,7 @@ namespace ReplayTimerMod
     //     [N]  clipIndex[]     uint8  (0xFF = no clip for this frame)
     //     [N]  animFrame[]     uint8  (saturated at 255)
     //
-    // SVLQ = ZigZag(n) → ULEB128. See FrameCodec.cs.
+    // SVLQ = ZigZag(n) -> ULEB128. See FrameCodec.cs.
     // ─────────────────────────────────────────────────────────────────────────
 
     public static class ReplayShareEncoder
@@ -50,7 +50,7 @@ namespace ReplayTimerMod
             byte[] binary = WriteBinary(room);
             byte[] compressed = Compress(binary);
             string result = Convert.ToBase64String(compressed);
-            Log.LogInfo($"[RTM3] {room.Key}: {room.FrameCount} frames → " +
+            Log.LogInfo($"[RTM3] {room.Key}: {room.FrameCount} frames -> " +
                         $"binary={binary.Length}B deflate={compressed.Length}B str={result.Length}ch");
             return result;
         }
@@ -235,7 +235,7 @@ namespace ReplayTimerMod
                 }
             }
             string result = Convert.ToBase64String(Compress(ms.ToArray()));
-            Log.LogInfo($"[RTMC1] Encoded {list.Count} rooms → {result.Length} chars");
+            Log.LogInfo($"[RTMC1] Encoded {list.Count} rooms -> {result.Length} chars");
             return result;
         }
 

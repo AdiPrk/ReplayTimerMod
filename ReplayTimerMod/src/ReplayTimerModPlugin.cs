@@ -26,6 +26,10 @@ namespace ReplayTimerMod
 
             new Harmony(Id).PatchAll(Assembly.GetExecutingAssembly());
 
+            // Bind GhostSettings to BepInEx config before any other system
+            // reads those properties.
+            GhostSettings.Init(Config);
+
             string dataDir = Path.Combine(
                 Path.GetDirectoryName(Info.Location)!, "..", "..", "data");
             DataStore.Init(dataDir);
@@ -84,9 +88,12 @@ namespace ReplayTimerMod
 
         private void LateUpdate()
         {
-            RoomTracker.Tick();
-            frameRecorder.Tick();
-            ghostPlayback.Tick();
+            bool shouldTick = false;
+            try { shouldTick = LoadRemover.ShouldTick(); } catch { }
+
+            RoomTracker.Tick(shouldTick);
+            frameRecorder.Tick(shouldTick);
+            ghostPlayback.Tick(shouldTick);
             replayUI.Tick();
         }
     }

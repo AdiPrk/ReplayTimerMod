@@ -9,14 +9,14 @@ namespace ReplayTimerMod
     // position scaling, 2nd-order DPCM streams, and SVLQ encoding.
     internal static class FrameCodec
     {
-        // World-space float → fixed-point int16 (1 unit = 100 ticks).
+        // World-space float -> fixed-point int16 (1 unit = 100 ticks).
         public const float PosScale = 100f;
 
         // ── 2nd-order DPCM ────────────────────────────────────────────────────
         // Encodes positions as: absolute anchor, 1st-order delta for frame 1,
         // then 2nd-order residuals (acceleration) for frames 2+.
-        // During constant-velocity motion residuals are 0 → single 0x00 bytes
-        // → maximally compressible.
+        // During constant-velocity motion residuals are 0 -> single 0x00 bytes
+        // -> maximally compressible.
 
         public static byte[] Encode2ndOrder(FrameData[] frames, bool getX)
         {
@@ -62,9 +62,9 @@ namespace ReplayTimerMod
             return result;
         }
 
-        // ── SVLQ = ZigZag(n) → ULEB128 ───────────────────────────────────────
-        // ZigZag maps signed → unsigned preserving small magnitudes:
-        //   0→0  -1→1  1→2  -2→3  …
+        // ── SVLQ = ZigZag(n) -> ULEB128 ───────────────────────────────────────
+        // ZigZag maps signed -> unsigned preserving small magnitudes:
+        //   0->0  -1->1  1->2  -2->3  …
         // ULEB128 encodes unsigned ints 7 bits per byte, high bit = "more follows".
         // Values 0–127 fit in one byte.
 
@@ -100,7 +100,7 @@ namespace ReplayTimerMod
         public static string ReadString(BinaryReader r) =>
             Encoding.UTF8.GetString(r.ReadBytes(r.ReadUInt16()));
 
-        // ── World-space float → int16 ─────────────────────────────────────────
+        // ── World-space float -> int16 ─────────────────────────────────────────
 
         public static short ToShort(float world) =>
             (short)Math.Max(short.MinValue,

@@ -61,7 +61,7 @@ namespace ReplayTimerMod
             }
             catch { }
 
-            Log.LogInfo($"[GameHooks] BeginSceneTransition → '{destScene}' via '{entryGate}' (type={__0.GetType().Name})");
+            Log.LogInfo($"[GameHooks] BeginSceneTransition -> '{destScene}' via '{entryGate}' (type={__0.GetType().Name})");
             OnGateTransitionBegin?.Invoke(destScene, entryGate);
         }
     }
