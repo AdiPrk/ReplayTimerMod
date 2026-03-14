@@ -19,6 +19,11 @@ namespace ReplayTimerMod
         {
             frames.Clear();
             recording = true;
+            // Pre-fill the accumulator so the very first Tick() captures a frame
+            // immediately (on the first LateUpdate after room entry). Without this,
+            // frame 0 isn't stored until a full RECORD_INTERVAL has elapsed, which
+            // means playback begins at the position Hornet was ~33 ms into the room
+            // rather than at the room-entry position - making the ghost appear ahead.
             accumulatedTime = RECORD_INTERVAL;
         }
 
@@ -53,7 +58,12 @@ namespace ReplayTimerMod
             if (HeroController.instance == null) return;
             if (!shouldTick) return;
 
-            accumulatedTime += Time.unscaledDeltaTime;
+            // Use Time.deltaTime (scaled) to match the playback cursor, so that
+            // recording and playback always advance at the same rate regardless of
+            // timeScale. At 0.5x both sides accumulate half as fast, keeping the
+            // ghost in sync. RoomTracker.CurrentRoomTime stays on unscaledDeltaTime
+            // so PB times remain valid wall-clock comparisons.
+            accumulatedTime += Time.deltaTime;
             if (accumulatedTime < RECORD_INTERVAL) return;
             accumulatedTime -= RECORD_INTERVAL;
 

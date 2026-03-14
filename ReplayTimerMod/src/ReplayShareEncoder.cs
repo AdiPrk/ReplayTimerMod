@@ -9,9 +9,7 @@ using BepInEx.Logging;
 namespace ReplayTimerMod
 {
     // ── RTM3 format ───────────────────────────────────────────────────────────
-    //
-    // Single format used everywhere: on-disk storage and clipboard share strings
-    // are identical. Chain: RecordedRoom -> RTM3 binary -> Deflate -> Base64.
+    // RecordedRoom -> RTM3 binary -> Deflate -> Base64.
     //
     // Binary layout (before Deflate):
     //   [4]     magic "RTM3"

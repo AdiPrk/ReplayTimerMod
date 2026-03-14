@@ -7,14 +7,14 @@ namespace ReplayTimerMod
     // Plays back a previously recorded PB run as a ghost in world space.
     //
     // Lifecycle:
-    //   RoomTracker.OnRoomEnter  -> StartPlayback(scene, entryFromScene)
-    //   LateUpdate               -> Tick() advances playback in LR time
-    //   RoomTracker.OnRoomExit / OnRecordingDiscarded -> StopPlayback()
+    //   RoomTracker.OnRoomEnter  → StartPlayback(scene, entryFromScene)
+    //   LateUpdate               → Tick() advances playback in LR time
+    //   RoomTracker.OnRoomExit / OnRecordingDiscarded → StopPlayback()
     //
     // Sprite rendering:
     //   We create a minimal GO while inactive so tk2dSprite.Awake() is deferred
     //   until after we assign Collection - this prevents the pink-rectangle bug.
-    //   Clip name -> spriteId is resolved via a Dictionary built once at init
+    //   Clip name → spriteId is resolved via a Dictionary built once at init
     //   so the hot tick path is a single hash lookup, not GetClipByName() which
     //   does a linear scan every frame.
     public class GhostPlayback
@@ -99,13 +99,24 @@ namespace ReplayTimerMod
 
         // ── Tick ──────────────────────────────────────────────────────────────
 
+        // Accepts the pre-computed shouldTick value from the plugin so that
+        // LoadRemover.ShouldTick() is only called once per LateUpdate across
+        // all subsystems. Calling it multiple times per frame causes incorrect
+        // state transitions because it writes prevGameState on every call.
         public void Tick(bool shouldTick)
         {
             if (!playing || currentPB == null) return;
             if (!GhostSettings.GhostEnabled) { HideAll(); return; }
             if (!shouldTick) return;
 
-            playbackTime += Time.unscaledDeltaTime;
+            // Use Time.deltaTime (scaled) so the ghost respects Time.timeScale.
+            // If the game is slowed down via DebugMod the ghost slows with it,
+            // staying visually in sync with the slowed world.
+            // Recording uses unscaledDeltaTime for its accumulator, but that only
+            // controls when frames are *sampled* - the playback cursor is
+            // independent and just needs to advance at the same perceived rate as
+            // everything else the player sees.
+            playbackTime += Time.deltaTime;
 
             float interval = FrameRecorder.RECORD_INTERVAL;
             int frameIdx = Mathf.FloorToInt(playbackTime / interval);

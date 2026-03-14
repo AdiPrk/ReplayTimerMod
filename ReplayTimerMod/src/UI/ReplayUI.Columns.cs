@@ -37,14 +37,31 @@ namespace ReplayTimerMod
         private void AddSceneRow(Transform parent, string scene)
         {
             bool selected = scene == selectedScene;
+            bool isCurrent = scene == RoomTracker.CurrentScene;
+
+            // Visual priority: current room > selected.
+            // current + selected  → brighter gold tint to show both states at once.
+            // current only        → subtle gold tint.
+            // selected only       → standard overlay/accent.
+            // neither             → transparent.
+            Color bgColor = isCurrent
+                ? UIStyle.Gold with { a = selected ? 0.28f : 0.14f }
+                : (selected ? UIStyle.Overlay : Color.clear);
+
+            Color textColor = isCurrent
+                ? UIStyle.Gold
+                : (selected ? UIStyle.Accent : UIStyle.Text);
+
+            // ● prefix makes the current room scannable without reading every label.
+            string label = isCurrent ? $"● {scene}" : scene;
+
             var row = MakeGO("SceneRow", parent);
-            Img(row, selected ? UIStyle.Overlay : Color.clear);
+            Img(row, bgColor);
             var le = row.AddComponent<LayoutElement>();
             le.minHeight = le.preferredHeight = RH;
             Btn(row, () => SelectScene(scene));
-            MakeLbl(row.transform, scene, UIStyle.FontSizeSm,
-                selected ? UIStyle.Accent : UIStyle.Text,
-                TextAnchor.MiddleLeft, x: M, fill: true);
+            MakeLbl(row.transform, label, UIStyle.FontSizeSm,
+                textColor, TextAnchor.MiddleLeft, x: M, w: LW - M * 2, h: RH);
         }
 
         private void SelectScene(string scene)
@@ -52,6 +69,44 @@ namespace ReplayTimerMod
             selectedScene = scene;
             RebuildLeft();
             RebuildRight(scene);
+        }
+
+        // Programmatically scrolls the left list so the given scene row is
+        // centred in the viewport. Called by OnJumpToCurrentClicked().
+        //
+        // The VerticalLayoutGroup places rows in sorted order with 1px spacing,
+        // so the top of row[idx] is always idx * (RH + 1) from the content top.
+        // We compute the normalised scroll position from that offset and the
+        // measured content / viewport heights.
+        private void ScrollToScene(string scene)
+        {
+            if (leftScrollRect == null || leftContent == null) return;
+
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(
+                leftContent.GetComponent<RectTransform>());
+
+            var scenes = PBManager.AllPBs()
+                .Select(p => p.Key.SceneName)
+                .Distinct()
+                .OrderBy(s => s)
+                .ToList();
+
+            int idx = scenes.IndexOf(scene);
+            if (idx < 0) return;
+
+            float contentHeight = leftContent.GetComponent<RectTransform>().rect.height;
+            float viewportHeight = leftScrollRect.viewport.rect.height;
+            if (contentHeight <= viewportHeight) return;
+
+            // Position the row in the centre of the viewport.
+            float rowTop = idx * (RH + 1f);
+            float scrollOffset = rowTop - (viewportHeight - RH) / 2f;
+            scrollOffset = Mathf.Clamp(scrollOffset, 0f, contentHeight - viewportHeight);
+
+            // ScrollRect.verticalNormalizedPosition: 1 = top, 0 = bottom.
+            leftScrollRect.verticalNormalizedPosition =
+                1f - scrollOffset / (contentHeight - viewportHeight);
         }
 
         // ── Right column - entries for selected scene ─────────────────────────
@@ -134,7 +189,7 @@ namespace ReplayTimerMod
 
             // Route label - fills remaining left space
             string from = string.IsNullOrEmpty(key.EntryFromScene) ? "spawn" : key.EntryFromScene;
-            MakeLbl(row.transform, $"{from} -> {key.ExitToScene}",
+            MakeLbl(row.transform, $"{from} → {key.ExitToScene}",
                 UIStyle.FontSizeSm, UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: M, w: timeX - M * 2, h: h);
         }

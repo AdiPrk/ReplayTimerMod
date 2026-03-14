@@ -28,7 +28,7 @@
         }
 
         public override string ToString() =>
-            $"{SceneName}[{EntryFromScene}->{ExitToScene}]";
+            $"{SceneName}[{EntryFromScene}→{ExitToScene}]";
 
         public override bool Equals(object? obj) =>
             obj is RoomKey other &&

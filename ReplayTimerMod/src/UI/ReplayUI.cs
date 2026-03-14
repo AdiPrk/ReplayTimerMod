@@ -11,6 +11,8 @@ namespace ReplayTimerMod
     // ReplayUI - pause-only two-column replay browser.
     //
     // Left column  : alphabetical scene list. Click to populate right column.
+    //   Sub-header : [● Go to current room]
+    //   Each row   : scene name (gold + ● prefix when it's the current room)
     // Right column : routes for the selected scene.
     //   Sub-header : scene name | [Paste] [Clear scene]
     //   Each row   : route  time  [Copy]  [✕]
@@ -55,8 +57,17 @@ namespace ReplayTimerMod
 
         private Transform? leftContent;
         private Transform? rightContent;
-        private Text? rightHeader;   // scene name in right sub-header
-        private Text? pasteStatus;  // brief feedback next to [Paste]
+        private Text? rightHeader;          // scene name in right sub-header
+        private Text? pasteStatus;          // brief feedback next to [Paste]
+
+        // Left column scroll control - used by ScrollToScene() to programmatically
+        // reposition the list when jumping to the current room.
+        private ScrollRect? leftScrollRect;
+
+        // "Go to current room" button label - updated to show feedback when the
+        // current room has no recorded PBs.
+        private Text? jumpToCurrentBtnLbl;
+        private Image? jumpToCurrentBtnImg;
 
         // ── Pixel sizes (computed once in Setup from screen resolution) ───────
         private int PW, PH;    // panel width/height
@@ -65,7 +76,7 @@ namespace ReplayTimerMod
         private int M;         // general margin
         private int TW, TH;    // tab button width/height
         private int HDR;       // panel header height
-        private int SUBHDR;    // right-column sub-header height
+        private int SUBHDR;    // sub-header height (both columns share this value)
         private int STGSH;     // settings strip height
 
         // ── Settings strip live refs ──────────────────────────────────────────

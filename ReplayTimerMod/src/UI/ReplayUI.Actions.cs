@@ -39,13 +39,11 @@ namespace ReplayTimerMod
                     "export");
                 System.IO.Directory.CreateDirectory(dir);
 
-                // Format: Re_2026-03-13_1315_5.rtmc.txt
                 string datePart = System.DateTime.Now.ToString("yyyy-MM-dd_HHmm");
                 string countPart = $"{all.Count}";
                 string fileName = $"Re_{datePart}_{countPart}.rtmc.txt";
 
                 string path = System.IO.Path.Combine(dir, fileName);
-                // ----------------------------------
 
                 System.IO.File.WriteAllText(path, ReplayShareEncoder.EncodeCollection(all));
 
@@ -76,6 +74,7 @@ namespace ReplayTimerMod
                 ShowDownloadFeedback("Folder not found", UIStyle.Red);
             }
         }
+
         private void ShowExportFeedback(string msg, Color color)
         {
             if (exportAllBtnLbl == null) return;
@@ -144,9 +143,6 @@ namespace ReplayTimerMod
         }
 
         // ── Global clear-all (header) - two-click confirm ─────────────────────
-        // First click: button text -> "Are you sure?" and background brightens.
-        // Second click: deletes all replays and resets.
-        // Resets to default whenever the panel is closed or game unpauses.
 
         private void OnClearAllClicked()
         {
@@ -189,7 +185,6 @@ namespace ReplayTimerMod
                 return;
             }
 
-            // Try collection first, then single.
             var collection = ReplayShareEncoder.DecodeCollection(clip);
             if (collection != null)
             {
@@ -226,6 +221,55 @@ namespace ReplayTimerMod
             if (pasteStatus == null) return;
             pasteStatus.text = msg;
             pasteStatus.color = color;
+        }
+
+        // ── Jump to current room (left sub-header) ────────────────────────────
+        // Selects and scrolls to the scene the player is currently in.
+        // Shows brief feedback on the button itself if no PB exists for it yet.
+
+        private void OnJumpToCurrentClicked()
+        {
+            string scene = RoomTracker.CurrentScene;
+
+            if (string.IsNullOrEmpty(scene))
+            {
+                ShowJumpFeedback("Not in a room", UIStyle.Subtext);
+                return;
+            }
+
+            bool hasPB = PBManager.AllPBs().Any(p => p.Key.SceneName == scene);
+            if (!hasPB)
+            {
+                ShowJumpFeedback($"No PB for {scene}", UIStyle.Subtext);
+                return;
+            }
+
+            // Reset any feedback text before rebuilding (RebuildLeft recreates rows,
+            // so the button label is not touched, but we want a clean state).
+            ResetJumpFeedback();
+
+            SelectScene(scene);
+            ScrollToScene(scene);
+
+            Log.LogInfo($"[ReplayUI] Jumped to current room: {scene}");
+        }
+
+        private void ShowJumpFeedback(string msg, Color color)
+        {
+            if (jumpToCurrentBtnLbl == null) return;
+            jumpToCurrentBtnLbl.text = msg;
+            jumpToCurrentBtnLbl.color = color;
+            if (jumpToCurrentBtnImg != null)
+                jumpToCurrentBtnImg.color = color with { a = 0.18f };
+        }
+
+        private void ResetJumpFeedback()
+        {
+            if (jumpToCurrentBtnLbl == null) return;
+            jumpToCurrentBtnLbl.text = "● Go to current room";
+            jumpToCurrentBtnLbl.color = UIStyle.Gold;
+            if (jumpToCurrentBtnImg != null)
+                jumpToCurrentBtnImg.color = UIStyle.Gold with { a = 0.18f };
         }
 
         // ── Ghost settings ────────────────────────────────────────────────────

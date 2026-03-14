@@ -38,17 +38,26 @@ namespace ReplayTimerMod
 
             int bodyY = HDR + 1;
             int bodyH = PH - bodyY - 1 - STGSH;
+            int scrollBodyH = bodyH - SUBHDR - 1;
 
-            leftContent = BuildScrollArea(panelGO.transform, "LeftScroll",
-                0, bodyY, LW, bodyH);
+            // Both columns now have matching sub-headers. A single HLine at
+            // bodyY + SUBHDR spans the full panel width, visually unifying them.
+            BuildLeftSubHeader(bodyY);
+            BuildRightSubHeader(bodyY);
+            HLine(panelGO.transform, 0, bodyY + SUBHDR, PW);
 
             VLine(panelGO.transform, LW, bodyY, bodyH);
 
-            BuildRightSubHeader(bodyY);
-            HLine(panelGO.transform, LW + 1, bodyY + SUBHDR, RW);
+            // Left scroll area starts below its sub-header.
+            leftContent = BuildScrollArea(panelGO.transform, "LeftScroll",
+                0, bodyY + SUBHDR + 1, LW, scrollBodyH);
+
+            // Grab the ScrollRect from the grandparent of Content:
+            //   BuildScrollArea returns Content; hierarchy is sr > Viewport > Content.
+            leftScrollRect = leftContent.parent.parent.GetComponent<ScrollRect>();
 
             rightContent = BuildScrollArea(panelGO.transform, "RightScroll",
-                LW + 1, bodyY + SUBHDR + 1, RW, bodyH - SUBHDR - 1);
+                LW + 1, bodyY + SUBHDR + 1, RW, scrollBodyH);
 
             HLine(panelGO.transform, 0, PH - STGSH - 1, PW);
             BuildSettingsBar();
@@ -120,6 +129,26 @@ namespace ReplayTimerMod
             MakeLbl(hdr.transform, "Replay Times", UIStyle.FontSizeLg,
                 UIStyle.Text, TextAnchor.MiddleLeft,
                 x: M, w: openX - M - M, h: HDR);
+        }
+
+        // ── Left sub-header: [● Go to current room] ──────────────────────────
+        private void BuildLeftSubHeader(int bodyY)
+        {
+            var lhdr = MakeGO("LeftSubHeader", panelGO!.transform);
+            Img(lhdr, UIStyle.Surface);
+            Rect(lhdr, 0, bodyY, LW, SUBHDR);
+
+            int btnH = UIStyle.H(20);
+            int btnY = (SUBHDR - btnH) / 2;
+
+            var jumpBtn = MakeGO("JumpToCurrent", lhdr.transform);
+            jumpToCurrentBtnImg = jumpBtn.AddComponent<Image>();
+            jumpToCurrentBtnImg.color = UIStyle.Gold with { a = 0.18f };
+            jumpBtn.AddComponent<Button>().onClick.AddListener(OnJumpToCurrentClicked);
+            Rect(jumpBtn, M, btnY, LW - M * 2, btnH);
+            jumpToCurrentBtnLbl = MakeLbl(jumpBtn.transform,
+                "● Go to current room", UIStyle.FontSizeSm - 2,
+                UIStyle.Gold, TextAnchor.MiddleCenter, fill: true);
         }
 
         // ── Right sub-header: scene name | [Export scene] [Paste] [Clear scene]
