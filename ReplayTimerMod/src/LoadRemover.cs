@@ -5,8 +5,7 @@ namespace ReplayTimerMod
 {
     // Ported directly from TimerMod's LoadRemover.
     // Determines whether the in-game clock should be ticking.
-    // All the edge-case logic (teleport from menu, cutscenes, hero transition
-    // state, etc.) is preserved exactly as-is.
+
     public static class LoadRemover
     {
         private const string MENU_TITLE = "Menu_Title";
