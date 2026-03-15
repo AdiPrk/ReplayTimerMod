@@ -36,8 +36,17 @@
             EntryFromScene == other.EntryFromScene &&
             ExitToScene == other.ExitToScene;
 
-        public override int GetHashCode() =>
-            System.HashCode.Combine(SceneName, EntryFromScene, ExitToScene);
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                int hash = 17;
+                hash = hash * 31 + (SceneName?.GetHashCode() ?? 0);
+                hash = hash * 31 + (EntryFromScene?.GetHashCode() ?? 0);
+                hash = hash * 31 + (ExitToScene?.GetHashCode() ?? 0);
+                return hash;
+            }
+        }
     }
 
     public static class TimeUtil

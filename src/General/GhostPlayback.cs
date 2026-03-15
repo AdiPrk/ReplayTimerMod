@@ -184,7 +184,11 @@ namespace ReplayTimerMod
 
                 Log.LogInfo($"[Ghost] Sprite ready - collection='{heroSprite.Collection.name}'");
 
-                var heroAnim = HeroController.instance.GetComponent<tk2dSpriteAnimator>();
+                var heroAnim = heroSprite.GetComponent<tk2dSpriteAnimator>()
+                           ?? heroSprite.GetComponentInParent<tk2dSpriteAnimator>()
+                           ?? heroSprite.GetComponentInChildren<tk2dSpriteAnimator>()
+                           ?? HeroController.instance.GetComponent<tk2dSpriteAnimator>()
+                           ?? HeroController.instance.GetComponentInChildren<tk2dSpriteAnimator>();
                 if (heroAnim?.Library != null)
                 {
                     clipCache = new Dictionary<string, tk2dSpriteAnimationClip>(

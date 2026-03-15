@@ -11,6 +11,13 @@
 *.sln.docstates
 *.env
 
+# Local game paths used by this repository
+.config/local/SilksongPath.props
+.config/local/HollowKnightPath.props
+obj/ss/
+obj/hk/
+bin/
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
