@@ -203,7 +203,7 @@ namespace ReplayTimerMod
                 x: M, w: statusX - M, h: SUBHDR);
         }
 
-        // ── Settings strip: Ghost [ON/OFF] | Alpha [-] 0.40 [+] | Color ■■■■■■
+        // ── Settings strip: Tracking [ON/OFF] | Ghost [ON/OFF] | Alpha [-] 0.40 [+] | Color ■■■■■■
         private void BuildSettingsBar()
         {
             var bar = MakeGO("SettingsBar", panelGO!.transform);
@@ -215,6 +215,27 @@ namespace ReplayTimerMod
             int lblW = UIStyle.W(38);
             int stepW = UIStyle.W(22);
             int x = M;
+
+            // Tracking: [ON/OFF] - master switch for recording
+            int trackLblW = UIStyle.W(52);
+            MakeLbl(bar.transform, "Tracking:", UIStyle.FontSizeSm - 1,
+                UIStyle.Subtext, TextAnchor.MiddleLeft, x: x, y: 0, w: trackLblW, h: STGSH);
+            x += trackLblW + M / 2;
+
+            var trackingBtn = MakeGO("TrackingToggle", bar.transform);
+            Img(trackingBtn, GhostSettings.TrackingEnabled
+                ? UIStyle.Accent with { a = 0.22f }
+                : UIStyle.Red with { a = 0.22f });
+            Btn(trackingBtn, OnTrackingToggle);
+            Rect(trackingBtn, x, btnY, UIStyle.W(46), btnH);
+            trackingToggleLbl = MakeLbl(trackingBtn.transform,
+                GhostSettings.TrackingEnabled ? "ON" : "OFF", UIStyle.FontSizeSm - 1,
+                GhostSettings.TrackingEnabled ? UIStyle.Accent : UIStyle.Red,
+                TextAnchor.MiddleCenter, fill: true);
+            trackingToggleBtnImg = trackingBtn.GetComponent<Image>();
+            x += UIStyle.W(46);
+
+            x = BarSeparator(bar.transform, x, btnY, btnH);
 
             // Ghost: [ON/OFF]
             MakeLbl(bar.transform, "Ghost:", UIStyle.FontSizeSm - 1,

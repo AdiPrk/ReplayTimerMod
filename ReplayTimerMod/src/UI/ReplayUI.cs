@@ -42,6 +42,8 @@ namespace ReplayTimerMod
         // Set by OnPBUpdated() whenever a new PB is recorded
         private bool rebuildPending = false;
 
+        private bool wasPaused = false;
+
         // Two-click confirm for the global clear-all button.
         private bool clearAllPending = false;
         private Image? clearAllBtnImg;
@@ -83,6 +85,8 @@ namespace ReplayTimerMod
         // ── Settings strip live refs ──────────────────────────────────────────
         private Text? ghostToggleLbl;
         private Text? alphaLbl;
+        private Text? trackingToggleLbl;
+        private Image? trackingToggleBtnImg;
 
         // ─────────────────────────────────────────────────────────────────────
         // SETUP
@@ -128,16 +132,25 @@ namespace ReplayTimerMod
             if (!isSetup) return;
 
             bool paused = IsPaused();
-            canvasGO!.SetActive(paused);
 
-            if (!paused)
+            if (paused && !wasPaused)
             {
+                canvasGO!.SetActive(true);
+                tabGO!.SetActive(true);
+                wasPaused = true;
+            }
+
+            if (!paused && wasPaused)
+            {
+                canvasGO!.SetActive(false);
                 expanded = false;
                 ResetClearAllConfirm();
+                wasPaused = false;
                 return;
             }
 
-            tabGO!.SetActive(true);
+            if (!paused) return;
+
             panelGO!.SetActive(expanded);
 
             if (expanded && rebuildPending)

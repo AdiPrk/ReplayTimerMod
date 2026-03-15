@@ -18,8 +18,16 @@ namespace ReplayTimerMod
 
         // ── Init ──────────────────────────────────────────────────────────────
 
+        private static ConfigEntry<bool>? _trackingEnabled;
+
         public static void Init(ConfigFile config)
         {
+            _trackingEnabled = config.Bind(
+                section: "Mod",
+                key: "TrackingEnabled",
+                defaultValue: true,
+                description: "Master switch. When false, no rooms are recorded and no PBs are updated.");
+
             _ghostEnabled = config.Bind(
                 section: "Ghost",
                 key: "Enabled",
@@ -57,7 +65,12 @@ namespace ReplayTimerMod
 
         // ── Properties ────────────────────────────────────────────────────────
         // Fall back to hardcoded defaults when Init() hasn't been called yet
-        // (e.g. in unit-test contexts or before Awake).
+
+        public static bool TrackingEnabled
+        {
+            get => _trackingEnabled?.Value ?? true;
+            set { if (_trackingEnabled != null) _trackingEnabled.Value = value; }
+        }
 
         public static bool GhostEnabled
         {

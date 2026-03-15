@@ -274,6 +274,19 @@ namespace ReplayTimerMod
 
         // ── Ghost settings ────────────────────────────────────────────────────
 
+        private void OnTrackingToggle()
+        {
+            GhostSettings.TrackingEnabled = !GhostSettings.TrackingEnabled;
+            if (trackingToggleLbl == null) return;
+            bool on = GhostSettings.TrackingEnabled;
+            trackingToggleLbl.text = on ? "ON" : "OFF";
+            trackingToggleLbl.color = on ? UIStyle.Accent : UIStyle.Red;
+            if (trackingToggleBtnImg != null)
+                trackingToggleBtnImg.color = on
+                    ? UIStyle.Accent with { a = 0.22f }
+                    : UIStyle.Red with { a = 0.22f };
+        }
+
         private void OnGhostToggle()
         {
             GhostSettings.GhostEnabled = !GhostSettings.GhostEnabled;
