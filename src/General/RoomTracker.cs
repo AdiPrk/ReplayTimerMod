@@ -2,7 +2,6 @@
 using System.Reflection;
 using BepInEx.Logging;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using GlobalEnums;
 
 namespace ReplayTimerMod
@@ -35,6 +34,7 @@ namespace ReplayTimerMod
         // ── Private state ────────────────────────────────────────────────────
         private static int sceneCount = 0;
         private static bool isReady = false;
+        private static string lastSceneName = "";
 
         // Set by OnGateTransitionBegin; consumed and cleared in OnActiveSceneChanged.
         private static bool pendingGateTransition = false;
@@ -73,7 +73,7 @@ namespace ReplayTimerMod
 
         public static void Init()
         {
-            SceneManager.activeSceneChanged += OnActiveSceneChanged;
+            lastSceneName = "";
             GameHooks.OnPlayerDead += HandleInvalidation;
             GameHooks.OnGateTransitionBegin += HandleGateTransitionBegin;
         }
@@ -98,7 +98,7 @@ namespace ReplayTimerMod
             pendingGateTransition = false;
         }
 
-        private static void OnActiveSceneChanged(Scene from, Scene to)
+        private static void OnActiveSceneChanged(string fromName, string toName)
         {
             sceneCount++;
             if (sceneCount >= 4) isReady = true;
@@ -113,10 +113,10 @@ namespace ReplayTimerMod
             bool arrivedViaGate = pendingGateTransition;
             pendingGateTransition = false;
 
-            if (from.name == MENU_TITLE || from.name == QUIT_TO_MENU)
+            if (fromName == MENU_TITLE || fromName == QUIT_TO_MENU)
                 arrivedViaGate = false;
 
-            bool toMenu = to.name == MENU_TITLE || to.name == QUIT_TO_MENU;
+            bool toMenu = toName == MENU_TITLE || toName == QUIT_TO_MENU;
 
             // ── Close out current recording ───────────────────────────────────
             if (IsRecording)
@@ -125,7 +125,7 @@ namespace ReplayTimerMod
                 {
                     string exitedScene = CurrentScene;
                     string exitedFromScene = EntryFromScene;
-                    string exitedTo = to.name;
+                    string exitedTo = toName;
                     float exitedTime = CurrentRoomTime;
 
                     Log.LogInfo($"[RoomTracker] Exit: {exitedScene} [{exitedFromScene}->{exitedTo}] {TimeUtil.Format(exitedTime)}");
@@ -150,8 +150,8 @@ namespace ReplayTimerMod
             // ── Start new recording ───────────────────────────────────────────
             if (arrivedViaGate && !toMenu)
             {
-                CurrentScene = to.name;
-                EntryFromScene = from.name;
+                CurrentScene = toName;
+                EntryFromScene = fromName;
                 CurrentRoomTime = 0f;
                 IsRecording = true;
 
@@ -160,12 +160,12 @@ namespace ReplayTimerMod
             }
             else
             {
-                CurrentScene = to.name;
+                CurrentScene = toName;
                 EntryFromScene = "";
                 CurrentRoomTime = 0f;
                 IsRecording = false;
 
-                Log.LogInfo($"[RoomTracker] IDLE in {to.name}");
+                Log.LogInfo($"[RoomTracker] IDLE in {toName}");
             }
 
             bool isOverTime() => CurrentRoomTime > MAX_ROOM_TIME;
@@ -174,9 +174,29 @@ namespace ReplayTimerMod
         // ── Tick ──────────────────────────────────────────────────────────────
         public static void Tick(bool shouldTick)
         {
+            string currentSceneName = GetCurrentSceneName();
+            if (!string.IsNullOrEmpty(currentSceneName) && currentSceneName != lastSceneName)
+            {
+                string fromName = lastSceneName;
+                lastSceneName = currentSceneName;
+                OnActiveSceneChanged(fromName, currentSceneName);
+            }
+
             if (!isReady || !IsRecording) return;
             if (shouldTick)
                 CurrentRoomTime += Time.unscaledDeltaTime;
+        }
+
+        private static string GetCurrentSceneName()
+        {
+            try
+            {
+                return GameManager.instance?.GetSceneNameString() ?? "";
+            }
+            catch
+            {
+                return "";
+            }
         }
 
     }

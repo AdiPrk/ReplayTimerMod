@@ -1,23 +1,24 @@
+#if SILKSONG_BUILD
 using BepInEx;
 using System.IO;
 using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace ReplayTimerMod
 {
-    [BepInDependency(DependencyGUID: "org.silksong-modding.modlist")]
+    [BepInDependency("org.silksong-modding.modlist", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInAutoPlugin(id: "io.github.adiprk.replaytimermod")]
-    public partial class ReplayTimerModPlugin : BaseUnityPlugin
+    public partial class ReplayTimerModSS : BaseUnityPlugin
     {
-        internal static ReplayTimerModPlugin Instance { get; private set; } = null!;
+        internal static ReplayTimerModSS Instance { get; private set; } = null!;
+        private static GameManager? cachedGameManager;
 
         private FrameRecorder frameRecorder = null!;
         private GhostPlayback ghostPlayback = null!;
         private ReplayUI replayUI = null!;
 
-        private int sceneCount = 0;
+        private bool lateInitDone = false;
 
         private void Awake()
         {
@@ -44,19 +45,6 @@ namespace ReplayTimerMod
             RoomTracker.OnRoomEnter += OnRoomEnter;
             RoomTracker.OnRoomExit += OnRoomExit;
             RoomTracker.OnRecordingDiscarded += OnRecordingDiscarded;
-
-            SceneManager.activeSceneChanged += OnSceneChanged;
-        }
-
-        private void OnSceneChanged(Scene from, Scene to)
-        {
-            sceneCount++;
-            if (sceneCount == 4)
-            {
-                Logger.LogInfo("Scene 4 - setting up UI and ghost");
-                ghostPlayback.Setup();
-                replayUI.Setup();
-            }
         }
 
         private void OnRoomEnter(string sceneName, string entryFromScene)
@@ -88,6 +76,11 @@ namespace ReplayTimerMod
 
         private void LateUpdate()
         {
+            TryLateInit();
+
+            if (!TryGetGameManager(out _))
+                return;
+
             bool shouldTick = false;
             try { shouldTick = LoadRemover.ShouldTick(); } catch { }
 
@@ -96,5 +89,32 @@ namespace ReplayTimerMod
             ghostPlayback.Tick(shouldTick);
             replayUI.Tick();
         }
+
+        private void TryLateInit()
+        {
+            if (lateInitDone) return;
+            if (HeroController.instance == null) return;
+
+            lateInitDone = true;
+            Logger.LogInfo("Hero ready - setting up UI and ghost");
+            ghostPlayback.Setup();
+            replayUI.Setup();
+        }
+
+        private static bool TryGetGameManager(out GameManager gm)
+        {
+            if (cachedGameManager != null)
+            {
+                gm = cachedGameManager;
+                return true;
+            }
+
+            gm = Object.FindFirstObjectByType<GameManager>();
+            if (gm == null) return false;
+
+            cachedGameManager = gm;
+            return true;
+        }
     }
 }
+#endif
