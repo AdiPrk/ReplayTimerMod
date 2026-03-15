@@ -49,6 +49,13 @@ namespace ReplayTimerMod
 
         private void OnRoomEnter(string sceneName, string entryFromScene)
         {
+            if (!GhostSettings.TrackingEnabled)
+            {
+                // Start playback, but don't record
+                ghostPlayback.StartPlayback(sceneName, entryFromScene);
+                return;
+            }
+
             frameRecorder.StartRecording();
             ghostPlayback.StartPlayback(sceneName, entryFromScene);
         }
@@ -58,13 +65,30 @@ namespace ReplayTimerMod
         {
             ghostPlayback.StopPlayback();
 
-            RoomKey key = new RoomKey(sceneName, entryFromScene, exitToScene);
-            RecordedRoom? recording = frameRecorder.FinishRecording(key, lrTime);
-
-            if (recording != null)
+            if (!GhostSettings.TrackingEnabled)
             {
-                EvaluationResult result = PBManager.Evaluate(recording);
-                replayUI.OnPBUpdated();
+                frameRecorder.DiscardRecording();
+                return;
+            }
+
+            RoomKey key = new RoomKey(sceneName, entryFromScene, exitToScene);
+
+            // Check before calling FinishRecording so we don't pay the cost of
+            // frames.ToArray() (up to ~25KB) on every missed attempt. For a
+            // speedrunner retrying the same room hundreds of times this avoids
+            // GC pressure that would otherwise cause periodic hitches.
+            if (PBManager.WouldBePB(key, lrTime))
+            {
+                RecordedRoom? recording = frameRecorder.FinishRecording(key, lrTime);
+                if (recording != null)
+                {
+                    PBManager.Evaluate(recording);
+                    replayUI.OnPBUpdated();
+                }
+            }
+            else
+            {
+                frameRecorder.DiscardRecording();
             }
         }
 

@@ -33,6 +33,14 @@ namespace ReplayTimerMod
             return pb;
         }
 
+        // Returns true if the given time would be stored by Evaluate() - i.e.
+        // it's either the first run for this key or faster than the existing PB.
+        public static bool WouldBePB(RoomKey key, float time)
+        {
+            if (!pbs.TryGetValue(key, out var existing)) return true; // first run
+            return time < existing.TotalTime;
+        }
+
         // ── Evaluate (called after a live run) ────────────────────────────────
 
         public static EvaluationResult Evaluate(RecordedRoom run)
