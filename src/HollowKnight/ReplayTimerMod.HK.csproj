@@ -18,7 +18,7 @@
     <PathMap Condition="'$(Configuration)' == 'Release'">$(MSBuildProjectDirectory)=/</PathMap>
 
     <AssemblyTitle>ReplayTimerMod</AssemblyTitle>
-    <Version>0.1.0-hk-preview1</Version>
+    <Version>0.2.0-hk-preview1</Version>
 
     <!-- Keep HK build artifacts in-repo instead of copying directly to a game install. -->
     <HKPackageOutputDir>$(OutputPath)dist\ReplayTimerMod</HKPackageOutputDir>
