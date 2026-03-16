@@ -80,7 +80,7 @@ namespace ReplayTimerMod
             _maxSavedReplaysPerRoute = config.Bind(
                 section: "Recording",
                 key: "MaxSavedReplaysPerRoute",
-                defaultValue: 10,
+                defaultValue: 5,
                 new ConfigDescription("Maximum number of saved replays to keep per route.",
                     new AcceptableValueRange<int>(1, int.MaxValue)));
         }
@@ -137,7 +137,7 @@ namespace ReplayTimerMod
 
         public static int MaxSavedReplaysPerRoute
         {
-            get => Mathf.Max(1, _maxSavedReplaysPerRoute?.Value ?? 10);
+            get => Mathf.Max(1, _maxSavedReplaysPerRoute?.Value ?? 5);
             set
             {
                 if (_maxSavedReplaysPerRoute != null)
