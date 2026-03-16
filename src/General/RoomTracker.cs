@@ -64,7 +64,7 @@ namespace ReplayTimerMod
                         }
                     }
                 }
-                return _savestateLoadingProp?.GetValue(null) != null;
+                return _savestateLoadingProp?.GetValue(null, null) != null;
             }
             catch { return false; }
         }

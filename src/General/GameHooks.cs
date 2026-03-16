@@ -4,6 +4,8 @@ using BepInEx.Logging;
 
 #if SILKSONG_BUILD
 using HarmonyLib;
+#else
+using Modding;
 #endif
 
 namespace ReplayTimerMod
@@ -105,73 +107,42 @@ namespace ReplayTimerMod
             if (initialized) return;
             initialized = true;
 
-            On.GameManager.PlayerDead += GameManager_PlayerDead;
-            On.GameManager.BeginSceneTransition += GameManager_BeginSceneTransition;
-            Log.LogInfo("[GameHooks] MMHOOK hooks installed");
+            ModHooks.Instance.BeforePlayerDeadHook += GameManager_PlayerDead;
+            ModHooks.Instance.BeforeSceneLoadHook += GameManager_BeginSceneTransition;
+
+            Log.LogInfo("[GameHooks] ModHooks installed");
         }
 
-        private static System.Collections.IEnumerator GameManager_PlayerDead(
-            On.GameManager.orig_PlayerDead orig,
-            GameManager self,
-            float waitTime)
+        private static void GameManager_PlayerDead()
         {
             Log.LogInfo("[GameHooks] PlayerDead fired");
             pendingDeath = true;
             OnPlayerDead?.Invoke();
-            return orig(self, waitTime);
         }
 
-        private static void GameManager_BeginSceneTransition(
-            On.GameManager.orig_BeginSceneTransition orig,
-            GameManager self,
-            GameManager.SceneLoadInfo info)
-        {
-            if (info == null)
-            {
-                orig(self, info);
-                return;
-            }
 
+        private static string GameManager_BeginSceneTransition(string target)
+        {
             if (pendingDeath)
             {
                 Log.LogInfo("[GameHooks] BeginSceneTransition - death respawn, skipping");
                 pendingDeath = false;
-                orig(self, info);
-                return;
+                return target;
             }
 
-            string destScene = TryReadStringMember(info, "SceneName", "sceneName", "ToScene", "Scene");
-            string entryGate = TryReadStringMember(info, "EntryGateName", "EntryGate", "entryGateName", "GateName");
+            string destScene = "";
+            string entryGate = "";
+            try
+            {
+                destScene = target;
+                entryGate = GameManager.instance.entryGateName;
+            }
+            catch { }
 
-            Log.LogInfo($"[GameHooks] BeginSceneTransition -> '{destScene}' via '{entryGate}' (type={info.GetType().Name})");
+            Log.LogInfo($"[GameHooks] BeginSceneTransition -> '{destScene}' via '{entryGate}' ");
             OnGateTransitionBegin?.Invoke(destScene, entryGate);
 
-            orig(self, info);
-        }
-
-        private static string TryReadStringMember(object instance, params string[] names)
-        {
-            if (instance == null) return "";
-
-            const BindingFlags Flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-            var type = instance.GetType();
-
-            foreach (string name in names)
-            {
-                try
-                {
-                    var prop = type.GetProperty(name, Flags);
-                    if (prop != null && prop.PropertyType == typeof(string))
-                        return prop.GetValue(instance) as string ?? "";
-
-                    var field = type.GetField(name, Flags);
-                    if (field != null && field.FieldType == typeof(string))
-                        return field.GetValue(instance) as string ?? "";
-                }
-                catch { }
-            }
-
-            return "";
+            return target;
         }
     }
 #endif

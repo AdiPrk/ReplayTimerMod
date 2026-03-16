@@ -100,7 +100,7 @@ namespace ReplayTimerMod
             }
 
             using var ms = new MemoryStream();
-            using (var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
+            using (var w = new BinaryWriter(ms, Encoding.UTF8))
             {
                 w.Write(Magic);
                 w.Write(Version);
@@ -142,7 +142,7 @@ namespace ReplayTimerMod
         private static RecordedRoom ReadBinary(byte[] raw)
         {
             using var ms = new MemoryStream(raw);
-            using var r = new BinaryReader(ms, Encoding.UTF8, leaveOpen: true);
+            using var r = new BinaryReader(ms, Encoding.UTF8);
 
             for (int i = 0; i < 4; i++)
                 if (r.ReadByte() != Magic[i])
@@ -221,7 +221,7 @@ namespace ReplayTimerMod
         {
             var list = rooms.ToList();
             using var ms = new MemoryStream();
-            using (var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
+            using (var w = new BinaryWriter(ms, Encoding.UTF8))
             {
                 w.Write(MagicCollection);
                 w.Write(VersionCollection);
@@ -256,7 +256,7 @@ namespace ReplayTimerMod
         private static List<RecordedRoom> ReadCollection(byte[] raw)
         {
             using var ms = new MemoryStream(raw);
-            using var r = new BinaryReader(ms, Encoding.UTF8, leaveOpen: true);
+            using var r = new BinaryReader(ms, Encoding.UTF8);
 
             for (int i = 0; i < 4; i++)
                 if (r.ReadByte() != MagicCollection[i])
@@ -352,4 +352,18 @@ namespace ReplayTimerMod
             return output.ToArray();
         }
     }
+
+    public static partial class TestA
+    {
+        public static void CopyTo(this Stream from, Stream to)
+        {
+            byte[] buffer = new byte[32768];
+            int read;
+            while ((read = from.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                to.Write (buffer, 0, read);
+            }
+        }
+    }
 }
+
