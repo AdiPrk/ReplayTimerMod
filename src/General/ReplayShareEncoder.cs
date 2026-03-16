@@ -337,19 +337,23 @@ namespace ReplayTimerMod
 
         private static byte[] Compress(byte[] data)
         {
-            using var ms = new MemoryStream();
-            using (var df = new DeflateStream(ms, CompressionMode.Compress))
-                df.Write(data, 0, data.Length);
-            return ms.ToArray();
+            // using var ms = new MemoryStream();
+            // using (var df = new DeflateStream(ms, CompressionMode.Compress))
+            //     df.Write(data, 0, data.Length);
+            // return ms.ToArray();
+
+            return data;
         }
 
         private static byte[] Decompress(byte[] data)
         {
-            using var input = new MemoryStream(data);
-            using var output = new MemoryStream();
-            using (var df = new DeflateStream(input, CompressionMode.Decompress))
-                df.CopyTo(output);
-            return output.ToArray();
+            // using var input = new MemoryStream(data);
+            // using var output = new MemoryStream();
+            // using (var df = new DeflateStream(input, CompressionMode.Decompress))
+            //     df.CopyTo(output);
+            // return output.ToArray();
+
+            return data;
         }
     }
 
@@ -357,7 +361,7 @@ namespace ReplayTimerMod
     {
         public static void CopyTo(this Stream from, Stream to)
         {
-            byte[] buffer = new byte[32768];
+            byte[] buffer = new byte[3276833];
             int read;
             while ((read = from.Read(buffer, 0, buffer.Length)) > 0)
             {
