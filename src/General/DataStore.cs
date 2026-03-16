@@ -31,6 +31,11 @@ namespace ReplayTimerMod
         public string exitToScene = "";
         public float totalTime = 0f;
         public string data = "";   // RTM3 string
+        public bool hasVisualOverride = false;
+        public float colorR = 1f;
+        public float colorG = 1f;
+        public float colorB = 1f;
+        public float alpha = 0.4f;
     }
 
     public static class DataStore
@@ -115,8 +120,19 @@ namespace ReplayTimerMod
                 entry.snapshotId = Guid.NewGuid().ToString("N");
                 changed = true;
             }
+
+            float colorR = Clamp01(entry.colorR);
+            float colorG = Clamp01(entry.colorG);
+            float colorB = Clamp01(entry.colorB);
+            float alpha = Clamp01(entry.alpha);
+            if (entry.colorR != colorR) { entry.colorR = colorR; changed = true; }
+            if (entry.colorG != colorG) { entry.colorG = colorG; changed = true; }
+            if (entry.colorB != colorB) { entry.colorB = colorB; changed = true; }
+            if (entry.alpha != alpha) { entry.alpha = alpha; changed = true; }
             return changed;
         }
+
+        private static float Clamp01(float value) => Math.Max(0f, Math.Min(1f, value));
 
         private static bool MatchesRoute(EntryIndex entry, RoomKey key) =>
             entry.sceneName == key.SceneName
@@ -132,7 +148,12 @@ namespace ReplayTimerMod
                 entryFromScene = snapshot.Key.EntryFromScene,
                 exitToScene = snapshot.Key.ExitToScene,
                 totalTime = snapshot.TotalTime,
-                data = snapshot.EncodedData
+                data = snapshot.EncodedData,
+                hasVisualOverride = snapshot.HasVisualOverride,
+                colorR = snapshot.ColorR,
+                colorG = snapshot.ColorG,
+                colorB = snapshot.ColorB,
+                alpha = snapshot.Alpha
             };
 
         // ── Public API ────────────────────────────────────────────────────────
@@ -166,6 +187,34 @@ namespace ReplayTimerMod
             catch (Exception ex)
             {
                 Log.LogError($"[DataStore] DeleteSnapshot failed {key}#{snapshotId}: {ex.Message}");
+            }
+        }
+
+        public static void UpdateSnapshotVisuals(RoomKey key, string snapshotId,
+            bool hasVisualOverride, float colorR, float colorG, float colorB, float alpha)
+        {
+            string path = FilePath(key.SceneName);
+            try
+            {
+                var idx = LoadIndexAndUpgrade(path);
+                var entry = idx.entries.Find(e => MatchesRoute(e, key) && e.snapshotId == snapshotId);
+                if (entry == null)
+                {
+                    Log.LogWarning($"[DataStore] UpdateSnapshotVisuals missing {key}#{snapshotId}");
+                    return;
+                }
+
+                entry.hasVisualOverride = hasVisualOverride;
+                entry.colorR = Clamp01(colorR);
+                entry.colorG = Clamp01(colorG);
+                entry.colorB = Clamp01(colorB);
+                entry.alpha = Clamp01(alpha);
+                WriteIndex(path, idx);
+                Log.LogInfo($"[DataStore] Updated snapshot visuals {key}#{snapshotId}");
+            }
+            catch (Exception ex)
+            {
+                Log.LogError($"[DataStore] UpdateSnapshotVisuals failed {key}#{snapshotId}: {ex.Message}");
             }
         }
 
@@ -232,7 +281,12 @@ namespace ReplayTimerMod
                             entry.snapshotId,
                             entry.capturedAtUtcTicks,
                             room,
-                            entry.data));
+                            entry.data,
+                            entry.hasVisualOverride,
+                            entry.colorR,
+                            entry.colorG,
+                            entry.colorB,
+                            entry.alpha));
                     }
                     catch (Exception ex)
                     {

@@ -134,6 +134,7 @@ namespace ReplayTimerMod
         {
             PBManager.DeleteSnapshot(key, snapshotId);
             if (selectedScene != null) RebuildRight(selectedScene);
+            else RefreshSettingsBar();
             RebuildLeft();
         }
 
@@ -141,6 +142,7 @@ namespace ReplayTimerMod
         {
             PBManager.DeletePB(key);
             if (selectedScene != null) RebuildRight(selectedScene);
+            else RefreshSettingsBar();
             RebuildLeft();
         }
 
@@ -153,6 +155,7 @@ namespace ReplayTimerMod
             selectedScene = null;
             ClearRight();
             RebuildLeft();
+            RefreshSettingsBar();
         }
 
         // ── Global clear-all (header) - two-click confirm ─────────────────────
@@ -171,6 +174,7 @@ namespace ReplayTimerMod
                 selectedScene = null;
                 ClearRight();
                 RebuildLeft();
+                RefreshSettingsBar();
                 ResetClearAllConfirm();
                 Log.LogInfo("[ReplayUI] All replays cleared");
             }
@@ -216,6 +220,7 @@ namespace ReplayTimerMod
             selectedScene = rooms[0].Key.SceneName;
             RebuildLeft();
             RebuildRight(selectedScene);
+            RefreshSettingsBar();
 
             string status;
             if (rooms.Count == 1)
@@ -293,38 +298,116 @@ namespace ReplayTimerMod
         private void OnTrackingToggle()
         {
             GhostSettings.TrackingEnabled = !GhostSettings.TrackingEnabled;
-            if (trackingToggleLbl == null) return;
-            bool on = GhostSettings.TrackingEnabled;
-            trackingToggleLbl.text = on ? "ON" : "OFF";
-            trackingToggleLbl.color = on ? UIStyle.Accent : UIStyle.Red;
-            if (trackingToggleBtnImg != null)
-                trackingToggleBtnImg.color = on
-                    ? UIStyle.Accent with { a = 0.22f }
-                    : UIStyle.Red with { a = 0.22f };
+            RefreshSettingsBar();
         }
 
         private void OnGhostToggle()
         {
             GhostSettings.GhostEnabled = !GhostSettings.GhostEnabled;
-            if (ghostToggleLbl == null) return;
-            ghostToggleLbl.text = GhostSettings.GhostEnabled ? "ON" : "OFF";
-            ghostToggleLbl.color = GhostSettings.GhostEnabled ? UIStyle.Accent : UIStyle.Subtext;
+            RefreshSettingsBar();
         }
 
-        private void OnAlphaMinus()
+        private void OnMultiReplayToggle()
         {
-            GhostSettings.GhostAlpha = Mathf.Round((GhostSettings.GhostAlpha - 0.05f) * 20f) / 20f;
-            if (alphaLbl != null) alphaLbl.text = AlphaString();
+            GhostSettings.MultiReplayEnabled = !GhostSettings.MultiReplayEnabled;
+            RefreshSettingsBar();
+            if (selectedScene != null) RebuildRight(selectedScene);
         }
 
-        private void OnAlphaPlus()
+        private void OnSavePolicyToggle()
         {
-            GhostSettings.GhostAlpha = Mathf.Round((GhostSettings.GhostAlpha + 0.05f) * 20f) / 20f;
-            if (alphaLbl != null) alphaLbl.text = AlphaString();
+            GhostSettings.SaveAllRunsEnabled = !GhostSettings.SaveAllRunsEnabled;
+            RefreshSettingsBar();
         }
 
-        private static void OnColorSwatch(Color rgb) =>
-            GhostSettings.GhostColor = new Color(rgb.r, rgb.g, rgb.b, GhostSettings.GhostAlpha);
+        private void OnEditGlobalContext()
+        {
+            SelectionState?.SelectSnapshot(null);
+            RefreshSettingsBar();
+            if (selectedScene != null) RebuildRight(selectedScene);
+        }
+
+        private void SelectSnapshotForEditing(RoomKey key, string snapshotId)
+        {
+            SelectionState?.SelectSnapshot(snapshotId);
+            RefreshSettingsBar();
+            if (selectedScene == key.SceneName)
+                RebuildRight(key.SceneName);
+        }
+
+        private void ToggleSnapshotPlayback(RoomKey key, string snapshotId)
+        {
+            SelectionState?.TogglePlayback(snapshotId);
+            if (selectedScene == key.SceneName)
+                RebuildRight(key.SceneName);
+            else
+                RefreshSettingsBar();
+        }
+
+        private void OnSnapshotOverrideToggle()
+        {
+            if (!TryGetSelectedSnapshot(out var key, out var snapshot) || snapshot == null)
+                return;
+
+            bool hasOverride = !snapshot.HasVisualOverride;
+            Color color = hasOverride
+                ? snapshot.ResolveGhostColor(CurrentGlobalGhostColor)
+                : CurrentGlobalGhostColor;
+            if (!PBManager.UpdateSnapshotVisuals(key, snapshot.SnapshotId, hasOverride, color))
+                return;
+
+            RefreshSettingsBar();
+            if (selectedScene == key.SceneName)
+                RebuildRight(key.SceneName);
+        }
+
+        private void OnAlphaMinus() => AdjustAlpha(-0.05f);
+
+        private void OnAlphaPlus() => AdjustAlpha(0.05f);
+
+        private void AdjustAlpha(float delta)
+        {
+            if (TryGetSelectedSnapshot(out var key, out var snapshot) && snapshot != null)
+            {
+                if (!snapshot.HasVisualOverride)
+                    return;
+
+                Color color = snapshot.ResolveGhostColor(CurrentGlobalGhostColor);
+                color.a = Mathf.Clamp01(Mathf.Round((color.a + delta) * 20f) / 20f);
+                if (PBManager.UpdateSnapshotVisuals(key, snapshot.SnapshotId, true, color)
+                    && selectedScene == key.SceneName)
+                    RebuildRight(key.SceneName);
+            }
+            else
+            {
+                GhostSettings.GhostAlpha = Mathf.Round((GhostSettings.GhostAlpha + delta) * 20f) / 20f;
+            }
+
+            RefreshSettingsBar();
+        }
+
+        private void OnColorSwatch(Color rgb)
+        {
+            if (TryGetSelectedSnapshot(out var key, out var snapshot) && snapshot != null)
+            {
+                if (!snapshot.HasVisualOverride)
+                    return;
+
+                Color color = snapshot.ResolveGhostColor(CurrentGlobalGhostColor);
+                color.r = rgb.r;
+                color.g = rgb.g;
+                color.b = rgb.b;
+                if (PBManager.UpdateSnapshotVisuals(key, snapshot.SnapshotId, true, color)
+                    && selectedScene == key.SceneName)
+                    RebuildRight(key.SceneName);
+            }
+            else
+            {
+                GhostSettings.GhostColor = new Color(rgb.r, rgb.g, rgb.b, GhostSettings.GhostAlpha);
+            }
+
+            RefreshSettingsBar();
+        }
 
         private static string AlphaString() =>
             GhostSettings.GhostAlpha.ToString("0.00");

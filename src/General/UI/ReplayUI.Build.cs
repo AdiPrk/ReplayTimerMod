@@ -203,7 +203,7 @@ namespace ReplayTimerMod
                 x: M, w: statusX - M, h: SUBHDR);
         }
 
-        // ── Settings strip: Tracking [ON/OFF] | Ghost [ON/OFF] | Alpha [-] 0.40 [+] | Color ■■■■■■
+        // ── Settings strip: global toggles + context-aware visual editor ─────
         private void BuildSettingsBar()
         {
             var bar = MakeGO("SettingsBar", panelGO!.transform);
@@ -211,90 +211,149 @@ namespace ReplayTimerMod
             Rect(bar, 0, PH - STGSH, PW, STGSH);
 
             int btnH = UIStyle.H(22);
-            int btnY = (STGSH - btnH) / 2;
-            int lblW = UIStyle.W(38);
+            int topY = UIStyle.H(6);
+            int bottomY = UIStyle.H(34);
             int stepW = UIStyle.W(22);
+            int valueW = UIStyle.W(38);
+            int toggleW = UIStyle.W(46);
             int x = M;
 
-            // Tracking: [ON/OFF] - master switch for recording
-            int trackLblW = UIStyle.W(52);
             MakeLbl(bar.transform, "Tracking:", UIStyle.FontSizeSm - 1,
-                UIStyle.Subtext, TextAnchor.MiddleLeft, x: x, y: 0, w: trackLblW, h: STGSH);
-            x += trackLblW + M / 2;
+                UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: x, y: topY, w: UIStyle.W(52), h: btnH);
+            x += UIStyle.W(52) + M / 2;
 
             var trackingBtn = MakeGO("TrackingToggle", bar.transform);
-            Img(trackingBtn, GhostSettings.TrackingEnabled
-                ? UIStyle.Accent with { a = 0.22f }
-                : UIStyle.Red with { a = 0.22f });
+            Img(trackingBtn, UIStyle.Overlay);
             Btn(trackingBtn, OnTrackingToggle);
-            Rect(trackingBtn, x, btnY, UIStyle.W(46), btnH);
-            trackingToggleLbl = MakeLbl(trackingBtn.transform,
-                GhostSettings.TrackingEnabled ? "ON" : "OFF", UIStyle.FontSizeSm - 1,
-                GhostSettings.TrackingEnabled ? UIStyle.Accent : UIStyle.Red,
+            Rect(trackingBtn, x, topY, toggleW, btnH);
+            trackingToggleLbl = MakeLbl(trackingBtn.transform, "ON",
+                UIStyle.FontSizeSm - 1, UIStyle.Accent,
                 TextAnchor.MiddleCenter, fill: true);
             trackingToggleBtnImg = trackingBtn.GetComponent<Image>();
-            x += UIStyle.W(46);
+            x += toggleW;
 
-            x = BarSeparator(bar.transform, x, btnY, btnH);
+            x = BarSeparator(bar.transform, x, topY, btnH);
 
-            // Ghost: [ON/OFF]
             MakeLbl(bar.transform, "Ghost:", UIStyle.FontSizeSm - 1,
-                UIStyle.Subtext, TextAnchor.MiddleLeft, x: x, y: 0, w: lblW, h: STGSH);
-            x += lblW + M / 2;
+                UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: x, y: topY, w: UIStyle.W(38), h: btnH);
+            x += UIStyle.W(38) + M / 2;
 
-            var toggleBtn = MakeGO("GhostToggle", bar.transform);
-            Img(toggleBtn, UIStyle.Overlay);
-            Btn(toggleBtn, OnGhostToggle);
-            Rect(toggleBtn, x, btnY, UIStyle.W(46), btnH);
-            ghostToggleLbl = MakeLbl(toggleBtn.transform,
-                GhostSettings.GhostEnabled ? "ON" : "OFF", UIStyle.FontSizeSm - 1,
-                GhostSettings.GhostEnabled ? UIStyle.Accent : UIStyle.Subtext,
+            var ghostBtn = MakeGO("GhostToggle", bar.transform);
+            Img(ghostBtn, UIStyle.Overlay);
+            Btn(ghostBtn, OnGhostToggle);
+            Rect(ghostBtn, x, topY, toggleW, btnH);
+            ghostToggleLbl = MakeLbl(ghostBtn.transform, "ON",
+                UIStyle.FontSizeSm - 1, UIStyle.Accent,
                 TextAnchor.MiddleCenter, fill: true);
-            x += UIStyle.W(46);
+            ghostToggleBtnImg = ghostBtn.GetComponent<Image>();
+            x += toggleW;
 
-            x = BarSeparator(bar.transform, x, btnY, btnH);
+            x = BarSeparator(bar.transform, x, topY, btnH);
 
-            // Alpha: [−] 0.40 [+]
+            MakeLbl(bar.transform, "Multi:", UIStyle.FontSizeSm - 1,
+                UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: x, y: topY, w: UIStyle.W(34), h: btnH);
+            x += UIStyle.W(34) + M / 2;
+
+            var multiBtn = MakeGO("MultiReplayToggle", bar.transform);
+            Img(multiBtn, UIStyle.Overlay);
+            Btn(multiBtn, OnMultiReplayToggle);
+            Rect(multiBtn, x, topY, toggleW, btnH);
+            multiReplayToggleLbl = MakeLbl(multiBtn.transform, "OFF",
+                UIStyle.FontSizeSm - 1, UIStyle.Subtext,
+                TextAnchor.MiddleCenter, fill: true);
+            multiReplayToggleBtnImg = multiBtn.GetComponent<Image>();
+            x += toggleW;
+
+            x = BarSeparator(bar.transform, x, topY, btnH);
+
+            MakeLbl(bar.transform, "Save:", UIStyle.FontSizeSm - 1,
+                UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: x, y: topY, w: UIStyle.W(34), h: btnH);
+            x += UIStyle.W(34) + M / 2;
+
+            var saveBtn = MakeGO("SavePolicyToggle", bar.transform);
+            Img(saveBtn, UIStyle.Overlay);
+            Btn(saveBtn, OnSavePolicyToggle);
+            Rect(saveBtn, x, topY, UIStyle.W(68), btnH);
+            savePolicyLbl = MakeLbl(saveBtn.transform, SavePolicyLabel(),
+                UIStyle.FontSizeSm - 2, UIStyle.Gold,
+                TextAnchor.MiddleCenter, fill: true);
+            savePolicyBtnImg = saveBtn.GetComponent<Image>();
+
+            int bottomX = M;
+
+            var contextBtn = MakeGO("SettingsContext", bar.transform);
+            Img(contextBtn, UIStyle.Overlay with { a = 0.55f });
+            Btn(contextBtn, OnEditGlobalContext);
+            Rect(contextBtn, bottomX, bottomY, UIStyle.W(178), btnH);
+            settingsContextLbl = MakeLbl(contextBtn.transform, "Edit: Global",
+                UIStyle.FontSizeSm - 1, UIStyle.Text,
+                TextAnchor.MiddleCenter, fill: true);
+            bottomX += UIStyle.W(178);
+
+            bottomX = BarSeparator(bar.transform, bottomX, bottomY, btnH);
+
+            MakeLbl(bar.transform, "Override:", UIStyle.FontSizeSm - 1,
+                UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: bottomX, y: bottomY, w: UIStyle.W(52), h: btnH);
+            bottomX += UIStyle.W(52) + M / 2;
+
+            var overrideBtn = MakeGO("OverrideToggle", bar.transform);
+            Img(overrideBtn, UIStyle.Overlay);
+            Btn(overrideBtn, OnSnapshotOverrideToggle);
+            Rect(overrideBtn, bottomX, bottomY, toggleW, btnH);
+            overrideToggleLbl = MakeLbl(overrideBtn.transform, "—",
+                UIStyle.FontSizeSm - 1, UIStyle.Subtext,
+                TextAnchor.MiddleCenter, fill: true);
+            overrideToggleBtnImg = overrideBtn.GetComponent<Image>();
+            bottomX += toggleW;
+
+            bottomX = BarSeparator(bar.transform, bottomX, bottomY, btnH);
+
             MakeLbl(bar.transform, "Alpha:", UIStyle.FontSizeSm - 1,
-                UIStyle.Subtext, TextAnchor.MiddleLeft, x: x, y: 0, w: lblW, h: STGSH);
-            x += lblW + M / 2;
+                UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: bottomX, y: bottomY, w: UIStyle.W(38), h: btnH);
+            bottomX += UIStyle.W(38) + M / 2;
 
             var minusBtn = MakeGO("AlphaMinus", bar.transform);
             Img(minusBtn, UIStyle.Overlay);
             Btn(minusBtn, OnAlphaMinus);
-            Rect(minusBtn, x, btnY, stepW, btnH);
+            Rect(minusBtn, bottomX, bottomY, stepW, btnH);
             MakeLbl(minusBtn.transform, "−", UIStyle.FontSizeSm - 1,
                 UIStyle.Text, TextAnchor.MiddleCenter, fill: true);
-            x += stepW + M / 2;
+            bottomX += stepW + M / 2;
 
             alphaLbl = MakeLbl(bar.transform, AlphaString(), UIStyle.FontSizeSm - 1,
                 UIStyle.Text, TextAnchor.MiddleCenter,
-                x: x, y: 0, w: UIStyle.W(38), h: STGSH);
-            x += UIStyle.W(38) + M / 2;
+                x: bottomX, y: bottomY, w: valueW, h: btnH);
+            bottomX += valueW + M / 2;
 
             var plusBtn = MakeGO("AlphaPlus", bar.transform);
             Img(plusBtn, UIStyle.Overlay);
             Btn(plusBtn, OnAlphaPlus);
-            Rect(plusBtn, x, btnY, stepW, btnH);
+            Rect(plusBtn, bottomX, bottomY, stepW, btnH);
             MakeLbl(plusBtn.transform, "+", UIStyle.FontSizeSm - 1,
                 UIStyle.Text, TextAnchor.MiddleCenter, fill: true);
-            x += stepW;
+            bottomX += stepW;
 
-            x = BarSeparator(bar.transform, x, btnY, btnH);
+            bottomX = BarSeparator(bar.transform, bottomX, bottomY, btnH);
 
-            // Color: ■ ■ ■ ■ ■ ■
             MakeLbl(bar.transform, "Color:", UIStyle.FontSizeSm - 1,
-                UIStyle.Subtext, TextAnchor.MiddleLeft, x: x, y: 0, w: lblW, h: STGSH);
-            x += lblW + M / 2;
+                UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: bottomX, y: bottomY, w: UIStyle.W(38), h: btnH);
+            bottomX += UIStyle.W(38) + M / 2;
 
             Color[] swatches =
             {
-                new Color(1.00f, 1.00f, 1.00f),  // white
-                new Color(0.40f, 0.80f, 1.00f),  // cyan
-                new Color(0.93f, 0.83f, 0.62f),  // gold
-                new Color(0.40f, 0.85f, 0.40f),  // green
-                new Color(0.93f, 0.53f, 0.59f),  // red
-                new Color(0.75f, 0.55f, 1.00f),  // purple
+                new Color(1.00f, 1.00f, 1.00f),
+                new Color(0.40f, 0.80f, 1.00f),
+                new Color(0.93f, 0.83f, 0.62f),
+                new Color(0.40f, 0.85f, 0.40f),
+                new Color(0.93f, 0.53f, 0.59f),
+                new Color(0.75f, 0.55f, 1.00f),
             };
             int swatchW = UIStyle.W(22);
             foreach (var swatch in swatches)
@@ -303,9 +362,11 @@ namespace ReplayTimerMod
                 Color c = swatch;
                 Img(sw, c);
                 Btn(sw, () => OnColorSwatch(c));
-                Rect(sw, x, btnY, swatchW, btnH);
-                x += swatchW + UIStyle.W(4);
+                Rect(sw, bottomX, bottomY, swatchW, btnH);
+                bottomX += swatchW + UIStyle.W(4);
             }
+
+            RefreshSettingsBar();
         }
 
         // Draws a vertical bar separator in the settings strip and advances x.

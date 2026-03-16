@@ -15,6 +15,8 @@ namespace ReplayTimerMod
         private static ConfigEntry<float>? _g;
         private static ConfigEntry<float>? _b;
         private static ConfigEntry<float>? _alpha;
+        private static ConfigEntry<bool>? _multiReplayEnabled;
+        private static ConfigEntry<bool>? _saveAllRunsEnabled;
 
         // ── Init ──────────────────────────────────────────────────────────────
 
@@ -61,6 +63,18 @@ namespace ReplayTimerMod
                 defaultValue: 0.4f,
                 new ConfigDescription("Ghost opacity (0 = invisible, 1 = fully opaque).",
                     new AcceptableValueRange<float>(0f, 1f)));
+
+            _multiReplayEnabled = config.Bind(
+                section: "Ghost",
+                key: "MultiReplayEnabled",
+                defaultValue: false,
+                description: "Allow multiple selected replays to play at the same time.");
+
+            _saveAllRunsEnabled = config.Bind(
+                section: "Recording",
+                key: "SaveAllRunsEnabled",
+                defaultValue: false,
+                description: "Save every completed non-duplicate run instead of PB-only.");
         }
 
         // ── Properties ────────────────────────────────────────────────────────
@@ -99,6 +113,18 @@ namespace ReplayTimerMod
         {
             get => _alpha?.Value ?? 0.4f;
             set { if (_alpha != null) _alpha.Value = Mathf.Clamp01(value); }
+        }
+
+        public static bool MultiReplayEnabled
+        {
+            get => _multiReplayEnabled?.Value ?? false;
+            set { if (_multiReplayEnabled != null) _multiReplayEnabled.Value = value; }
+        }
+
+        public static bool SaveAllRunsEnabled
+        {
+            get => _saveAllRunsEnabled?.Value ?? false;
+            set { if (_saveAllRunsEnabled != null) _saveAllRunsEnabled.Value = value; }
         }
     }
 }

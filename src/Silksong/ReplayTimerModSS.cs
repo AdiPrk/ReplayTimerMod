@@ -17,6 +17,7 @@ namespace ReplayTimerMod
         private FrameRecorder frameRecorder = null!;
         private GhostPlayback ghostPlayback = null!;
         private ReplayUI replayUI = null!;
+        private ReplaySelectionState replaySelectionState = null!;
 
         private bool lateInitDone = false;
 
@@ -34,10 +35,13 @@ namespace ReplayTimerMod
             string dataDir = Path.Combine(
                 Path.GetDirectoryName(Info.Location)!, "..", "..", "data");
             DataStore.Init(dataDir);
+            replaySelectionState = new ReplaySelectionState();
+            PBManager.SetSelectionState(replaySelectionState);
             PBManager.Init();
 
             frameRecorder = new FrameRecorder();
             ghostPlayback = new GhostPlayback();
+            ghostPlayback.SetSelectionState(replaySelectionState);
             replayUI = new ReplayUI();
 
             RoomTracker.Init();
@@ -73,23 +77,26 @@ namespace ReplayTimerMod
 
             RoomKey key = new RoomKey(sceneName, entryFromScene, exitToScene);
 
-            // Check before calling FinishRecording so we don't pay the cost of
-            // frames.ToArray() (up to ~25KB) on every missed attempt. For a
-            // speedrunner retrying the same room hundreds of times this avoids
-            // GC pressure that would otherwise cause periodic hitches.
-            if (PBManager.WouldBePB(key, lrTime))
-            {
-                RecordedRoom? recording = frameRecorder.FinishRecording(key, lrTime);
-                if (recording != null)
-                {
-                    PBManager.Evaluate(recording);
-                    replayUI.OnPBUpdated();
-                }
-            }
-            else
+            bool saveAllRuns = GhostSettings.SaveAllRunsEnabled;
+
+            // PB-only mode preserves the existing fast path so we avoid paying the
+            // cost of frames.ToArray() on missed attempts. Save-all mode opts into
+            // materializing every completed run and relies on PBManager dedupe.
+            if (!saveAllRuns && !PBManager.WouldBePB(key, lrTime))
             {
                 frameRecorder.DiscardRecording();
+                return;
             }
+
+            RecordedRoom? recording = frameRecorder.FinishRecording(key, lrTime);
+            if (recording == null)
+                return;
+
+            var result = PBManager.Evaluate(recording, saveAllRuns);
+            if (result.Kind == ResultKind.FirstRun
+                || result.Kind == ResultKind.NewPB
+                || result.Kind == ResultKind.SavedHistory)
+                replayUI.OnPBUpdated();
         }
 
         private void OnRecordingDiscarded()

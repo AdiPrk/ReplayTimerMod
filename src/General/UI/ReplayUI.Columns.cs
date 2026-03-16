@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
+using static ReplayTimerMod.UIStyle;
 
 namespace ReplayTimerMod
 {
@@ -127,6 +128,7 @@ namespace ReplayTimerMod
             }
 
             ForceLayout(rightContent);
+            RefreshSettingsBar();
         }
 
         private void ClearRight()
@@ -134,6 +136,7 @@ namespace ReplayTimerMod
             if (rightContent != null) ClearContent(rightContent);
             if (rightHeader != null) rightHeader.text = "Select a room";
             if (pasteStatus != null) pasteStatus.text = "";
+            RefreshSettingsBar();
         }
 
         private void AddRouteGroup(Transform parent, RouteReplayHistory route, bool stripe)
@@ -204,6 +207,8 @@ namespace ReplayTimerMod
         {
             int h = RH;
             int top = RH + 2 + index * RH;
+            int toggleW = UIStyle.W(22);
+            int previewW = UIStyle.W(18);
             int xBtnW = UIStyle.W(22);
             int copyW = UIStyle.W(46);
             int statusW = UIStyle.W(54);
@@ -212,9 +217,43 @@ namespace ReplayTimerMod
             int btnH = UIStyle.H(20);
             int btnY = (h - btnH) / 2;
 
+            bool playbackSelected = SelectionState?.IsPlaybackSelected(snapshot.SnapshotId) ?? false;
+            bool editSelected = SelectedSnapshotId == snapshot.SnapshotId;
+            Color baseColor = index % 2 == 0 ? Color.clear : UIStyle.Surface with { a = 0.55f };
+            Color rowColor = editSelected
+                ? UIStyle.Accent with { a = 0.18f }
+                : (playbackSelected ? UIStyle.Gold with { a = 0.10f } : baseColor);
+
             var row = MakeGO("SnapshotRow", parent);
-            Img(row, index % 2 == 0 ? Color.clear : UIStyle.Surface with { a = 0.55f });
+            Img(row, rowColor);
             Rect(row, 0, top, RW, h);
+            RoomKey selectedKey = route.Key;
+            string selectedSnapshotId = snapshot.SnapshotId;
+            Btn(row, () => SelectSnapshotForEditing(selectedKey, selectedSnapshotId));
+
+            if (editSelected)
+            {
+                var selectedBorder = MakeGO("SelectedBorder", row.transform);
+                Img(selectedBorder, UIStyle.Accent with { a = 0.9f });
+                Rect(selectedBorder, 0, 0, UIStyle.W(3), h);
+            }
+
+            var playbackBtn = MakeGO("PlaybackToggle", row.transform);
+            Img(playbackBtn, playbackSelected
+                ? UIStyle.Gold with { a = 0.28f }
+                : UIStyle.Overlay with { a = 0.55f });
+            RoomKey playbackKey = route.Key;
+            string playbackSnapshotId = snapshot.SnapshotId;
+            Btn(playbackBtn, () => ToggleSnapshotPlayback(playbackKey, playbackSnapshotId));
+            Rect(playbackBtn, M / 2, btnY, toggleW, btnH);
+            MakeLbl(playbackBtn.transform, playbackSelected ? "▶" : "·",
+                UIStyle.FontSizeSm - 2,
+                playbackSelected ? UIStyle.Gold : UIStyle.Subtext,
+                TextAnchor.MiddleCenter, fill: true);
+
+            var preview = MakeGO("VisualPreview", row.transform);
+            Img(preview, GetResolvedSnapshotColor(snapshot));
+            Rect(preview, M / 2 + toggleW + M / 2, btnY + UIStyle.H(2), previewW, btnH - UIStyle.H(4));
 
             var xBtn = MakeGO("Delete", row.transform);
             Img(xBtn, UIStyle.Red with { a = 0.20f });
@@ -237,15 +276,22 @@ namespace ReplayTimerMod
             int statusX = RW - xBtnW - M - copyW - M - statusW - M;
             int metaX = statusX - metaW - M;
             int timeX = metaX - timeW - M;
+            int labelX = M / 2 + toggleW + M / 2 + previewW + M;
 
             bool isCurrent = snapshot.SnapshotId == route.Current.SnapshotId;
-            MakeLbl(row.transform, isCurrent ? "Current" : "History",
+            string status = isCurrent ? "Current" : (playbackSelected ? "Play" : "History");
+            Color statusColor = isCurrent
+                ? UIStyle.Accent
+                : (playbackSelected ? UIStyle.Gold : UIStyle.Subtext);
+            MakeLbl(row.transform, status,
                 UIStyle.FontSizeSm - 2,
-                isCurrent ? UIStyle.Accent : UIStyle.Subtext,
+                statusColor,
                 TextAnchor.MiddleCenter,
                 x: statusX, w: statusW, h: h);
 
             string meta = FormatSnapshotMeta(snapshot);
+            if (snapshot.HasVisualOverride)
+                meta += " · local";
             MakeLbl(row.transform, meta, UIStyle.FontSizeSm - 3,
                 UIStyle.Subtext, TextAnchor.MiddleRight,
                 x: metaX, w: metaW, h: h);
@@ -255,8 +301,10 @@ namespace ReplayTimerMod
                 x: timeX, w: timeW, h: h);
 
             MakeLbl(row.transform, SnapshotLabel(snapshot, index),
-                UIStyle.FontSizeSm - 1, UIStyle.Subtext, TextAnchor.MiddleLeft,
-                x: M * 2, w: timeX - M * 3, h: h);
+                UIStyle.FontSizeSm - 1,
+                editSelected ? UIStyle.Text : UIStyle.Subtext,
+                TextAnchor.MiddleLeft,
+                x: labelX, w: timeX - labelX - M, h: h);
         }
 
         private static string SnapshotLabel(ReplaySnapshot snapshot, int index)
