@@ -32,8 +32,6 @@ namespace ReplayTimerMod
         public static event Action? OnRecordingDiscarded;
 
         // ── Private state ────────────────────────────────────────────────────
-        private static int sceneCount = 0;
-        private static bool isReady = false;
         private static string lastSceneName = "";
 
         // Set by OnGateTransitionBegin; consumed and cleared in OnActiveSceneChanged.
@@ -180,7 +178,7 @@ namespace ReplayTimerMod
                 OnActiveSceneChanged(fromName, currentSceneName);
             }
 
-            if (!isReady || !IsRecording) return;
+            if (!IsRecording) return;
             if (shouldTick)
                 CurrentRoomTime += Time.unscaledDeltaTime;
         }

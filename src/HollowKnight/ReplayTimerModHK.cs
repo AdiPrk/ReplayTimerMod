@@ -52,7 +52,7 @@ namespace ReplayTimerMod
             TryLateInit();
 
             bool shouldTick = false;
-            try { shouldTick = LoadRemover.ShouldTick(); } catch { }
+            try { shouldTick = LoadRemover.ShouldTick(); } catch { Log("couldnt check tick timer"); }
 
             RoomTracker.Tick(shouldTick);
             frameRecorder.Tick(shouldTick);
