@@ -50,8 +50,10 @@ namespace ReplayTimerMod
                 if (!_savestateReflectionResolved)
                 {
                     _savestateReflectionResolved = true;
+                    Log.LogInfo("attempt");
                     foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
                     {
+                        Log.LogInfo("looking thoguht" + asm.GetName().Name);
                         if (asm.GetName().Name == "DebugMod")
                         {
                             var t = asm.GetType("SaveState")
@@ -100,10 +102,6 @@ namespace ReplayTimerMod
 
         private static void OnActiveSceneChanged(string fromName, string toName)
         {
-            sceneCount++;
-            if (sceneCount >= 4) isReady = true;
-            if (!isReady) return;
-
             if (IsDebugModSavestateLoading())
             {
                 Log.LogInfo("[RoomTracker] Savestate detected - invalidating");

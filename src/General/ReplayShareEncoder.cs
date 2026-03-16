@@ -338,7 +338,7 @@ namespace ReplayTimerMod
         private static byte[] Compress(byte[] data)
         {
             using var ms = new MemoryStream();
-            using (var df = new DeflateStream(ms, CompressionLevel.Optimal))
+            using (var df = new DeflateStream(ms, CompressionMode.Compress))
                 df.Write(data, 0, data.Length);
             return ms.ToArray();
         }

@@ -345,8 +345,8 @@ namespace ReplayTimerMod
 
             var vlg = ct.AddComponent<VerticalLayoutGroup>();
             vlg.childAlignment = TextAnchor.UpperLeft;
-            vlg.childControlWidth = true;
-            vlg.childControlHeight = true;
+            // vlg.childControlWidth = true;
+            // vlg.childControlHeight = true;
             vlg.childForceExpandWidth = true;
             vlg.childForceExpandHeight = false;
             vlg.spacing = 1;

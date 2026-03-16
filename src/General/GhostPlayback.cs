@@ -44,16 +44,16 @@ namespace ReplayTimerMod
         public void Setup()
         {
             diamondGo = new GameObject("ReplayGhost_Diamond");
-            Object.DontDestroyOnLoad(diamondGo);
+            UnityEngine.Object.DontDestroyOnLoad(diamondGo);
             diamondGo.SetActive(false);
 
             diamondLine = diamondGo.AddComponent<LineRenderer>();
             diamondLine.useWorldSpace = true;
-            diamondLine.loop = true;
-            diamondLine.positionCount = 4;
-            diamondLine.startWidth = 0.06f;
-            diamondLine.endWidth = 0.06f;
-            diamondLine.numCapVertices = 2;
+            // diamondLine.loop = true;
+            // diamondLine.positionCount = 4;
+            // diamondLine.startWidth = 0.06f;
+            // diamondLine.endWidth = 0.06f;
+            // diamondLine.numCapVertices = 2;
             diamondLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             diamondLine.receiveShadows = false;
 
@@ -108,6 +108,8 @@ namespace ReplayTimerMod
             if (!playing || currentPB == null) return;
             if (!GhostSettings.GhostEnabled) { HideAll(); return; }
             if (!shouldTick) return;
+            UnityEngine.Object.DontDestroyOnLoad(diamondGo);
+            UnityEngine.Object.DontDestroyOnLoad(ghostSpriteGo);
 
             // Use Time.deltaTime (scaled) so the ghost respects Time.timeScale.
             // If the game is slowed down via DebugMod the ghost slows with it,
@@ -173,7 +175,7 @@ namespace ReplayTimerMod
 
                 ghostSpriteGo = new GameObject("ReplayGhost_Sprite");
                 ghostSpriteGo.SetActive(false);
-                Object.DontDestroyOnLoad(ghostSpriteGo);
+                UnityEngine.Object.DontDestroyOnLoad(ghostSpriteGo);
 
                 ghostSprite = ghostSpriteGo.AddComponent<tk2dSprite>();
                 ghostSprite.Collection = heroSprite.Collection;
