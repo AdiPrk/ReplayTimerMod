@@ -114,17 +114,30 @@ namespace ReplayTimerMod
             Log.LogInfo($"[ReplayUI] Exported {entries.Count} routes for {selectedScene}");
         }
 
-        // ── Per-entry ─────────────────────────────────────────────────────────
+        // ── Per-snapshot ──────────────────────────────────────────────────────
 
-        private void CopyReplay(RoomKey key)
+        private void CopyReplay(RoomKey key, string snapshotId)
         {
-            var pb = PBManager.GetPB(key);
-            if (pb == null) { Log.LogWarning($"[ReplayUI] No PB for {key}"); return; }
-            GUIUtility.systemCopyBuffer = ReplayShareEncoder.Encode(pb);
-            Log.LogInfo($"[ReplayUI] Copied {key}");
+            var snapshot = PBManager.GetHistory(key)
+                .FirstOrDefault(s => s.SnapshotId == snapshotId);
+            if (snapshot == null)
+            {
+                Log.LogWarning($"[ReplayUI] No snapshot for {key}#{snapshotId}");
+                return;
+            }
+
+            GUIUtility.systemCopyBuffer = snapshot.EncodedData;
+            Log.LogInfo($"[ReplayUI] Copied {key}#{snapshotId}");
         }
 
-        private void DeleteEntry(RoomKey key)
+        private void DeleteSnapshot(RoomKey key, string snapshotId)
+        {
+            PBManager.DeleteSnapshot(key, snapshotId);
+            if (selectedScene != null) RebuildRight(selectedScene);
+            RebuildLeft();
+        }
+
+        private void DeleteRoute(RoomKey key)
         {
             PBManager.DeletePB(key);
             if (selectedScene != null) RebuildRight(selectedScene);
@@ -192,16 +205,31 @@ namespace ReplayTimerMod
                 return;
             }
 
-            foreach (var r in rooms)
-                PBManager.ImportPB(r);
+            int imported = 0;
+            int duplicates = 0;
+            foreach (var room in rooms)
+            {
+                if (PBManager.ImportPB(room)) imported++;
+                else duplicates++;
+            }
 
             selectedScene = rooms[0].Key.SceneName;
             RebuildLeft();
             RebuildRight(selectedScene);
-            ShowPasteStatus(
-                rooms.Count == 1 ? rooms[0].Key.SceneName : $"{rooms.Count} replays",
-                UIStyle.Gold);
-            Log.LogInfo($"[ReplayUI] Pasted {rooms.Count} replay(s)");
+
+            string status;
+            if (rooms.Count == 1)
+            {
+                status = imported > 0 ? rooms[0].Key.SceneName : "Duplicate replay";
+            }
+            else
+            {
+                status = imported > 0 ? $"{imported} imported" : "No new replays";
+                if (duplicates > 0) status += $" ({duplicates} duplicate)";
+            }
+
+            ShowPasteStatus(status, imported > 0 ? UIStyle.Gold : UIStyle.Subtext);
+            Log.LogInfo($"[ReplayUI] Pasted {rooms.Count} replay(s): {imported} imported, {duplicates} duplicates");
         }
 
         private void ShowPasteStatus(string msg, Color color)

@@ -1,4 +1,6 @@
-﻿namespace ReplayTimerMod
+﻿using System.Collections.Generic;
+
+namespace ReplayTimerMod
 {
     public struct FrameData
     {
@@ -72,6 +74,52 @@
             Key = key;
             TotalTime = totalTime;
             Frames = frames;
+        }
+    }
+
+    public sealed class ReplaySnapshot
+    {
+        public string SnapshotId { get; }
+        public long CapturedAtUtcTicks { get; }
+        public RecordedRoom Room { get; }
+        public RoomKey Key => Room.Key;
+        public float TotalTime => Room.TotalTime;
+        public string EncodedData { get; }
+        public bool HasCapturedAt => CapturedAtUtcTicks > 0;
+
+        public ReplaySnapshot(string snapshotId, long capturedAtUtcTicks,
+            RecordedRoom room, string? encodedData = null)
+        {
+            SnapshotId = string.IsNullOrWhiteSpace(snapshotId)
+                ? System.Guid.NewGuid().ToString("N")
+                : snapshotId;
+            CapturedAtUtcTicks = capturedAtUtcTicks;
+            Room = room;
+            EncodedData = encodedData ?? ReplayShareEncoder.Encode(room);
+        }
+
+        public static ReplaySnapshot CreateNew(RecordedRoom room,
+            string? encodedData = null, long? capturedAtUtcTicks = null) =>
+            new ReplaySnapshot(
+                System.Guid.NewGuid().ToString("N"),
+                capturedAtUtcTicks ?? System.DateTime.UtcNow.Ticks,
+                room,
+                encodedData);
+    }
+
+    public sealed class RouteReplayHistory
+    {
+        public RoomKey Key { get; }
+        public IReadOnlyList<ReplaySnapshot> Snapshots { get; }
+        public ReplaySnapshot Current { get; }
+        public int Count => Snapshots.Count;
+
+        public RouteReplayHistory(RoomKey key, IReadOnlyList<ReplaySnapshot> snapshots,
+            ReplaySnapshot current)
+        {
+            Key = key;
+            Snapshots = snapshots;
+            Current = current;
         }
     }
 }
