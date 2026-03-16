@@ -185,35 +185,23 @@ namespace ReplayTimerMod
                 return;
             }
 
-            var collection = ReplayShareEncoder.DecodeCollection(clip);
-            if (collection != null)
-            {
-                foreach (var r in collection)
-                    PBManager.ImportPB(r);
-                if (collection.Count > 0) selectedScene = collection[0].Key.SceneName;
-                RebuildLeft();
-                if (selectedScene != null) RebuildRight(selectedScene);
-                ShowPasteStatus($"{collection.Count} replays", UIStyle.Gold);
-                Log.LogInfo($"[ReplayUI] Pasted collection: {collection.Count} replays");
-                return;
-            }
-
-            RecordedRoom? room = null;
-            try { room = ReplayShareEncoder.Decode(clip); }
-            catch { }
-
-            if (room == null)
+            var rooms = ReplayShareEncoder.DecodeShareString(clip);
+            if (rooms.Count == 0)
             {
                 ShowPasteStatus("✕ Invalid data", UIStyle.Red);
                 return;
             }
 
-            PBManager.ImportPB(room);
-            selectedScene = room.Key.SceneName;
+            foreach (var r in rooms)
+                PBManager.ImportPB(r);
+
+            selectedScene = rooms[0].Key.SceneName;
             RebuildLeft();
             RebuildRight(selectedScene);
-            ShowPasteStatus($"{room.Key.SceneName}", UIStyle.Gold);
-            Log.LogInfo($"[ReplayUI] Pasted {room.Key}");
+            ShowPasteStatus(
+                rooms.Count == 1 ? rooms[0].Key.SceneName : $"{rooms.Count} replays",
+                UIStyle.Gold);
+            Log.LogInfo($"[ReplayUI] Pasted {rooms.Count} replay(s)");
         }
 
         private void ShowPasteStatus(string msg, Color color)

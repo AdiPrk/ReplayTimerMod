@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using BepInEx.Logging;
 
 namespace ReplayTimerMod
@@ -241,38 +242,95 @@ namespace ReplayTimerMod
         {
             try
             {
-                byte[] raw = Decompress(Convert.FromBase64String(encoded));
-                using var ms = new MemoryStream(raw);
-                using var r = new BinaryReader(ms, Encoding.UTF8, leaveOpen: true);
-
-                for (int i = 0; i < 4; i++)
-                    if (r.ReadByte() != MagicCollection[i])
-                        throw new InvalidDataException("Bad RTMC magic");
-
-                byte ver = r.ReadByte();
-                if (ver != VersionCollection)
-                    throw new InvalidDataException($"Unsupported RTMC version 0x{ver:X2}");
-
-                int count = r.ReadInt32();
-                if (count < 0 || count > 100000)
-                    throw new InvalidDataException($"Implausible count: {count}");
-
-                var rooms = new List<RecordedRoom>(count);
-                for (int i = 0; i < count; i++)
-                {
-                    int blobLen = r.ReadInt32();
-                    byte[] blob = r.ReadBytes(blobLen);
-                    rooms.Add(ReadBinary(blob));
-                }
-
-                Log.LogInfo($"[RTMC1] Decoded {rooms.Count} rooms");
-                return rooms;
+                return ReadCollection(Decompress(Convert.FromBase64String(encoded)));
             }
             catch (Exception ex)
             {
                 Log.LogError($"[RTMC1] Decode failed: {ex.Message}");
                 return null;
             }
+        }
+
+        // Parses a decompressed RTMC byte array. Extracted so DecodeShareString
+        // can call it without going through base64 -> decompress again.
+        private static List<RecordedRoom> ReadCollection(byte[] raw)
+        {
+            using var ms = new MemoryStream(raw);
+            using var r = new BinaryReader(ms, Encoding.UTF8, leaveOpen: true);
+
+            for (int i = 0; i < 4; i++)
+                if (r.ReadByte() != MagicCollection[i])
+                    throw new InvalidDataException("Bad RTMC magic");
+
+            byte ver = r.ReadByte();
+            if (ver != VersionCollection)
+                throw new InvalidDataException($"Unsupported RTMC version 0x{ver:X2}");
+
+            int count = r.ReadInt32();
+            if (count < 0 || count > 100000)
+                throw new InvalidDataException($"Implausible count: {count}");
+
+            var rooms = new List<RecordedRoom>(count);
+            for (int i = 0; i < count; i++)
+            {
+                int blobLen = r.ReadInt32();
+                byte[] blob = r.ReadBytes(blobLen);
+                rooms.Add(ReadBinary(blob));
+            }
+
+            Log.LogInfo($"[RTMC1] Decoded {rooms.Count} rooms");
+            return rooms;
+        }
+
+        // Works for a single RTM3 string, a single RTMC string, and any number
+        // of either format concatenated (e.g. a .rtmc.txt file pasted as text,
+        // or two clipboard strings merged).
+        public static List<RecordedRoom> DecodeShareString(string str)
+        {
+            var result = new List<RecordedRoom>();
+
+            string raw = Regex.Replace(str, @"\s+", "");
+            if (raw.Length == 0) return result;
+
+            // Split after each padding '=' that is immediately followed by a
+            // base64 character. The lookbehind keeps the '=' with the blob before it.
+            string[] chunks = Regex.Split(raw, @"(?<==)(?=[A-Za-z0-9+/])");
+
+            foreach (string chunk in chunks)
+            {
+                if (chunk.Length == 0) continue;
+                try
+                {
+                    byte[] decompressed = Decompress(Convert.FromBase64String(chunk));
+
+                    if (decompressed.Length >= 4 &&
+                        decompressed[0] == MagicCollection[0] &&
+                        decompressed[1] == MagicCollection[1] &&
+                        decompressed[2] == MagicCollection[2] &&
+                        decompressed[3] == MagicCollection[3])
+                    {
+                        result.AddRange(ReadCollection(decompressed));
+                    }
+                    else if (decompressed.Length >= 4 &&
+                             decompressed[0] == Magic[0] &&
+                             decompressed[1] == Magic[1] &&
+                             decompressed[2] == Magic[2] &&
+                             decompressed[3] == Magic[3])
+                    {
+                        result.Add(ReadBinary(decompressed));
+                    }
+                    else
+                    {
+                        Log.LogWarning("[ShareEncoder] Unknown magic in chunk -- skipping");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.LogWarning($"[ShareEncoder] Chunk decode failed: {ex.Message}");
+                }
+            }
+
+            return result;
         }
 
         // ── Compression ───────────────────────────────────────────────────────
