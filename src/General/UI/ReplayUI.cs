@@ -92,6 +92,7 @@ namespace ReplayTimerMod
         private Image? multiReplayToggleBtnImg;
         private Text? savePolicyLbl;
         private Image? savePolicyBtnImg;
+        private Text? maxSavedReplaysLbl;
         private Text? settingsContextLbl;
         private Text? overrideToggleLbl;
         private Image? overrideToggleBtnImg;
@@ -244,6 +245,23 @@ namespace ReplayTimerMod
         private static string SavePolicyLabel() =>
             GhostSettings.SaveAllRunsEnabled ? "Save all" : "PB only";
 
+        private static string MaxSavedReplaysString() =>
+            GhostSettings.MaxSavedReplaysPerRoute.ToString();
+
+        private void OnMaxSavedReplaysMinus() => AdjustMaxSavedReplays(-1);
+
+        private void OnMaxSavedReplaysPlus() => AdjustMaxSavedReplays(1);
+
+        private void AdjustMaxSavedReplays(int delta)
+        {
+            GhostSettings.MaxSavedReplaysPerRoute += delta;
+            int newLimit = GhostSettings.MaxSavedReplaysPerRoute;
+            PBManager.PruneAllHistories(newLimit, persist: true);
+            RefreshSettingsBar();
+            if (selectedScene != null)
+                RebuildRight(selectedScene);
+        }
+
         private void RefreshSettingsBar()
         {
             if (trackingToggleLbl != null)
@@ -289,6 +307,9 @@ namespace ReplayTimerMod
                         ? UIStyle.Accent with { a = 0.22f }
                         : UIStyle.Gold with { a = 0.18f };
             }
+
+            if (maxSavedReplaysLbl != null)
+                maxSavedReplaysLbl.text = MaxSavedReplaysString();
 
             if (IsEditingSnapshot(out var snapshot))
             {

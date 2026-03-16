@@ -216,6 +216,8 @@ namespace ReplayTimerMod
             int stepW = UIStyle.W(22);
             int valueW = UIStyle.W(38);
             int toggleW = UIStyle.W(46);
+            int saveValueW = UIStyle.W(68);
+            int keepValueW = UIStyle.W(32);
             int x = M;
 
             MakeLbl(bar.transform, "Tracking:", UIStyle.FontSizeSm - 1,
@@ -277,11 +279,39 @@ namespace ReplayTimerMod
             var saveBtn = MakeGO("SavePolicyToggle", bar.transform);
             Img(saveBtn, UIStyle.Overlay);
             Btn(saveBtn, OnSavePolicyToggle);
-            Rect(saveBtn, x, topY, UIStyle.W(68), btnH);
+            Rect(saveBtn, x, topY, saveValueW, btnH);
             savePolicyLbl = MakeLbl(saveBtn.transform, SavePolicyLabel(),
                 UIStyle.FontSizeSm - 2, UIStyle.Gold,
                 TextAnchor.MiddleCenter, fill: true);
             savePolicyBtnImg = saveBtn.GetComponent<Image>();
+            x += saveValueW;
+
+            x = BarSeparator(bar.transform, x, topY, btnH);
+
+            MakeLbl(bar.transform, "Keep:", UIStyle.FontSizeSm - 1,
+                UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: x, y: topY, w: UIStyle.W(34), h: btnH);
+            x += UIStyle.W(34) + M / 2;
+
+            var keepMinusBtn = MakeGO("MaxSavedReplaysMinus", bar.transform);
+            Img(keepMinusBtn, UIStyle.Overlay);
+            Btn(keepMinusBtn, OnMaxSavedReplaysMinus);
+            Rect(keepMinusBtn, x, topY, stepW, btnH);
+            MakeLbl(keepMinusBtn.transform, "−", UIStyle.FontSizeSm - 1,
+                UIStyle.Text, TextAnchor.MiddleCenter, fill: true);
+            x += stepW + M / 2;
+
+            maxSavedReplaysLbl = MakeLbl(bar.transform, MaxSavedReplaysString(), UIStyle.FontSizeSm - 1,
+                UIStyle.Text, TextAnchor.MiddleCenter,
+                x: x, y: topY, w: keepValueW, h: btnH);
+            x += keepValueW + M / 2;
+
+            var keepPlusBtn = MakeGO("MaxSavedReplaysPlus", bar.transform);
+            Img(keepPlusBtn, UIStyle.Overlay);
+            Btn(keepPlusBtn, OnMaxSavedReplaysPlus);
+            Rect(keepPlusBtn, x, topY, stepW, btnH);
+            MakeLbl(keepPlusBtn.transform, "+", UIStyle.FontSizeSm - 1,
+                UIStyle.Text, TextAnchor.MiddleCenter, fill: true);
 
             int bottomX = M;
 

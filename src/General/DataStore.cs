@@ -218,6 +218,37 @@ namespace ReplayTimerMod
             }
         }
 
+        public static void ReplaceRouteSnapshots(RoomKey key,
+            IReadOnlyCollection<ReplaySnapshot> retainedSnapshots)
+        {
+            string path = FilePath(key.SceneName);
+            try
+            {
+                var idx = LoadIndexAndUpgrade(path);
+                idx.entries.RemoveAll(e => MatchesRoute(e, key));
+
+                int added = 0;
+                foreach (var snapshot in retainedSnapshots)
+                {
+                    if (!snapshot.Key.Equals(key))
+                    {
+                        Log.LogWarning($"[DataStore] Skipping mismatched route snapshot during replace: expected {key}, got {snapshot.Key}#{snapshot.SnapshotId}");
+                        continue;
+                    }
+
+                    idx.entries.Add(ToEntryIndex(snapshot));
+                    added++;
+                }
+
+                WriteIndex(path, idx);
+                Log.LogInfo($"[DataStore] Replaced route {key} with {added} snapshots");
+            }
+            catch (Exception ex)
+            {
+                Log.LogError($"[DataStore] ReplaceRouteSnapshots failed {key}: {ex.Message}");
+            }
+        }
+
         public static void DeleteRoute(RoomKey key)
         {
             string path = FilePath(key.SceneName);

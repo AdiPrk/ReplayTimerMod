@@ -17,6 +17,7 @@ namespace ReplayTimerMod
         private static ConfigEntry<float>? _alpha;
         private static ConfigEntry<bool>? _multiReplayEnabled;
         private static ConfigEntry<bool>? _saveAllRunsEnabled;
+        private static ConfigEntry<int>? _maxSavedReplaysPerRoute;
 
         // ── Init ──────────────────────────────────────────────────────────────
 
@@ -75,6 +76,13 @@ namespace ReplayTimerMod
                 key: "SaveAllRunsEnabled",
                 defaultValue: false,
                 description: "Save every completed non-duplicate run instead of PB-only.");
+
+            _maxSavedReplaysPerRoute = config.Bind(
+                section: "Recording",
+                key: "MaxSavedReplaysPerRoute",
+                defaultValue: 10,
+                new ConfigDescription("Maximum number of saved replays to keep per route.",
+                    new AcceptableValueRange<int>(1, int.MaxValue)));
         }
 
         // ── Properties ────────────────────────────────────────────────────────
@@ -125,6 +133,16 @@ namespace ReplayTimerMod
         {
             get => _saveAllRunsEnabled?.Value ?? false;
             set { if (_saveAllRunsEnabled != null) _saveAllRunsEnabled.Value = value; }
+        }
+
+        public static int MaxSavedReplaysPerRoute
+        {
+            get => Mathf.Max(1, _maxSavedReplaysPerRoute?.Value ?? 10);
+            set
+            {
+                if (_maxSavedReplaysPerRoute != null)
+                    _maxSavedReplaysPerRoute.Value = Mathf.Max(1, value);
+            }
         }
     }
 }

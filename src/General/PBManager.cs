@@ -42,9 +42,13 @@ namespace ReplayTimerMod
             selectionState?.ClearAll();
 
             foreach (var snapshot in DataStore.LoadAll())
-                AddSnapshot(snapshot, persist: false, allowDuplicate: false);
+                AddSnapshot(snapshot, persist: false, allowDuplicate: false,
+                    enforceLimit: false);
 
-            Log.LogInfo($"[PBManager] Loaded {currentPbs.Count} active PBs from disk ({histories.Values.Sum(list => list.Count)} snapshots)");
+            int pruned = PruneAllHistories(GhostSettings.MaxSavedReplaysPerRoute,
+                persist: true);
+            Log.LogInfo($"[PBManager] Loaded {currentPbs.Count} active PBs from disk ({histories.Values.Sum(list => list.Count)} snapshots)"
+                + (pruned > 0 ? $", pruned {pruned} overflow snapshots" : string.Empty));
         }
 
         public static ReplaySelectionState? SelectionState => selectionState;
@@ -90,15 +94,11 @@ namespace ReplayTimerMod
         public static IReadOnlyList<ReplaySnapshot> GetPlaybackCandidates(string sceneName,
             string entryFromScene)
         {
-            return histories
+            return OrderSnapshots(histories
                 .Where(kvp => kvp.Key.SceneName == sceneName
                     && kvp.Key.EntryFromScene == entryFromScene)
                 .SelectMany(kvp => kvp.Value)
-                .OrderBy(snapshot => snapshot.TotalTime)
-                .ThenBy(snapshot => snapshot.HasCapturedAt ? 0 : 1)
-                .ThenBy(snapshot => snapshot.CapturedAtUtcTicks)
-                .ThenBy(snapshot => snapshot.SnapshotId)
-                .ToArray();
+                .ToList());
         }
 
         public static bool UpdateSnapshotVisuals(RoomKey key, string snapshotId,
@@ -196,6 +196,45 @@ namespace ReplayTimerMod
             return true;
         }
 
+        public static int PruneRouteHistory(RoomKey key, List<ReplaySnapshot> history,
+            int limit, bool persist)
+        {
+            int retainedCount = Mathf.Max(1, limit);
+            var ordered = OrderSnapshots(history);
+            var pruned = ordered.Skip(retainedCount).ToArray();
+
+            if (pruned.Length > 0)
+            {
+                var prunedIds = new HashSet<string>(pruned.Select(snapshot =>
+                    snapshot.SnapshotId));
+                history.RemoveAll(snapshot => prunedIds.Contains(snapshot.SnapshotId));
+
+                foreach (var snapshot in pruned)
+                    selectionState?.RemoveSnapshot(snapshot.SnapshotId);
+            }
+
+            RefreshCurrent(key, history);
+
+            if (persist)
+                DataStore.ReplaceRouteSnapshots(key, OrderSnapshots(history));
+
+            return pruned.Length;
+        }
+
+        public static int PruneAllHistories(int limit, bool persist)
+        {
+            int pruned = 0;
+            foreach (var key in histories.Keys.ToArray())
+            {
+                if (!histories.TryGetValue(key, out var history))
+                    continue;
+
+                pruned += PruneRouteHistory(key, history, limit, persist);
+            }
+
+            return pruned;
+        }
+
         // ── Delete ────────────────────────────────────────────────────────────
 
         public static bool DeleteSnapshot(RoomKey key, string snapshotId)
@@ -258,7 +297,7 @@ namespace ReplayTimerMod
         // ── Internals ─────────────────────────────────────────────────────────
 
         private static bool AddSnapshot(ReplaySnapshot snapshot, bool persist,
-            bool allowDuplicate)
+            bool allowDuplicate, bool enforceLimit = true)
         {
             if (!histories.TryGetValue(snapshot.Key, out var history))
             {
@@ -270,8 +309,17 @@ namespace ReplayTimerMod
                 return false;
 
             history.Add(snapshot);
-            RefreshCurrent(snapshot.Key, history);
-            if (persist) DataStore.SaveSnapshot(snapshot);
+
+            if (!enforceLimit)
+            {
+                RefreshCurrent(snapshot.Key, history);
+                if (persist)
+                    DataStore.ReplaceRouteSnapshots(snapshot.Key, OrderSnapshots(history));
+                return true;
+            }
+
+            PruneRouteHistory(snapshot.Key, history,
+                GhostSettings.MaxSavedReplaysPerRoute, persist);
             return true;
         }
 
