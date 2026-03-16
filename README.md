@@ -37,3 +37,22 @@ ColorG  = 1
 ColorB  = 1
 Alpha   = 0.4
 ```
+
+## Build for Hollow Knight
+
+This repository now includes a Hollow Knight build target:
+
+- Project: `src/HollowKnight/ReplayTimerMod.HK.csproj`
+- Local path config: `.config/local/HollowKnightPath.props`
+
+Steps:
+
+1. Edit `.config/local/HollowKnightPath.props` to point at your HK install and `hollow_knight_Data/Managed` folder.
+2. Build with:
+   `dotnet build src/HollowKnight/ReplayTimerMod.HK.csproj -c Release`
+3. Build output is written only inside this repo (no auto-copy into game folders):
+   `obj/hk/Release/dist/ReplayTimerMod/ReplayTimerMod.HK.dll`
+4. Release zip is generated automatically in Release builds:
+   `obj/hk/Release/dist/ReplayTimerMod.HK-v<version>.zip`
+
+To install manually in HK/Lumafly, extract/copy `ReplayTimerMod.HK.dll` into `hollow_knight_Data/Managed/Mods/ReplayTimerMod`.

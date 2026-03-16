@@ -38,21 +38,21 @@ namespace ReplayTimerMod
                 section: "Ghost",
                 key: "ColorR",
                 defaultValue: 1f,
-                new ConfigDescription("Ghost colour red channel (0–1).",
+                new ConfigDescription("Ghost colour red channel (0-1).",
                     new AcceptableValueRange<float>(0f, 1f)));
 
             _g = config.Bind(
                 section: "Ghost",
                 key: "ColorG",
                 defaultValue: 1f,
-                new ConfigDescription("Ghost colour green channel (0–1).",
+                new ConfigDescription("Ghost colour green channel (0-1).",
                     new AcceptableValueRange<float>(0f, 1f)));
 
             _b = config.Bind(
                 section: "Ghost",
                 key: "ColorB",
                 defaultValue: 1f,
-                new ConfigDescription("Ghost colour blue channel (0–1).",
+                new ConfigDescription("Ghost colour blue channel (0-1).",
                     new AcceptableValueRange<float>(0f, 1f)));
 
             _alpha = config.Bind(

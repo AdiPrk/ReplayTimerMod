@@ -68,7 +68,7 @@ namespace ReplayTimerMod
             Vector3 pos = HeroController.instance.transform.position;
 
             if (cachedAnim == null)
-                cachedAnim = HeroController.instance.GetComponent<tk2dSpriteAnimator>();
+                cachedAnim = ResolveHeroAnimator();
 
             string clipName = "";
             int clipFrame = 0;
@@ -78,6 +78,16 @@ namespace ReplayTimerMod
                 {
                     clipName = cachedAnim.CurrentClip.name;
                     clipFrame = cachedAnim.CurrentFrame;
+                }
+                else
+                {
+                    // Some states swap sprite/animator ownership; re-resolve when clip is missing.
+                    cachedAnim = ResolveHeroAnimator();
+                    if (cachedAnim?.CurrentClip != null)
+                    {
+                        clipName = cachedAnim.CurrentClip.name;
+                        clipFrame = cachedAnim.CurrentFrame;
+                    }
                 }
             }
             catch { cachedAnim = null; } // guh
@@ -94,5 +104,26 @@ namespace ReplayTimerMod
 
         public bool IsRecording => recording;
         public int FrameCount => frames.Count;
+
+        private static tk2dSpriteAnimator? ResolveHeroAnimator()
+        {
+            var hero = HeroController.instance;
+            if (hero == null) return null;
+
+            // Prefer animator on the same GO as the visible hero sprite.
+            var heroSprite = hero.GetComponent<tk2dSprite>()
+                          ?? hero.GetComponentInChildren<tk2dSprite>();
+
+            if (heroSprite != null)
+            {
+                var spriteAnim = heroSprite.GetComponent<tk2dSpriteAnimator>()
+                              ?? heroSprite.GetComponentInParent<tk2dSpriteAnimator>()
+                              ?? heroSprite.GetComponentInChildren<tk2dSpriteAnimator>();
+                if (spriteAnim != null) return spriteAnim;
+            }
+
+            return hero.GetComponent<tk2dSpriteAnimator>()
+                ?? hero.GetComponentInChildren<tk2dSpriteAnimator>();
+        }
     }
 }

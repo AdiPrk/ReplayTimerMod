@@ -3,11 +3,14 @@
   Imports silksong path properties only if present in order to allow CI builds. The file should be gitignored.
   If you are checking out from git and need to create a new one, you can use `dotnet new silksongpath` to generate one.
   -->
-  <Import Condition="Exists('SilksongPath.props')" Project="SilksongPath.props" />
+  <Import Condition="Exists('..\..\.config\local\SilksongPath.props')" Project="..\..\.config\local\SilksongPath.props" />
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>ReplayTimerMod.SS</AssemblyName>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
+    <DefineConstants>$(DefineConstants);SILKSONG_BUILD</DefineConstants>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableNETAnalyzers>True</EnableNETAnalyzers>
     <AnalysisMode>recommended</AnalysisMode>
     <!-- Ignore warning about processor architecture mismatch with PlayMaker ConditionalExpression -->
@@ -27,14 +30,18 @@
     <PackageReference Include="Harmonize" Version="1.0.3" PrivateAssets="all" />
     <PackageReference Include="Hamunii.BepInEx.AutoPlugin" Version="2.0.1" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Unity.Analyzers" Version="1.25.0" PrivateAssets="all" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="UnityEngine.Modules" Version="6000.0.50" IncludeAssets="compile" />
     <PackageReference Include="Silksong.GameLibs" Version="1.2.0-silksong1.0.28324" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Remove="thunderstore/temp;thunderstore/dist" />
-    <None Include="README.md" Pack="True" PackagePath="README.md" />
-    <None Include="thunderstore/icon.png" Pack="True" PackagePath="icon.png" />
+    <Compile Include="**\*.cs" />
+    <Compile Include="..\General\**\*.cs" />
+
+    <Folder Remove="..\..\thunderstore/temp;..\..\thunderstore/dist" />
+    <None Include="..\..\README.md" Pack="True" PackagePath="README.md" />
+    <None Include="..\..\thunderstore/icon.png" Pack="True" PackagePath="icon.png" />
   </ItemGroup>
 
   <Target Name="CopyAndPackageMod" AfterTargets="PostBuildEvent">
@@ -43,7 +50,7 @@
       <Binaries Include="$(TargetDir)/$(TargetName).pdb" LocalDir="/" PackDir="/" />
     </ItemGroup>
     <PropertyGroup>
-      <ThunderstoreDir>$(ProjectDir)/thunderstore</ThunderstoreDir>
+      <ThunderstoreDir>$(MSBuildProjectDirectory)\..\..\thunderstore</ThunderstoreDir>
     </PropertyGroup>
 
     <!-- Local install -->
