@@ -178,16 +178,11 @@ namespace ReplayTimerMod
             MakeLbl(clearBtn.transform, "Clear", UIStyle.FontSizeSm - 2,
                 UIStyle.Red, TextAnchor.MiddleCenter, fill: true);
 
-            int timeW = UIStyle.W(64);
-            int countW = UIStyle.W(58);
-            int currentW = UIStyle.W(54);
-            int currentX = RW - clearW - M - currentW - M;
-            int countX = currentX - countW - M;
+            int timeW = UIStyle.W(72);
+            int countW = UIStyle.W(46);
+            int countX = RW - clearW - M - countW - M;
             int timeX = countX - timeW - M;
 
-            MakeLbl(row.transform, "Current", UIStyle.FontSizeSm - 2,
-                UIStyle.Accent, TextAnchor.MiddleCenter,
-                x: currentX, w: currentW, h: h);
             MakeLbl(row.transform, $"x{route.Count}", UIStyle.FontSizeSm - 2,
                 UIStyle.Subtext, TextAnchor.MiddleCenter,
                 x: countX, w: countW, h: h);
@@ -211,9 +206,9 @@ namespace ReplayTimerMod
             int previewW = UIStyle.W(18);
             int xBtnW = UIStyle.W(22);
             int copyW = UIStyle.W(46);
-            int statusW = UIStyle.W(54);
-            int metaW = UIStyle.W(92);
-            int timeW = UIStyle.W(60);
+            int metaW = UIStyle.W(88);
+            int deltaW = UIStyle.W(72);
+            int timeW = UIStyle.W(72);
             int btnH = UIStyle.H(20);
             int btnY = (h - btnH) / 2;
 
@@ -254,6 +249,17 @@ namespace ReplayTimerMod
             var preview = MakeGO("VisualPreview", row.transform);
             Img(preview, GetResolvedSnapshotColor(snapshot));
             Rect(preview, M / 2 + toggleW + M / 2, btnY + UIStyle.H(2), previewW, btnH - UIStyle.H(4));
+            if (!snapshot.HasVisualOverride)
+            {
+                var inheritedMarker = MakeGO("InheritedMarker", preview.transform);
+                Img(inheritedMarker, UIStyle.Text with { a = 0.32f });
+                Rect(inheritedMarker,
+                    UIStyle.W(5),
+                    UIStyle.H(5),
+                    previewW - UIStyle.W(10),
+                    btnH - UIStyle.H(14));
+                inheritedMarker.GetComponent<Graphic>().raycastTarget = false;
+            }
 
             var xBtn = MakeGO("Delete", row.transform);
             Img(xBtn, UIStyle.Red with { a = 0.20f });
@@ -273,35 +279,28 @@ namespace ReplayTimerMod
             MakeLbl(copyBtn.transform, "Copy", UIStyle.FontSizeSm - 2,
                 UIStyle.Accent, TextAnchor.MiddleCenter, fill: true);
 
-            int statusX = RW - xBtnW - M - copyW - M - statusW - M;
-            int metaX = statusX - metaW - M;
-            int timeX = metaX - timeW - M;
+            int metaX = RW - xBtnW - M - copyW - M - metaW - M;
+            int deltaX = metaX - deltaW - M;
+            int timeX = deltaX - timeW - M;
             int labelX = M / 2 + toggleW + M / 2 + previewW + M;
 
-            bool isCurrent = snapshot.SnapshotId == route.Current.SnapshotId;
-            string status = isCurrent ? "Current" : (playbackSelected ? "Play" : "History");
-            Color statusColor = isCurrent
-                ? UIStyle.Accent
-                : (playbackSelected ? UIStyle.Gold : UIStyle.Subtext);
-            MakeLbl(row.transform, status,
-                UIStyle.FontSizeSm - 2,
-                statusColor,
-                TextAnchor.MiddleCenter,
-                x: statusX, w: statusW, h: h);
-
             string meta = FormatSnapshotMeta(snapshot);
-            if (snapshot.HasVisualOverride)
-                meta += " · local";
             MakeLbl(row.transform, meta, UIStyle.FontSizeSm - 3,
                 UIStyle.Subtext, TextAnchor.MiddleRight,
                 x: metaX, w: metaW, h: h);
+
+            bool isCurrent = snapshot.SnapshotId == route.Current.SnapshotId;
+            string delta = FormatSnapshotDelta(route.Current.TotalTime, snapshot.TotalTime, isCurrent);
+            MakeLbl(row.transform, delta, UIStyle.FontSizeSm - 1,
+                UIStyle.Gold, TextAnchor.MiddleRight,
+                x: deltaX, w: deltaW, h: h);
 
             MakeLbl(row.transform, TimeUtil.Format(snapshot.TotalTime), UIStyle.FontSizeSm,
                 UIStyle.Gold, TextAnchor.MiddleRight,
                 x: timeX, w: timeW, h: h);
 
-            MakeLbl(row.transform, SnapshotLabel(snapshot, index),
-                UIStyle.FontSizeSm - 1,
+            MakeLbl(row.transform, SnapshotLabel(index),
+                UIStyle.FontSizeSm,
                 editSelected ? UIStyle.Text : UIStyle.Subtext,
                 TextAnchor.MiddleLeft,
                 x: labelX, w: timeX - labelX - M, h: h);
@@ -316,6 +315,11 @@ namespace ReplayTimerMod
                 return $"PB #{index + 1} · {captured:yyyy-MM-dd HH:mm}";
             }
 
+            return SnapshotLabel(index);
+        }
+
+        private static string SnapshotLabel(int index)
+        {
             return $"PB #{index + 1}";
         }
 
@@ -325,6 +329,21 @@ namespace ReplayTimerMod
             var captured = new DateTime(snapshot.CapturedAtUtcTicks, DateTimeKind.Utc)
                 .ToLocalTime();
             return captured.ToString("MM-dd HH:mm");
+        }
+
+        private static string FormatSnapshotDelta(float routePbTime, float snapshotTime, bool isRoutePb)
+        {
+            if (isRoutePb) return string.Empty;
+
+            float delta = Mathf.Max(0f, snapshotTime - routePbTime);
+            int totalCentiseconds = Mathf.RoundToInt(delta * 100f);
+            int minutes = totalCentiseconds / 6000;
+            int seconds = (totalCentiseconds / 100) % 60;
+            int centiseconds = totalCentiseconds % 100;
+
+            return minutes > 0
+                ? $"+{minutes}:{seconds:00}.{centiseconds:00}"
+                : $"+{seconds:00}.{centiseconds:00}";
         }
 
         private static void AddMessageRow(Transform parent, string msg)
