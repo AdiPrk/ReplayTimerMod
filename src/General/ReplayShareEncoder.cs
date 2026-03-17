@@ -146,11 +146,11 @@ namespace ReplayTimerMod
 
             for (int i = 0; i < 4; i++)
                 if (r.ReadByte() != Magic[i])
-                    throw new InvalidDataException("Bad RTM3 magic");
+                    throw new Exception("Bad RTM3 magic");
 
             byte ver = r.ReadByte();
             if (ver != Version)
-                throw new InvalidDataException($"Unsupported RTM3 version 0x{ver:X2}");
+                throw new Exception($"Unsupported RTM3 version 0x{ver:X2}");
 
             string sceneName = FrameCodec.ReadString(r);
             string entryFromScene = FrameCodec.ReadString(r);
@@ -260,15 +260,15 @@ namespace ReplayTimerMod
 
             for (int i = 0; i < 4; i++)
                 if (r.ReadByte() != MagicCollection[i])
-                    throw new InvalidDataException("Bad RTMC magic");
+                    throw new Exception("Bad RTMC magic");
 
             byte ver = r.ReadByte();
             if (ver != VersionCollection)
-                throw new InvalidDataException($"Unsupported RTMC version 0x{ver:X2}");
+                throw new Exception($"Unsupported RTMC version 0x{ver:X2}");
 
             int count = r.ReadInt32();
             if (count < 0 || count > 100000)
-                throw new InvalidDataException($"Implausible count: {count}");
+                throw new Exception($"Implausible count: {count}");
 
             var rooms = new List<RecordedRoom>(count);
             for (int i = 0; i < count; i++)
