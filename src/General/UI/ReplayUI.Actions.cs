@@ -368,6 +368,8 @@ namespace ReplayTimerMod
             else
             {
                 GhostSettings.GhostAlpha = Mathf.Round((GhostSettings.GhostAlpha + delta) * 20f) / 20f;
+                if (selectedScene != null)
+                    RebuildRight(selectedScene);
             }
 
             RefreshSettingsBar();
@@ -391,6 +393,8 @@ namespace ReplayTimerMod
             else
             {
                 GhostSettings.GhostColor = new Color(rgb.r, rgb.g, rgb.b, GhostSettings.GhostAlpha);
+                if (selectedScene != null)
+                    RebuildRight(selectedScene);
             }
 
             RefreshSettingsBar();
