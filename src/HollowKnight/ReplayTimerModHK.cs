@@ -10,6 +10,7 @@ namespace ReplayTimerMod
         private FrameRecorder frameRecorder = null!;
         private GhostPlayback ghostPlayback = null!;
         private ReplayUI replayUI = null!;
+        private ReplaySelectionState replaySelectionState = null!;
 
         private bool lateInitDone = false;
 
@@ -40,10 +41,13 @@ namespace ReplayTimerMod
             if (!Directory.Exists(saveDir))
                 saveDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
             DataStore.Init(saveDir);
+            replaySelectionState = new ReplaySelectionState();
+            PBManager.SetSelectionState(replaySelectionState);
             PBManager.Init();
 
             frameRecorder = new FrameRecorder();
             ghostPlayback = new GhostPlayback();
+            ghostPlayback.SetSelectionState(replaySelectionState);
             replayUI = new ReplayUI();
 
             RoomTracker.Init();

@@ -34,6 +34,8 @@ namespace ReplayTimerMod
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("ReplayUI");
 
+        private const string GlobalSettingsContextText = "Edit: Global";
+
         // ── State ─────────────────────────────────────────────────────────────
         private bool isSetup = false;
         private bool expanded = false;
@@ -88,14 +90,11 @@ namespace ReplayTimerMod
         private Text? alphaLbl;
         private Text? trackingToggleLbl;
         private Image? trackingToggleBtnImg;
-        private Text? multiReplayToggleLbl;
-        private Image? multiReplayToggleBtnImg;
         private Text? savePolicyLbl;
         private Image? savePolicyBtnImg;
         private Text? maxSavedReplaysLbl;
         private Text? settingsContextLbl;
-        private Text? overrideToggleLbl;
-        private Image? overrideToggleBtnImg;
+        private Image? settingsContextBtnImg;
 
         // ─────────────────────────────────────────────────────────────────────
         // SETUP
@@ -286,17 +285,6 @@ namespace ReplayTimerMod
                         : UIStyle.Overlay;
             }
 
-            if (multiReplayToggleLbl != null)
-            {
-                bool multiReplayEnabled = GhostSettings.MultiReplayEnabled;
-                multiReplayToggleLbl.text = multiReplayEnabled ? "ON" : "OFF";
-                multiReplayToggleLbl.color = multiReplayEnabled ? UIStyle.Accent : UIStyle.Subtext;
-                if (multiReplayToggleBtnImg != null)
-                    multiReplayToggleBtnImg.color = multiReplayEnabled
-                        ? UIStyle.Accent with { a = 0.22f }
-                        : UIStyle.Overlay;
-            }
-
             if (savePolicyLbl != null)
             {
                 bool saveAllRunsEnabled = GhostSettings.SaveAllRunsEnabled;
@@ -314,18 +302,13 @@ namespace ReplayTimerMod
             if (IsEditingSnapshot(out var snapshot))
             {
                 if (settingsContextLbl != null)
-                    settingsContextLbl.text = FindSnapshotContextLabel(snapshot!);
-
-                if (overrideToggleLbl != null)
                 {
-                    bool hasOverride = snapshot!.HasVisualOverride;
-                    overrideToggleLbl.text = hasOverride ? "ON" : "OFF";
-                    overrideToggleLbl.color = hasOverride ? UIStyle.Accent : UIStyle.Subtext;
-                    if (overrideToggleBtnImg != null)
-                        overrideToggleBtnImg.color = hasOverride
-                            ? UIStyle.Accent with { a = 0.22f }
-                            : UIStyle.Overlay;
+                    settingsContextLbl.text = FindSnapshotContextLabel(snapshot!);
+                    settingsContextLbl.color = UIStyle.Accent;
                 }
+
+                if (settingsContextBtnImg != null)
+                    settingsContextBtnImg.color = UIStyle.Accent with { a = 0.22f };
 
                 if (alphaLbl != null)
                     alphaLbl.text = snapshot!.ResolveGhostColor(CurrentGlobalGhostColor).a.ToString("0.00");
@@ -333,15 +316,13 @@ namespace ReplayTimerMod
             else
             {
                 if (settingsContextLbl != null)
-                    settingsContextLbl.text = "Edit: Global";
-
-                if (overrideToggleLbl != null)
                 {
-                    overrideToggleLbl.text = "—";
-                    overrideToggleLbl.color = UIStyle.Subtext;
-                    if (overrideToggleBtnImg != null)
-                        overrideToggleBtnImg.color = UIStyle.Overlay with { a = 0.35f };
+                    settingsContextLbl.text = GlobalSettingsContextText;
+                    settingsContextLbl.color = UIStyle.Text;
                 }
+
+                if (settingsContextBtnImg != null)
+                    settingsContextBtnImg.color = UIStyle.Overlay with { a = 0.55f };
 
                 if (alphaLbl != null)
                     alphaLbl.text = AlphaString();

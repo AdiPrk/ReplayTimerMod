@@ -216,14 +216,25 @@ namespace ReplayTimerMod
             int stepW = UIStyle.W(22);
             int valueW = UIStyle.W(38);
             int toggleW = UIStyle.W(46);
-            int saveValueW = UIStyle.W(68);
-            int keepValueW = UIStyle.W(32);
-            int x = M;
+            int saveValueW = UIStyle.W(84);
+            int keepValueW = UIStyle.W(36);
+            int separatorW = UIStyle.W(20);
+            int trackingLabelW = UIStyle.W(52);
+            int ghostLabelW = UIStyle.W(38);
+            int saveLabelW = UIStyle.W(34);
+            int keepLabelW = UIStyle.W(34);
+            int halfGap = M / 2;
+
+            int topContentW = trackingLabelW + halfGap + toggleW + separatorW
+                + ghostLabelW + halfGap + toggleW + separatorW
+                + saveLabelW + halfGap + saveValueW + separatorW
+                + keepLabelW + halfGap + stepW + halfGap + keepValueW + halfGap + stepW;
+            int x = Mathf.Max(M, (PW - topContentW) / 2);
 
             MakeLbl(bar.transform, "Tracking:", UIStyle.FontSizeSm - 1,
                 UIStyle.Subtext, TextAnchor.MiddleLeft,
-                x: x, y: topY, w: UIStyle.W(52), h: btnH);
-            x += UIStyle.W(52) + M / 2;
+                x: x, y: topY, w: trackingLabelW, h: btnH);
+            x += trackingLabelW + halfGap;
 
             var trackingBtn = MakeGO("TrackingToggle", bar.transform);
             Img(trackingBtn, UIStyle.Overlay);
@@ -239,8 +250,8 @@ namespace ReplayTimerMod
 
             MakeLbl(bar.transform, "Ghost:", UIStyle.FontSizeSm - 1,
                 UIStyle.Subtext, TextAnchor.MiddleLeft,
-                x: x, y: topY, w: UIStyle.W(38), h: btnH);
-            x += UIStyle.W(38) + M / 2;
+                x: x, y: topY, w: ghostLabelW, h: btnH);
+            x += ghostLabelW + halfGap;
 
             var ghostBtn = MakeGO("GhostToggle", bar.transform);
             Img(ghostBtn, UIStyle.Overlay);
@@ -254,27 +265,10 @@ namespace ReplayTimerMod
 
             x = BarSeparator(bar.transform, x, topY, btnH);
 
-            MakeLbl(bar.transform, "Multi:", UIStyle.FontSizeSm - 1,
-                UIStyle.Subtext, TextAnchor.MiddleLeft,
-                x: x, y: topY, w: UIStyle.W(34), h: btnH);
-            x += UIStyle.W(34) + M / 2;
-
-            var multiBtn = MakeGO("MultiReplayToggle", bar.transform);
-            Img(multiBtn, UIStyle.Overlay);
-            Btn(multiBtn, OnMultiReplayToggle);
-            Rect(multiBtn, x, topY, toggleW, btnH);
-            multiReplayToggleLbl = MakeLbl(multiBtn.transform, "OFF",
-                UIStyle.FontSizeSm - 1, UIStyle.Subtext,
-                TextAnchor.MiddleCenter, fill: true);
-            multiReplayToggleBtnImg = multiBtn.GetComponent<Image>();
-            x += toggleW;
-
-            x = BarSeparator(bar.transform, x, topY, btnH);
-
             MakeLbl(bar.transform, "Save:", UIStyle.FontSizeSm - 1,
                 UIStyle.Subtext, TextAnchor.MiddleLeft,
-                x: x, y: topY, w: UIStyle.W(34), h: btnH);
-            x += UIStyle.W(34) + M / 2;
+                x: x, y: topY, w: saveLabelW, h: btnH);
+            x += saveLabelW + halfGap;
 
             var saveBtn = MakeGO("SavePolicyToggle", bar.transform);
             Img(saveBtn, UIStyle.Overlay);
@@ -290,8 +284,8 @@ namespace ReplayTimerMod
 
             MakeLbl(bar.transform, "Keep:", UIStyle.FontSizeSm - 1,
                 UIStyle.Subtext, TextAnchor.MiddleLeft,
-                x: x, y: topY, w: UIStyle.W(34), h: btnH);
-            x += UIStyle.W(34) + M / 2;
+                x: x, y: topY, w: keepLabelW, h: btnH);
+            x += keepLabelW + halfGap;
 
             var keepMinusBtn = MakeGO("MaxSavedReplaysMinus", bar.transform);
             Img(keepMinusBtn, UIStyle.Overlay);
@@ -299,12 +293,12 @@ namespace ReplayTimerMod
             Rect(keepMinusBtn, x, topY, stepW, btnH);
             MakeLbl(keepMinusBtn.transform, "−", UIStyle.FontSizeSm - 1,
                 UIStyle.Text, TextAnchor.MiddleCenter, fill: true);
-            x += stepW + M / 2;
+            x += stepW + halfGap;
 
             maxSavedReplaysLbl = MakeLbl(bar.transform, MaxSavedReplaysString(), UIStyle.FontSizeSm - 1,
                 UIStyle.Text, TextAnchor.MiddleCenter,
                 x: x, y: topY, w: keepValueW, h: btnH);
-            x += keepValueW + M / 2;
+            x += keepValueW + halfGap;
 
             var keepPlusBtn = MakeGO("MaxSavedReplaysPlus", bar.transform);
             Img(keepPlusBtn, UIStyle.Overlay);
@@ -313,40 +307,42 @@ namespace ReplayTimerMod
             MakeLbl(keepPlusBtn.transform, "+", UIStyle.FontSizeSm - 1,
                 UIStyle.Text, TextAnchor.MiddleCenter, fill: true);
 
-            int bottomX = M;
+            int contextW = UIStyle.W(272);
+            int alphaLabelW = UIStyle.W(38);
+            int colorLabelW = UIStyle.W(38);
+            int swatchW = UIStyle.W(22);
+            int swatchGap = UIStyle.W(4);
+            Color[] swatches =
+            {
+                new Color(1.00f, 1.00f, 1.00f),
+                new Color(0.40f, 0.80f, 1.00f),
+                new Color(0.93f, 0.83f, 0.62f),
+                new Color(0.40f, 0.85f, 0.40f),
+                new Color(0.93f, 0.53f, 0.59f),
+                new Color(0.75f, 0.55f, 1.00f),
+            };
+            int swatchesW = swatches.Length * swatchW + (swatches.Length - 1) * swatchGap;
+            int bottomContentW = contextW + separatorW
+                + alphaLabelW + halfGap + stepW + halfGap + valueW + halfGap + stepW + separatorW
+                + colorLabelW + halfGap + swatchesW;
+            int bottomX = Mathf.Max(M, (PW - bottomContentW) / 2);
 
             var contextBtn = MakeGO("SettingsContext", bar.transform);
             Img(contextBtn, UIStyle.Overlay with { a = 0.55f });
             Btn(contextBtn, OnEditGlobalContext);
-            Rect(contextBtn, bottomX, bottomY, UIStyle.W(178), btnH);
+            Rect(contextBtn, bottomX, bottomY, contextW, btnH);
             settingsContextLbl = MakeLbl(contextBtn.transform, "Edit: Global",
                 UIStyle.FontSizeSm - 1, UIStyle.Text,
                 TextAnchor.MiddleCenter, fill: true);
-            bottomX += UIStyle.W(178);
-
-            bottomX = BarSeparator(bar.transform, bottomX, bottomY, btnH);
-
-            MakeLbl(bar.transform, "Override:", UIStyle.FontSizeSm - 1,
-                UIStyle.Subtext, TextAnchor.MiddleLeft,
-                x: bottomX, y: bottomY, w: UIStyle.W(52), h: btnH);
-            bottomX += UIStyle.W(52) + M / 2;
-
-            var overrideBtn = MakeGO("OverrideToggle", bar.transform);
-            Img(overrideBtn, UIStyle.Overlay);
-            Btn(overrideBtn, OnSnapshotOverrideToggle);
-            Rect(overrideBtn, bottomX, bottomY, toggleW, btnH);
-            overrideToggleLbl = MakeLbl(overrideBtn.transform, "—",
-                UIStyle.FontSizeSm - 1, UIStyle.Subtext,
-                TextAnchor.MiddleCenter, fill: true);
-            overrideToggleBtnImg = overrideBtn.GetComponent<Image>();
-            bottomX += toggleW;
+            settingsContextBtnImg = contextBtn.GetComponent<Image>();
+            bottomX += contextW;
 
             bottomX = BarSeparator(bar.transform, bottomX, bottomY, btnH);
 
             MakeLbl(bar.transform, "Alpha:", UIStyle.FontSizeSm - 1,
                 UIStyle.Subtext, TextAnchor.MiddleLeft,
-                x: bottomX, y: bottomY, w: UIStyle.W(38), h: btnH);
-            bottomX += UIStyle.W(38) + M / 2;
+                x: bottomX, y: bottomY, w: alphaLabelW, h: btnH);
+            bottomX += alphaLabelW + halfGap;
 
             var minusBtn = MakeGO("AlphaMinus", bar.transform);
             Img(minusBtn, UIStyle.Overlay);
@@ -354,12 +350,12 @@ namespace ReplayTimerMod
             Rect(minusBtn, bottomX, bottomY, stepW, btnH);
             MakeLbl(minusBtn.transform, "−", UIStyle.FontSizeSm - 1,
                 UIStyle.Text, TextAnchor.MiddleCenter, fill: true);
-            bottomX += stepW + M / 2;
+            bottomX += stepW + halfGap;
 
             alphaLbl = MakeLbl(bar.transform, AlphaString(), UIStyle.FontSizeSm - 1,
                 UIStyle.Text, TextAnchor.MiddleCenter,
                 x: bottomX, y: bottomY, w: valueW, h: btnH);
-            bottomX += valueW + M / 2;
+            bottomX += valueW + halfGap;
 
             var plusBtn = MakeGO("AlphaPlus", bar.transform);
             Img(plusBtn, UIStyle.Overlay);
@@ -373,19 +369,9 @@ namespace ReplayTimerMod
 
             MakeLbl(bar.transform, "Color:", UIStyle.FontSizeSm - 1,
                 UIStyle.Subtext, TextAnchor.MiddleLeft,
-                x: bottomX, y: bottomY, w: UIStyle.W(38), h: btnH);
-            bottomX += UIStyle.W(38) + M / 2;
+                x: bottomX, y: bottomY, w: colorLabelW, h: btnH);
+            bottomX += colorLabelW + halfGap;
 
-            Color[] swatches =
-            {
-                new Color(1.00f, 1.00f, 1.00f),
-                new Color(0.40f, 0.80f, 1.00f),
-                new Color(0.93f, 0.83f, 0.62f),
-                new Color(0.40f, 0.85f, 0.40f),
-                new Color(0.93f, 0.53f, 0.59f),
-                new Color(0.75f, 0.55f, 1.00f),
-            };
-            int swatchW = UIStyle.W(22);
             foreach (var swatch in swatches)
             {
                 var sw = MakeGO("Swatch", bar.transform);
@@ -393,7 +379,7 @@ namespace ReplayTimerMod
                 Img(sw, c);
                 Btn(sw, () => OnColorSwatch(c));
                 Rect(sw, bottomX, bottomY, swatchW, btnH);
-                bottomX += swatchW + UIStyle.W(4);
+                bottomX += swatchW + swatchGap;
             }
 
             RefreshSettingsBar();

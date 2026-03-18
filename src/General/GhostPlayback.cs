@@ -141,35 +141,22 @@ namespace ReplayTimerMod
 
         private List<ReplaySnapshot> SelectSnapshots(string sceneName, string entryFromScene)
         {
-            if (!GhostSettings.MultiReplayEnabled)
-            {
-                var best = GetBestPB(sceneName, entryFromScene);
-                return best == null
-                    ? new List<ReplaySnapshot>()
-                    : new List<ReplaySnapshot> { best };
-            }
+            var candidates = PBManager.GetPlaybackCandidates(sceneName, entryFromScene);
+            if (candidates.Count == 0)
+                return new List<ReplaySnapshot>();
 
-            return PBManager.GetPlaybackCandidates(sceneName, entryFromScene)
+            var selected = candidates
                 .Where(snapshot => selectionState?.IsPlaybackSelected(snapshot.SnapshotId) == true)
                 .ToList();
-        }
-
-        private static ReplaySnapshot? GetBestPB(string sceneName, string entryFromScene)
-        {
-            ReplaySnapshot? best = null;
-            foreach (var pair in PBManager.AllHistories())
+            if (selected.Count > 0)
             {
-                var key = pair.Key;
-                if (key.SceneName != sceneName || key.EntryFromScene != entryFromScene)
-                    continue;
-
-                if (best == null || pair.Current.TotalTime < best.TotalTime)
-                    best = pair.Current;
+                Log.LogInfo($"[Ghost] Using selected playback subset ({selected.Count}/{candidates.Count}) for {sceneName} <- {entryFromScene}");
+                return selected;
             }
 
-            if (best != null)
-                Log.LogInfo($"[Ghost] Matched {best.Key}#{best.SnapshotId}");
-            return best;
+            var best = candidates[0];
+            Log.LogInfo($"[Ghost] Using fallback best PB {best.Key}#{best.SnapshotId} for {sceneName} <- {entryFromScene}");
+            return new List<ReplaySnapshot> { best };
         }
 
         private bool TickInstance(PlaybackInstance instance, float deltaTime,

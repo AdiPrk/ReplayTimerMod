@@ -307,13 +307,6 @@ namespace ReplayTimerMod
             RefreshSettingsBar();
         }
 
-        private void OnMultiReplayToggle()
-        {
-            GhostSettings.MultiReplayEnabled = !GhostSettings.MultiReplayEnabled;
-            RefreshSettingsBar();
-            if (selectedScene != null) RebuildRight(selectedScene);
-        }
-
         private void OnSavePolicyToggle()
         {
             GhostSettings.SaveAllRunsEnabled = !GhostSettings.SaveAllRunsEnabled;
@@ -329,6 +322,17 @@ namespace ReplayTimerMod
 
         private void SelectSnapshotForEditing(RoomKey key, string snapshotId)
         {
+            var snapshot = PBManager.GetSnapshot(key, snapshotId);
+            if (snapshot == null)
+                return;
+
+            if (!snapshot.HasVisualOverride)
+            {
+                Color color = snapshot.ResolveGhostColor(CurrentGlobalGhostColor);
+                if (!PBManager.UpdateSnapshotVisuals(key, snapshotId, true, color))
+                    return;
+            }
+
             SelectionState?.SelectSnapshot(snapshotId);
             RefreshSettingsBar();
             if (selectedScene == key.SceneName)
@@ -342,23 +346,6 @@ namespace ReplayTimerMod
                 RebuildRight(key.SceneName);
             else
                 RefreshSettingsBar();
-        }
-
-        private void OnSnapshotOverrideToggle()
-        {
-            if (!TryGetSelectedSnapshot(out var key, out var snapshot) || snapshot == null)
-                return;
-
-            bool hasOverride = !snapshot.HasVisualOverride;
-            Color color = hasOverride
-                ? snapshot.ResolveGhostColor(CurrentGlobalGhostColor)
-                : CurrentGlobalGhostColor;
-            if (!PBManager.UpdateSnapshotVisuals(key, snapshot.SnapshotId, hasOverride, color))
-                return;
-
-            RefreshSettingsBar();
-            if (selectedScene == key.SceneName)
-                RebuildRight(key.SceneName);
         }
 
         private void OnAlphaMinus() => AdjustAlpha(-0.05f);
