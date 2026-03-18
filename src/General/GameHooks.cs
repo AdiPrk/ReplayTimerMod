@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Reflection;
 using BepInEx.Logging;
 
@@ -54,41 +54,14 @@ namespace ReplayTimerMod
                 return;
             }
 
-            string destScene = TryReadStringMember(__0, "SceneName", "sceneName", "ToScene", "Scene");
-            string entryGate = TryReadStringMember(__0, "EntryGateName", "EntryGate", "entryGateName", "GateName");
+            string destScene = ReflectionStringMemberReader.TryReadStringMember(__0, "SceneName", "sceneName", "ToScene", "Scene");
+            string entryGate = ReflectionStringMemberReader.TryReadStringMember(__0, "EntryGateName", "EntryGate", "entryGateName", "GateName");
 
             Log.LogInfo($"[GameHooks] BeginSceneTransition -> '{destScene}' via '{entryGate}' (type={__0.GetType().Name})");
             OnGateTransitionBegin?.Invoke(destScene, entryGate);
         }
-
-        private static string TryReadStringMember(object instance, params string[] names)
-        {
-            if (instance == null) return "";
-
-            const BindingFlags Flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-            var type = instance.GetType();
-
-            foreach (string name in names)
-            {
-                try
-                {
-                    var prop = type.GetProperty(name, Flags);
-                    if (prop != null && prop.PropertyType == typeof(string))
-                        return prop.GetValue(instance) as string ?? "";
-
-                    var field = type.GetField(name, Flags);
-                    if (field != null && field.FieldType == typeof(string))
-                        return field.GetValue(instance) as string ?? "";
-                }
-                catch { }
-            }
-
-            return "";
-        }
     }
-
 #else
-
     public static class GameHooks
     {
         private static readonly ManualLogSource Log =
@@ -140,16 +113,20 @@ namespace ReplayTimerMod
                 return;
             }
 
-            string destScene = TryReadStringMember(info, "SceneName", "sceneName", "ToScene", "Scene");
-            string entryGate = TryReadStringMember(info, "EntryGateName", "EntryGate", "entryGateName", "GateName");
+            string destScene = ReflectionStringMemberReader.TryReadStringMember(info, "SceneName", "sceneName", "ToScene", "Scene");
+            string entryGate = ReflectionStringMemberReader.TryReadStringMember(info, "EntryGateName", "EntryGate", "entryGateName", "GateName");
 
             Log.LogInfo($"[GameHooks] BeginSceneTransition -> '{destScene}' via '{entryGate}' (type={info.GetType().Name})");
             OnGateTransitionBegin?.Invoke(destScene, entryGate);
 
             orig(self, info);
         }
+    }
+#endif
 
-        private static string TryReadStringMember(object instance, params string[] names)
+    internal static class ReflectionStringMemberReader
+    {
+        internal static string TryReadStringMember(object instance, params string[] names)
         {
             if (instance == null) return "";
 
@@ -174,5 +151,4 @@ namespace ReplayTimerMod
             return "";
         }
     }
-#endif
 }
