@@ -39,6 +39,10 @@
     <None Include="..\..\README.md" />
   </ItemGroup>
 
+  <ItemGroup>
+      <EmbeddedResource Include="..\..\Resources\Arial.ttf" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(HollowKnightManagedFolder)' != ''">
     <Reference Include="Assembly-CSharp" Condition="Exists('$(HollowKnightManagedFolder)\Assembly-CSharp.dll')">
       <HintPath>$(HollowKnightManagedFolder)\Assembly-CSharp.dll</HintPath>

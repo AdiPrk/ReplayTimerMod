@@ -241,7 +241,7 @@ namespace ReplayTimerMod
             string playbackSnapshotId = snapshot.SnapshotId;
             Btn(playbackBtn, () => ToggleSnapshotPlayback(playbackKey, playbackSnapshotId));
             Rect(playbackBtn, M / 2, btnY, toggleW, btnH);
-            MakeLbl(playbackBtn.transform, playbackSelected ? "▶" : "·",
+            MakeLbl(playbackBtn.transform, playbackSelected ? "▶" : "",
                 UIStyle.FontSizeSm - 2,
                 playbackSelected ? UIStyle.Gold : UIStyle.Subtext,
                 TextAnchor.MiddleCenter, fill: true);
