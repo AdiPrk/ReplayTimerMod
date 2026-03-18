@@ -338,8 +338,8 @@ namespace ReplayTimerMod
         private static byte[] Compress(byte[] data)
         {
             // using var ms = new MemoryStream();
-            // using (var df = new DeflateStream(ms, CompressionMode.Compress))
-            //     df.Write(data, 0, data.Length);
+            // using var gs = new GZipStream(ms, CompressionMode.Compress);
+            //     gs.Write(data, 0, data.Length);
             // return ms.ToArray();
 
             return data;
@@ -349,24 +349,18 @@ namespace ReplayTimerMod
         {
             // using var input = new MemoryStream(data);
             // using var output = new MemoryStream();
-            // using (var df = new DeflateStream(input, CompressionMode.Decompress))
-            //     df.CopyTo(output);
+            //
+            // using var df = new DeflateStream(input, CompressionMode.Decompress);
+            //
+            // int result = df.ReadByte();
+            // while (result != -1)
+            // {
+            //     output.WriteByte((byte)result);
+            //     result = df.ReadByte();
+            // }
             // return output.ToArray();
 
             return data;
-        }
-    }
-
-    public static partial class TestA
-    {
-        public static void CopyTo(this Stream from, Stream to)
-        {
-            byte[] buffer = new byte[3276833];
-            int read;
-            while ((read = from.Read(buffer, 0, buffer.Length)) > 0)
-            {
-                to.Write (buffer, 0, read);
-            }
         }
     }
 }
