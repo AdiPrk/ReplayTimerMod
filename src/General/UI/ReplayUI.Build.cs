@@ -218,18 +218,28 @@ namespace ReplayTimerMod
             int toggleW = UIStyle.W(46);
             int saveValueW = UIStyle.W(84);
             int keepValueW = UIStyle.W(36);
-            int separatorW = UIStyle.W(20);
             int trackingLabelW = UIStyle.W(52);
             int ghostLabelW = UIStyle.W(38);
             int saveLabelW = UIStyle.W(34);
             int keepLabelW = UIStyle.W(34);
             int halfGap = M / 2;
 
-            int topContentW = trackingLabelW + halfGap + toggleW + separatorW
-                + ghostLabelW + halfGap + toggleW + separatorW
-                + saveLabelW + halfGap + saveValueW + separatorW
-                + keepLabelW + halfGap + stepW + halfGap + keepValueW + halfGap + stepW;
-            int x = Mathf.Max(M, (PW - topContentW) / 2);
+            int contextW = UIStyle.W(272);
+            int alphaLabelW = UIStyle.W(38);
+            int colorLabelW = UIStyle.W(38);
+            int swatchW = UIStyle.W(22);
+            int swatchGap = UIStyle.W(4);
+            Color[] swatches =
+            {
+                new Color(1.00f, 1.00f, 1.00f),
+                new Color(0.40f, 0.80f, 1.00f),
+                new Color(0.93f, 0.83f, 0.62f),
+                new Color(0.40f, 0.85f, 0.40f),
+                new Color(0.93f, 0.53f, 0.59f),
+                new Color(0.75f, 0.55f, 1.00f),
+            };
+
+            int x = M;
 
             MakeLbl(bar.transform, "Tracking:", UIStyle.FontSizeSm - 1,
                 UIStyle.Subtext, TextAnchor.MiddleLeft,
@@ -307,25 +317,7 @@ namespace ReplayTimerMod
             MakeLbl(keepPlusBtn.transform, "+", UIStyle.FontSizeSm - 1,
                 UIStyle.Text, TextAnchor.MiddleCenter, fill: true);
 
-            int contextW = UIStyle.W(272);
-            int alphaLabelW = UIStyle.W(38);
-            int colorLabelW = UIStyle.W(38);
-            int swatchW = UIStyle.W(22);
-            int swatchGap = UIStyle.W(4);
-            Color[] swatches =
-            {
-                new Color(1.00f, 1.00f, 1.00f),
-                new Color(0.40f, 0.80f, 1.00f),
-                new Color(0.93f, 0.83f, 0.62f),
-                new Color(0.40f, 0.85f, 0.40f),
-                new Color(0.93f, 0.53f, 0.59f),
-                new Color(0.75f, 0.55f, 1.00f),
-            };
-            int swatchesW = swatches.Length * swatchW + (swatches.Length - 1) * swatchGap;
-            int bottomContentW = contextW + separatorW
-                + alphaLabelW + halfGap + stepW + halfGap + valueW + halfGap + stepW + separatorW
-                + colorLabelW + halfGap + swatchesW;
-            int bottomX = Mathf.Max(M, (PW - bottomContentW) / 2);
+            int bottomX = M;
 
             var contextBtn = MakeGO("SettingsContext", bar.transform);
             Img(contextBtn, UIStyle.Overlay with { a = 0.55f });
