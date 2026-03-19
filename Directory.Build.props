@@ -25,4 +25,9 @@
     <OutputPath>$(MSBuildThisFileDirectory)obj\hk\$(Configuration)\</OutputPath>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(MSBuildProjectFile)' == 'ReplayTimerMod.HK.1221.csproj'">
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj\hk1221\</BaseIntermediateOutputPath>
+    <OutputPath>$(MSBuildThisFileDirectory)obj\hk1221\$(Configuration)\</OutputPath>
+  </PropertyGroup>
+
 </Project>
