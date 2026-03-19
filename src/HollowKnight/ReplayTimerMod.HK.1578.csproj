@@ -3,7 +3,7 @@
   Imports Hollow Knight path properties only if present.
   Keep this file local (gitignored) if you need machine-specific paths.
   -->
-  <Import Condition="Exists('..\..\.config\local\HollowKnightPath.props')" Project="..\..\.config\local\HollowKnightPath.props" />
+  <Import Condition="Exists('..\..\.config\local\HollowKnightPath1578.props')" Project="..\..\.config\local\HollowKnightPath1578.props" />
 
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
@@ -11,7 +11,7 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <DefineConstants>$(DefineConstants);HOLLOW_KNIGHT_BUILD</DefineConstants>
+    <DefineConstants>$(DefineConstants);HOLLOW_KNIGHT_BUILD;V1578</DefineConstants>
     <EnableNETAnalyzers>True</EnableNETAnalyzers>
     <AnalysisMode>recommended</AnalysisMode>
 

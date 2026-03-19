@@ -3,7 +3,7 @@
   Imports Hollow Knight path properties only if present.
   Keep this file local (gitignored) if you need machine-specific paths.
   -->
-  <Import Condition="Exists('..\..\.config\local\HollowKnightPath.props')" Project="..\..\.config\local\HollowKnightPath.props" />
+  <Import Condition="Exists('..\..\.config\local\HollowKnightPath1221.props')" Project="..\..\.config\local\HollowKnightPath1221.props" />
 
   <PropertyGroup>
     <TargetFramework>net35</TargetFramework>
