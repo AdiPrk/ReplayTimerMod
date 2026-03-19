@@ -110,7 +110,7 @@ namespace ReplayTimerMod
         private static bool NormalizeMetadata(EntryIndex entry)
         {
             bool changed = false;
-            if (string.IsNullOrWhiteSpace(entry.snapshotId))
+            if (string.IsNullOrEmpty(entry.snapshotId))
             {
                 entry.snapshotId = Guid.NewGuid().ToString("N");
                 changed = true;
@@ -214,7 +214,7 @@ namespace ReplayTimerMod
         }
 
         public static void ReplaceRouteSnapshots(RoomKey key,
-            IReadOnlyCollection<ReplaySnapshot> retainedSnapshots)
+            ICollection<ReplaySnapshot> retainedSnapshots)
         {
             string path = FilePath(key.SceneName);
             try
@@ -289,7 +289,7 @@ namespace ReplayTimerMod
                 {
                     try
                     {
-                        if (string.IsNullOrWhiteSpace(entry.data))
+                        if (string.IsNullOrEmpty(entry.data))
                         {
                             Log.LogWarning($"[DataStore] Skipping empty entry in {sceneName}");
                             continue;

@@ -1,4 +1,4 @@
-using BepInEx.Logging;
+﻿using BepInEx.Logging;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -67,10 +67,10 @@ namespace ReplayTimerMod
             return snapshot?.Room;
         }
 
-        public static IReadOnlyList<ReplaySnapshot> GetHistory(RoomKey key)
+        public static IList<ReplaySnapshot> GetHistory(RoomKey key)
         {
             if (!histories.TryGetValue(key, out var history))
-                return System.Array.Empty<ReplaySnapshot>();
+                return new ReplaySnapshot[0]; // Array.Empty doesn't work net35
             return OrderSnapshots(history);
         }
 
@@ -91,7 +91,7 @@ namespace ReplayTimerMod
             return history.FirstOrDefault(snapshot => snapshot.SnapshotId == snapshotId);
         }
 
-        public static IReadOnlyList<ReplaySnapshot> GetPlaybackCandidates(string sceneName,
+        public static IList<ReplaySnapshot> GetPlaybackCandidates(string sceneName,
             string entryFromScene)
         {
             return OrderSnapshots(histories

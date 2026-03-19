@@ -8,22 +8,22 @@ namespace ReplayTimerMod
         private readonly HashSet<string> playbackSnapshotIds = new HashSet<string>();
 
         public string? SelectedSnapshotId { get; private set; }
-        public IReadOnlyCollection<string> PlaybackSnapshotIds => playbackSnapshotIds;
+        public ICollection<string> PlaybackSnapshotIds => playbackSnapshotIds;
 
         public void SelectSnapshot(string? snapshotId)
         {
-            SelectedSnapshotId = string.IsNullOrWhiteSpace(snapshotId)
+            SelectedSnapshotId = string.IsNullOrEmpty(snapshotId)
                 ? null
                 : snapshotId;
         }
 
         public bool IsPlaybackSelected(string snapshotId) =>
-            !string.IsNullOrWhiteSpace(snapshotId)
+            !string.IsNullOrEmpty(snapshotId)
             && playbackSnapshotIds.Contains(snapshotId);
 
         public bool SetPlaybackSelected(string snapshotId, bool selected)
         {
-            if (string.IsNullOrWhiteSpace(snapshotId))
+            if (string.IsNullOrEmpty(snapshotId))
                 return false;
 
             return selected
@@ -33,7 +33,7 @@ namespace ReplayTimerMod
 
         public bool TogglePlayback(string snapshotId)
         {
-            if (string.IsNullOrWhiteSpace(snapshotId))
+            if (string.IsNullOrEmpty(snapshotId))
                 return false;
 
             if (playbackSnapshotIds.Remove(snapshotId))
@@ -45,7 +45,7 @@ namespace ReplayTimerMod
 
         public bool RemoveSnapshot(string snapshotId)
         {
-            if (string.IsNullOrWhiteSpace(snapshotId))
+            if (string.IsNullOrEmpty(snapshotId))
                 return false;
 
             bool changed = playbackSnapshotIds.Remove(snapshotId);

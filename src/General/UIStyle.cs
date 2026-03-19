@@ -68,10 +68,15 @@ namespace ReplayTimerMod
                     var asm = System.Reflection.Assembly.GetExecutingAssembly();
                     string resourceName = asm.GetManifestResourceNames()
                         .First(n => n.EndsWith("Arial.ttf"));
-                    using var stream = asm.GetManifestResourceStream(resourceName)!;
-                    using var ms = new System.IO.MemoryStream();
-                    stream.CopyTo(ms);
-                    System.IO.File.WriteAllBytes(tmpPath, ms.ToArray());
+                    using (var stream = asm.GetManifestResourceStream(resourceName))
+                    using (var ms = new System.IO.MemoryStream())
+                    {
+                        byte[] buffer = new byte[4096];
+                        int bytesRead;
+                        while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
+                            ms.Write(buffer, 0, bytesRead);
+                        System.IO.File.WriteAllBytes(tmpPath, ms.ToArray());
+                    }
                 }
 
                 _arial = Font.CreateDynamicFontFromOSFont(tmpPath, 14);

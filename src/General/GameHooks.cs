@@ -86,7 +86,7 @@ namespace ReplayTimerMod
 #else
             On.GameManager.PlayerDead += GameManager_PlayerDead;
             On.GameManager.BeginSceneTransition += GameManager_BeginSceneTransition;
-#endif
+#endif // v1221
 
             Log.LogInfo("[GameHooks] ModHooks installed");
         }
@@ -109,7 +109,7 @@ namespace ReplayTimerMod
             OnPlayerDead?.Invoke();
             return orig(self, waitTime);
         }
-#endif
+#endif // v1221
 
 
 #if V1221
@@ -164,8 +164,10 @@ namespace ReplayTimerMod
 
             orig(self, info);
         }
+#endif // v1221
     }
-#endif
+
+#endif // SILKSONG_BUILD
 
     internal static class ReflectionStringMemberReader
     {
@@ -181,8 +183,9 @@ namespace ReplayTimerMod
                 try
                 {
                     var prop = type.GetProperty(name, Flags);
+                    
                     if (prop != null && prop.PropertyType == typeof(string))
-                        return prop.GetValue(instance) as string ?? "";
+                        return prop.GetValue(instance, null) as string ?? "";
 
                     var field = type.GetField(name, Flags);
                     if (field != null && field.FieldType == typeof(string))
@@ -193,6 +196,6 @@ namespace ReplayTimerMod
 
             return "";
         }
-#endif
     }
+    
 }

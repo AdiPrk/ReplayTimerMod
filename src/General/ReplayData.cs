@@ -99,7 +99,7 @@ namespace ReplayTimerMod
             bool hasVisualOverride = false,
             float colorR = 1f, float colorG = 1f, float colorB = 1f, float alpha = 0.4f)
         {
-            SnapshotId = string.IsNullOrWhiteSpace(snapshotId)
+            SnapshotId = string.IsNullOrEmpty(snapshotId)
                 ? System.Guid.NewGuid().ToString("N")
                 : snapshotId;
             CapturedAtUtcTicks = capturedAtUtcTicks;
@@ -141,11 +141,11 @@ namespace ReplayTimerMod
     public sealed class RouteReplayHistory
     {
         public RoomKey Key { get; }
-        public IReadOnlyList<ReplaySnapshot> Snapshots { get; }
+        public IList<ReplaySnapshot> Snapshots { get; }
         public ReplaySnapshot Current { get; }
         public int Count => Snapshots.Count;
 
-        public RouteReplayHistory(RoomKey key, IReadOnlyList<ReplaySnapshot> snapshots,
+        public RouteReplayHistory(RoomKey key, IList<ReplaySnapshot> snapshots,
             ReplaySnapshot current)
         {
             Key = key;
