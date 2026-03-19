@@ -265,7 +265,7 @@ namespace ReplayTimerMod
 
             var diamondLine = instance.DiamondGo.AddComponent<LineRenderer>();
             diamondLine.useWorldSpace = true;
-            diamondLine.SetVertexCount(5);      // 4 corners + repeat of [0] to manually close the loop
+            diamondLine.SetVertexCount(5);
             diamondLine.SetWidth(0.06f, 0.06f);
             diamondLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             diamondLine.receiveShadows = false;
@@ -360,6 +360,7 @@ namespace ReplayTimerMod
             instance.DiamondLine.SetPosition(1, center + new Vector3(s, 0, 0));
             instance.DiamondLine.SetPosition(2, center + new Vector3(0, -s, 0));
             instance.DiamondLine.SetPosition(3, center + new Vector3(-s, 0, 0));
+            instance.DiamondLine.SetPosition(4, center + new Vector3(0, s, 0));
         }
     }
 }
