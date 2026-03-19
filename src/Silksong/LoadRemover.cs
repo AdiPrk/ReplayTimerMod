@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿#if SILKSONG_BUILD
+using UnityEngine;
 using GlobalEnums;
 using System.Reflection;
 
@@ -142,3 +143,4 @@ namespace ReplayTimerMod
         }
     }
 }
+#endif

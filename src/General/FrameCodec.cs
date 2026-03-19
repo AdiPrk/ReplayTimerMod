@@ -21,10 +21,10 @@ namespace ReplayTimerMod
         public static byte[] Encode2ndOrder(FrameData[] frames, bool getX)
         {
             int n = frames.Length;
-            if (n == 0) return Array.Empty<byte>();
+            if (n == 0) return new byte[0];
 
             using var ms = new MemoryStream(2 + n * 3);
-            using var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true);
+            using var w = new BinaryWriter(ms, Encoding.UTF8);
 
             short x0 = ToShort(getX ? frames[0].x : frames[0].y);
             w.Write(x0);
@@ -46,10 +46,10 @@ namespace ReplayTimerMod
 
         public static short[] Decode2ndOrder(byte[] stream, int n)
         {
-            if (n == 0) return Array.Empty<short>();
+            if (n == 0) return new short[0];
 
             using var ms = new MemoryStream(stream);
-            using var r = new BinaryReader(ms, Encoding.UTF8, leaveOpen: true);
+            using var r = new BinaryReader(ms, Encoding.UTF8);
 
             var result = new short[n];
             result[0] = r.ReadInt16();

@@ -32,8 +32,6 @@ namespace ReplayTimerMod
         public static event Action? OnRecordingDiscarded;
 
         // ── Private state ────────────────────────────────────────────────────
-        private static int sceneCount = 0;
-        private static bool isReady = false;
         private static string lastSceneName = "";
 
         // Set by OnGateTransitionBegin; consumed and cleared in OnActiveSceneChanged.
@@ -64,7 +62,7 @@ namespace ReplayTimerMod
                         }
                     }
                 }
-                return _savestateLoadingProp?.GetValue(null) != null;
+                return _savestateLoadingProp?.GetValue(null, null) != null;
             }
             catch { return false; }
         }
@@ -100,11 +98,7 @@ namespace ReplayTimerMod
 
         private static void OnActiveSceneChanged(string fromName, string toName)
         {
-            sceneCount++;
-            if (sceneCount >= 4) isReady = true;
-            if (!isReady) return;
-
-            if (IsDebugModSavestateLoading())
+            if (IsDebugModSavestateLoading() || fromName == "Room_Mender_House" || toName == "Room_Mender_House")
             {
                 Log.LogInfo("[RoomTracker] Savestate detected - invalidating");
                 HandleInvalidation();
@@ -182,9 +176,11 @@ namespace ReplayTimerMod
                 OnActiveSceneChanged(fromName, currentSceneName);
             }
 
-            if (!isReady || !IsRecording) return;
+            if (!IsRecording) return;
             if (shouldTick)
+            {
                 CurrentRoomTime += Time.unscaledDeltaTime;
+            }
         }
 
         private static string GetCurrentSceneName()

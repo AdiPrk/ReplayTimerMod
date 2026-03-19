@@ -108,7 +108,7 @@ namespace ReplayTimerMod
             RW = PW - LW - 1;
 
             canvasGO = new GameObject("ReplayModCanvas");
-            Object.DontDestroyOnLoad(canvasGO);
+            UnityEngine.Object.DontDestroyOnLoad(canvasGO);
             var canvas = canvasGO.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 32767;
@@ -130,6 +130,7 @@ namespace ReplayTimerMod
         public void Tick()
         {
             if (!isSetup) return;
+            UnityEngine.Object.DontDestroyOnLoad(canvasGO);
 
             bool paused = IsPaused();
 
