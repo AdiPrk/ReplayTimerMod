@@ -1,9 +1,11 @@
-using System;
+﻿using System;
 using System.Reflection;
 using BepInEx.Logging;
 
 #if SILKSONG_BUILD
 using HarmonyLib;
+#else
+using Modding;
 #endif
 
 namespace ReplayTimerMod
@@ -78,11 +80,25 @@ namespace ReplayTimerMod
             if (initialized) return;
             initialized = true;
 
+#if V1221
+            ModHooks.Instance.BeforePlayerDeadHook += GameManager_PlayerDead;
+            ModHooks.Instance.BeforeSceneLoadHook += GameManager_BeginSceneTransition;
+#else
             On.GameManager.PlayerDead += GameManager_PlayerDead;
             On.GameManager.BeginSceneTransition += GameManager_BeginSceneTransition;
-            Log.LogInfo("[GameHooks] MMHOOK hooks installed");
+#endif
+
+            Log.LogInfo("[GameHooks] ModHooks installed");
         }
 
+#if V1221
+        private static void GameManager_PlayerDead()
+        {
+            Log.LogInfo("[GameHooks] PlayerDead fired");
+            pendingDeath = true;
+            OnPlayerDead?.Invoke();
+        }
+#else
         private static System.Collections.IEnumerator GameManager_PlayerDead(
             On.GameManager.orig_PlayerDead orig,
             GameManager self,
@@ -93,7 +109,34 @@ namespace ReplayTimerMod
             OnPlayerDead?.Invoke();
             return orig(self, waitTime);
         }
+#endif
 
+
+#if V1221
+        private static string GameManager_BeginSceneTransition(string target)
+        {
+            if (pendingDeath)
+            {
+                Log.LogInfo("[GameHooks] BeginSceneTransition - death respawn, skipping");
+                pendingDeath = false;
+                return target;
+            }
+
+            string destScene = "";
+            string entryGate = "";
+            try
+            {
+                destScene = target;
+                entryGate = GameManager.instance.entryGateName;
+            }
+            catch { }
+
+            Log.LogInfo($"[GameHooks] BeginSceneTransition -> '{destScene}' via '{entryGate}' ");
+            OnGateTransitionBegin?.Invoke(destScene, entryGate);
+
+            return target;
+        }
+#else
         private static void GameManager_BeginSceneTransition(
             On.GameManager.orig_BeginSceneTransition orig,
             GameManager self,
@@ -150,5 +193,6 @@ namespace ReplayTimerMod
 
             return "";
         }
+#endif
     }
 }

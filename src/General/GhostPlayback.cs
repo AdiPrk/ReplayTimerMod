@@ -350,7 +350,7 @@ namespace ReplayTimerMod
         private static void RenderDiamond(PlaybackInstance instance, Vector3 center,
             Color color)
         {
-            instance.SpriteGo?.SetActive(false);
+            if (instance.SpriteGo != null) instance.SpriteGo?.SetActive(false);
             if (instance.DiamondGo == null || instance.DiamondLine == null)
                 return;
 

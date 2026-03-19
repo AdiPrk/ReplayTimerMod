@@ -13,10 +13,15 @@
 
 # Local game paths used by this repository
 .config/local/SilksongPath.props
-.config/local/HollowKnightPath.props
+.config/local/HollowKnightPath1221.props
+.config/local/HollowKnightPath1578.props
+.config/local/HollowKnightPath1432.props
 obj/ss/
 obj/hk/
 bin/
+thunderstore/dist/
+thunderstore/temp/
+src/HollowKnight/dist/
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs

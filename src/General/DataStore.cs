@@ -1,8 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using BepInEx.Logging;
-using Newtonsoft.Json;
 
 namespace ReplayTimerMod
 {
@@ -43,9 +42,6 @@ namespace ReplayTimerMod
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("DataStore");
 
-        private static readonly JsonSerializerSettings JsonCfg =
-            new JsonSerializerSettings { Formatting = Formatting.None };
-
         private static string DataDirectory = "";
 
         // ── Init ──────────────────────────────────────────────────────────────
@@ -67,8 +63,7 @@ namespace ReplayTimerMod
             if (!File.Exists(path)) return new SceneIndex();
             try
             {
-                var idx = JsonConvert.DeserializeObject<SceneIndex>(
-                    File.ReadAllText(path), JsonCfg) ?? new SceneIndex();
+                var idx = MiniJson.Deserialize(File.ReadAllText(path));
                 idx.entries ??= new List<EntryIndex>();
                 return idx;
             }
@@ -104,7 +99,7 @@ namespace ReplayTimerMod
                 foreach (var entry in idx.entries)
                     NormalizeMetadata(entry);
 
-                File.WriteAllText(path, JsonConvert.SerializeObject(idx, JsonCfg));
+                File.WriteAllText(path, MiniJson.Serialize(idx));
             }
             catch (Exception ex)
             {

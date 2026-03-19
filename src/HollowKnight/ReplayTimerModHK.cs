@@ -16,12 +16,8 @@ namespace ReplayTimerMod
 
         public static ReplayTimerModHK? Instance { get; private set; }
 
-        public ReplayTimerModHK() : base("ReplayTimerMod")
-        {
-        }
-
         public override string GetVersion() =>
-            Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0.0";
+            Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0";
 
         public override void Initialize()
         {
@@ -33,11 +29,7 @@ namespace ReplayTimerMod
             // HK build uses lightweight in-memory config backing for now.
             GhostSettings.Init(new BepInEx.Configuration.ConfigFile());
 
-            string saveDir = Path.Combine(
-                System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
-                "Low",
-                "Team Cherry",
-                "Hollow Knight");
+            string saveDir = "the_saves";
             if (!Directory.Exists(saveDir))
                 saveDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
             DataStore.Init(saveDir);
@@ -56,7 +48,11 @@ namespace ReplayTimerMod
             RoomTracker.OnRoomExit += OnRoomExit;
             RoomTracker.OnRecordingDiscarded += OnRecordingDiscarded;
 
+#if V1221
+            ModHooks.Instance.HeroUpdateHook += OnHeroUpdate;
+#else
             ModHooks.HeroUpdateHook += OnHeroUpdate;
+#endif
         }
 
         private void OnHeroUpdate()
@@ -64,7 +60,7 @@ namespace ReplayTimerMod
             TryLateInit();
 
             bool shouldTick = false;
-            try { shouldTick = LoadRemover.ShouldTick(); } catch { }
+            try { shouldTick = LoadRemover.ShouldTick(); } catch { Log("couldnt check tick timer"); }
 
             RoomTracker.Tick(shouldTick);
             frameRecorder.Tick(shouldTick);

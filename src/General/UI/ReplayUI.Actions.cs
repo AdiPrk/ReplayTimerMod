@@ -196,7 +196,7 @@ namespace ReplayTimerMod
         private void OnPasteClicked()
         {
             string clip = GUIUtility.systemCopyBuffer ?? "";
-            if (string.IsNullOrWhiteSpace(clip))
+            if (string.IsNullOrEmpty(clip))
             {
                 ShowPasteStatus("✕ Clipboard empty", UIStyle.Red);
                 return;

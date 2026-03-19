@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -47,7 +46,7 @@ namespace ReplayTimerMod
         public static string Encode(RecordedRoom room)
         {
             byte[] binary = WriteBinary(room);
-            byte[] compressed = Compress(binary);
+            byte[] compressed = Compress.CompressData(binary);
             string result = Convert.ToBase64String(compressed);
             Log.LogInfo($"[RTM3] {room.Key}: {room.FrameCount} frames -> " +
                         $"binary={binary.Length}B deflate={compressed.Length}B str={result.Length}ch");
@@ -58,7 +57,7 @@ namespace ReplayTimerMod
         {
             try
             {
-                return ReadBinary(Decompress(Convert.FromBase64String(encoded)));
+                return ReadBinary(Compress.DecompressData(Convert.FromBase64String(encoded)));
             }
             catch (Exception ex)
             {
@@ -100,7 +99,7 @@ namespace ReplayTimerMod
             }
 
             using var ms = new MemoryStream();
-            using (var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
+            using (var w = new BinaryWriter(ms, Encoding.UTF8))
             {
                 w.Write(Magic);
                 w.Write(Version);
@@ -142,15 +141,15 @@ namespace ReplayTimerMod
         private static RecordedRoom ReadBinary(byte[] raw)
         {
             using var ms = new MemoryStream(raw);
-            using var r = new BinaryReader(ms, Encoding.UTF8, leaveOpen: true);
+            using var r = new BinaryReader(ms, Encoding.UTF8);
 
             for (int i = 0; i < 4; i++)
                 if (r.ReadByte() != Magic[i])
-                    throw new InvalidDataException("Bad RTM3 magic");
+                    throw new Exception("Bad RTM3 magic");
 
             byte ver = r.ReadByte();
             if (ver != Version)
-                throw new InvalidDataException($"Unsupported RTM3 version 0x{ver:X2}");
+                throw new Exception($"Unsupported RTM3 version 0x{ver:X2}");
 
             string sceneName = FrameCodec.ReadString(r);
             string entryFromScene = FrameCodec.ReadString(r);
@@ -221,7 +220,7 @@ namespace ReplayTimerMod
         {
             var list = rooms.ToList();
             using var ms = new MemoryStream();
-            using (var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
+            using (var w = new BinaryWriter(ms, Encoding.UTF8))
             {
                 w.Write(MagicCollection);
                 w.Write(VersionCollection);
@@ -233,7 +232,7 @@ namespace ReplayTimerMod
                     w.Write(blob);
                 }
             }
-            string result = Convert.ToBase64String(Compress(ms.ToArray()));
+            string result = Convert.ToBase64String(Compress.CompressData(ms.ToArray()));
             Log.LogInfo($"[RTMC1] Encoded {list.Count} rooms -> {result.Length} chars");
             return result;
         }
@@ -242,7 +241,7 @@ namespace ReplayTimerMod
         {
             try
             {
-                return ReadCollection(Decompress(Convert.FromBase64String(encoded)));
+                return ReadCollection(Compress.DecompressData(Convert.FromBase64String(encoded)));
             }
             catch (Exception ex)
             {
@@ -256,19 +255,19 @@ namespace ReplayTimerMod
         private static List<RecordedRoom> ReadCollection(byte[] raw)
         {
             using var ms = new MemoryStream(raw);
-            using var r = new BinaryReader(ms, Encoding.UTF8, leaveOpen: true);
+            using var r = new BinaryReader(ms, Encoding.UTF8);
 
             for (int i = 0; i < 4; i++)
                 if (r.ReadByte() != MagicCollection[i])
-                    throw new InvalidDataException("Bad RTMC magic");
+                    throw new Exception("Bad RTMC magic");
 
             byte ver = r.ReadByte();
             if (ver != VersionCollection)
-                throw new InvalidDataException($"Unsupported RTMC version 0x{ver:X2}");
+                throw new Exception($"Unsupported RTMC version 0x{ver:X2}");
 
             int count = r.ReadInt32();
             if (count < 0 || count > 100000)
-                throw new InvalidDataException($"Implausible count: {count}");
+                throw new Exception($"Implausible count: {count}");
 
             var rooms = new List<RecordedRoom>(count);
             for (int i = 0; i < count; i++)
@@ -301,7 +300,7 @@ namespace ReplayTimerMod
                 if (chunk.Length == 0) continue;
                 try
                 {
-                    byte[] decompressed = Decompress(Convert.FromBase64String(chunk));
+                    byte[] decompressed = Compress.DecompressData(Convert.FromBase64String(chunk));
 
                     if (decompressed.Length >= 4 &&
                         decompressed[0] == MagicCollection[0] &&
@@ -333,23 +332,6 @@ namespace ReplayTimerMod
             return result;
         }
 
-        // ── Compression ───────────────────────────────────────────────────────
-
-        private static byte[] Compress(byte[] data)
-        {
-            using var ms = new MemoryStream();
-            using (var df = new DeflateStream(ms, CompressionLevel.Optimal))
-                df.Write(data, 0, data.Length);
-            return ms.ToArray();
-        }
-
-        private static byte[] Decompress(byte[] data)
-        {
-            using var input = new MemoryStream(data);
-            using var output = new MemoryStream();
-            using (var df = new DeflateStream(input, CompressionMode.Decompress))
-                df.CopyTo(output);
-            return output.ToArray();
-        }
     }
 }
+
