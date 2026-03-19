@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -47,7 +46,7 @@ namespace ReplayTimerMod
         public static string Encode(RecordedRoom room)
         {
             byte[] binary = WriteBinary(room);
-            byte[] compressed = Compress(binary);
+            byte[] compressed = Compress.CompressData(binary);
             string result = Convert.ToBase64String(compressed);
             Log.LogInfo($"[RTM3] {room.Key}: {room.FrameCount} frames -> " +
                         $"binary={binary.Length}B deflate={compressed.Length}B str={result.Length}ch");
@@ -58,7 +57,7 @@ namespace ReplayTimerMod
         {
             try
             {
-                return ReadBinary(Decompress(Convert.FromBase64String(encoded)));
+                return ReadBinary(Compress.DecompressData(Convert.FromBase64String(encoded)));
             }
             catch (Exception ex)
             {
@@ -233,7 +232,7 @@ namespace ReplayTimerMod
                     w.Write(blob);
                 }
             }
-            string result = Convert.ToBase64String(Compress(ms.ToArray()));
+            string result = Convert.ToBase64String(Compress.CompressData(ms.ToArray()));
             Log.LogInfo($"[RTMC1] Encoded {list.Count} rooms -> {result.Length} chars");
             return result;
         }
@@ -242,7 +241,7 @@ namespace ReplayTimerMod
         {
             try
             {
-                return ReadCollection(Decompress(Convert.FromBase64String(encoded)));
+                return ReadCollection(Compress.DecompressData(Convert.FromBase64String(encoded)));
             }
             catch (Exception ex)
             {
@@ -301,7 +300,7 @@ namespace ReplayTimerMod
                 if (chunk.Length == 0) continue;
                 try
                 {
-                    byte[] decompressed = Decompress(Convert.FromBase64String(chunk));
+                    byte[] decompressed = Compress.DecompressData(Convert.FromBase64String(chunk));
 
                     if (decompressed.Length >= 4 &&
                         decompressed[0] == MagicCollection[0] &&
@@ -333,35 +332,6 @@ namespace ReplayTimerMod
             return result;
         }
 
-        // ── Compression ───────────────────────────────────────────────────────
-
-        private static byte[] Compress(byte[] data)
-        {
-            // using var ms = new MemoryStream();
-            // using var gs = new GZipStream(ms, CompressionMode.Compress);
-            //     gs.Write(data, 0, data.Length);
-            // return ms.ToArray();
-
-            return data;
-        }
-
-        private static byte[] Decompress(byte[] data)
-        {
-            // using var input = new MemoryStream(data);
-            // using var output = new MemoryStream();
-            //
-            // using var df = new DeflateStream(input, CompressionMode.Decompress);
-            //
-            // int result = df.ReadByte();
-            // while (result != -1)
-            // {
-            //     output.WriteByte((byte)result);
-            //     result = df.ReadByte();
-            // }
-            // return output.ToArray();
-
-            return data;
-        }
     }
 }
 
