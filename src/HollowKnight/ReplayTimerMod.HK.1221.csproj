@@ -6,12 +6,12 @@
   <Import Condition="Exists('..\..\.config\local\HollowKnightPath.props')" Project="..\..\.config\local\HollowKnightPath.props" />
 
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
+    <TargetFramework>net35</TargetFramework>
     <AssemblyName>ReplayTimerMod.HK</AssemblyName>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <DefineConstants>$(DefineConstants);HOLLOW_KNIGHT_BUILD</DefineConstants>
+    <DefineConstants>$(DefineConstants);HOLLOW_KNIGHT_BUILD;V1221</DefineConstants>
     <EnableNETAnalyzers>True</EnableNETAnalyzers>
     <AnalysisMode>recommended</AnalysisMode>
 
@@ -75,10 +75,6 @@
     </Reference>
     <Reference Include="tk2dRuntime" Condition="Exists('$(HollowKnightManagedFolder)\tk2dRuntime.dll')">
       <HintPath>$(HollowKnightManagedFolder)\tk2dRuntime.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="MMHOOK_Assembly-CSharp" Condition="Exists('$(HollowKnightManagedFolder)\MMHOOK_Assembly-CSharp.dll')">
-      <HintPath>$(HollowKnightManagedFolder)\MMHOOK_Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

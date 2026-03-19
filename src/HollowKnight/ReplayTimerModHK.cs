@@ -16,7 +16,7 @@ namespace ReplayTimerMod
         public static ReplayTimerModHK? Instance { get; private set; }
 
         public override string GetVersion() =>
-            Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0.0";
+            Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0";
 
         public override void Initialize()
         {
@@ -44,7 +44,11 @@ namespace ReplayTimerMod
             RoomTracker.OnRoomExit += OnRoomExit;
             RoomTracker.OnRecordingDiscarded += OnRecordingDiscarded;
 
+#if V1221
             ModHooks.Instance.HeroUpdateHook += OnHeroUpdate;
+#else
+            ModHooks.HeroUpdateHook += OnHeroUpdate;
+#endif
         }
 
         private void OnHeroUpdate()
