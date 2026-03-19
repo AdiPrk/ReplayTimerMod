@@ -10,7 +10,7 @@ namespace ReplayTimerMod
         internal static byte[] CompressData(byte[] data)
         {
             using var ms = new MemoryStream();
-            using (var ds = new DeflaterOutputStream(ms, new Deflater(Deflater.DEFAULT_COMPRESSION)))
+            using (var ds = new DeflaterOutputStream(ms, new Deflater(Deflater.DEFAULT_COMPRESSION, true)))
             {
                 ds.Write(data, 0, data.Length);
                 ds.Finish();
@@ -21,7 +21,7 @@ namespace ReplayTimerMod
         internal static byte[] DecompressData(byte[] data)
         {
             using var ms = new MemoryStream(data);
-            using var inf = new InflaterInputStream(ms);
+            using var inf = new InflaterInputStream(ms, new Inflater(true));
             using var output = new MemoryStream();
             var buf = new byte[4096];
             int n;
