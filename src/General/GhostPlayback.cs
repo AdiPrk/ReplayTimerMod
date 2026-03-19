@@ -108,8 +108,9 @@ namespace ReplayTimerMod
             if (!playing || currentPB == null) return;
             if (!GhostSettings.GhostEnabled) { HideAll(); return; }
             if (!shouldTick) return;
-            UnityEngine.Object.DontDestroyOnLoad(diamondGo);
-            UnityEngine.Object.DontDestroyOnLoad(ghostSpriteGo);
+
+            if (diamondGo != null) UnityEngine.Object.DontDestroyOnLoad(diamondGo);
+            if (ghostSpriteGo != null) UnityEngine.Object.DontDestroyOnLoad(ghostSpriteGo);
 
             // Use Time.deltaTime (scaled) so the ghost respects Time.timeScale.
             // If the game is slowed down via DebugMod the ghost slows with it,
@@ -241,10 +242,11 @@ namespace ReplayTimerMod
 
         private void RenderDiamond(Vector3 center)
         {
-            ghostSpriteGo?.SetActive(false);
+            if (ghostSpriteGo != null) ghostSpriteGo.SetActive(false);
             if (diamondGo == null || diamondLine == null) return;
             if (diamondMat != null) diamondMat.color = GhostSettings.GhostColor;
             diamondGo.SetActive(true);
+
             const float s = 0.25f;
             diamondLine.SetPosition(0, center + new Vector3(0, s, 0));
             diamondLine.SetPosition(1, center + new Vector3(s, 0, 0));
@@ -254,8 +256,8 @@ namespace ReplayTimerMod
 
         private void HideAll()
         {
-            ghostSpriteGo?.SetActive(false);
-            diamondGo?.SetActive(false);
+            if (ghostSpriteGo != null) ghostSpriteGo.SetActive(false);
+            if (diamondGo != null) diamondGo.SetActive(false);
         }
 
         // ── Ghost selection ───────────────────────────────────────────────────
