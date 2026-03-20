@@ -30,10 +30,11 @@ namespace ReplayTimerMod
 
             // Bind GhostSettings to BepInEx config before any other system
             // reads those properties.
-            GhostSettings.Init(Config);
+            string baseDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
 
-            string dataDir = Path.Combine(
-                Path.GetDirectoryName(Info.Location)!, "..", "..", "data");
+            GhostSettings.Init(baseDirectory);
+
+            string dataDir = Path.Combine(baseDirectory, "ReplayMod", "data");
             DataStore.Init(dataDir);
             replaySelectionState = new ReplaySelectionState();
             PBManager.SetSelectionState(replaySelectionState);

@@ -26,13 +26,11 @@ namespace ReplayTimerMod
 
             GameHooks.Init();
 
-            // HK build uses lightweight in-memory config backing for now.
-            GhostSettings.Init(new BepInEx.Configuration.ConfigFile());
+            string baseDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
 
-            string saveDir = "the_saves";
-            if (!Directory.Exists(saveDir))
-                saveDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
-            DataStore.Init(saveDir);
+            // HK build uses lightweight in-memory config backing for now.
+            GhostSettings.Init(baseDirectory);
+            DataStore.Init(baseDirectory);
             replaySelectionState = new ReplaySelectionState();
             PBManager.SetSelectionState(replaySelectionState);
             PBManager.Init();
