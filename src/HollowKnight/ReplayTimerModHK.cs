@@ -81,6 +81,13 @@ namespace ReplayTimerMod
 
         private void OnRoomEnter(string sceneName, string entryFromScene)
         {
+            if (!GhostSettings.TrackingEnabled)
+            {
+                // Start playback but don't record.
+                ghostPlayback.StartPlayback(sceneName, entryFromScene);
+                return;
+            }
+
             frameRecorder.StartRecording();
             ghostPlayback.StartPlayback(sceneName, entryFromScene);
         }
@@ -89,14 +96,31 @@ namespace ReplayTimerMod
         {
             ghostPlayback.StopPlayback();
 
-            RoomKey key = new RoomKey(sceneName, entryFromScene, exitToScene);
-            RecordedRoom? recording = frameRecorder.FinishRecording(key, lrTime);
-
-            if (recording != null)
+            if (!GhostSettings.TrackingEnabled)
             {
-                PBManager.Evaluate(recording);
-                replayUI.OnPBUpdated();
+                frameRecorder.DiscardRecording();
+                return;
             }
+
+            RoomKey key = new RoomKey(sceneName, entryFromScene, exitToScene);
+
+            bool saveAllRuns = GhostSettings.SaveAllRunsEnabled;
+
+            if (!saveAllRuns && !PBManager.WouldBePB(key, lrTime))
+            {
+                frameRecorder.DiscardRecording();
+                return;
+            }
+
+            RecordedRoom? recording = frameRecorder.FinishRecording(key, lrTime);
+            if (recording == null)
+                return;
+
+            var result = PBManager.Evaluate(recording, saveAllRuns);
+            if (result.Kind == ResultKind.FirstRun
+                || result.Kind == ResultKind.NewPB
+                || result.Kind == ResultKind.SavedHistory)
+                replayUI.OnPBUpdated();
         }
 
         private void OnRecordingDiscarded()
