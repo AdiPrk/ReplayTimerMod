@@ -30,7 +30,10 @@ namespace ReplayTimerMod
 
             // HK build uses lightweight in-memory config backing for now.
             GhostSettings.Init(baseDirectory);
-            DataStore.Init(baseDirectory);
+
+            string dataDir = Path.Combine(Path.Combine(baseDirectory, "ReplayMod"), "data");
+            DataStore.Init(dataDir);
+            
             replaySelectionState = new ReplaySelectionState();
             PBManager.SetSelectionState(replaySelectionState);
             PBManager.Init();
