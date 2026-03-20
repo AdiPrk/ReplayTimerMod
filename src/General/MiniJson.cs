@@ -67,7 +67,7 @@ namespace ReplayTimerMod
             AppendString(sb, e.snapshotId);
             sb.Append(",\"capturedAtUtcTicks\":");
             sb.Append(e.capturedAtUtcTicks.ToString(CultureInfo.InvariantCulture));
-            sb.Append("{\"sceneName\":");
+            sb.Append(",\"sceneName\":");
             AppendString(sb, e.sceneName);
             sb.Append(",\"entryFromScene\":");
             AppendString(sb, e.entryFromScene);
