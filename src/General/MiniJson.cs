@@ -63,6 +63,10 @@ namespace ReplayTimerMod
 
         private static void SerializeEntry(StringBuilder sb, EntryIndex e)
         {
+            sb.Append("{\"snapshotId\":");
+            AppendString(sb, e.snapshotId);
+            sb.Append(",\"capturedAtUtcTicks\":");
+            sb.Append(e.capturedAtUtcTicks.ToString(CultureInfo.InvariantCulture));
             sb.Append("{\"sceneName\":");
             AppendString(sb, e.sceneName);
             sb.Append(",\"entryFromScene\":");
@@ -113,6 +117,8 @@ namespace ReplayTimerMod
 
                 switch (key)
                 {
+                    case "snapshotId":        e.snapshotId        = p.ReadString(); break;
+                    case "capturedAtUtcTicks":e.capturedAtUtcTicks = p.ReadLong();  break;
                     case "sceneName":      e.sceneName      = p.ReadString(); break;
                     case "entryFromScene": e.entryFromScene = p.ReadString(); break;
                     case "exitToScene":    e.exitToScene    = p.ReadString(); break;
@@ -192,6 +198,20 @@ namespace ReplayTimerMod
                     _pos++;
                 }
                 return float.Parse(
+                    _s.Substring(start, _pos - start),
+                    CultureInfo.InvariantCulture);
+            }
+
+            public long ReadLong()
+            {
+                int start = _pos;
+                while (_pos < _s.Length)
+                {
+                    char c = _s[_pos];
+                    if (c == ',' || c == '}' || c == ']' || c <= ' ') break;
+                    _pos++;
+                }
+                return long.Parse(
                     _s.Substring(start, _pos - start),
                     CultureInfo.InvariantCulture);
             }
