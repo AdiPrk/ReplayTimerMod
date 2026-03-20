@@ -44,6 +44,10 @@
     <None Include="..\..\thunderstore/icon.png" Pack="True" PackagePath="icon.png" />
   </ItemGroup>
 
+  <ItemGroup>
+      <EmbeddedResource Include="..\..\Resources\Arial.ttf" />
+  </ItemGroup>
+
   <Target Name="CopyAndPackageMod" AfterTargets="PostBuildEvent">
     <ItemGroup>
       <Binaries Include="$(TargetPath)" LocalDir="/" PackDir="/" />

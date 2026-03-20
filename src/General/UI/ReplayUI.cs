@@ -34,6 +34,8 @@ namespace ReplayTimerMod
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("ReplayUI");
 
+        private const string GlobalSettingsContextText = "Edit: Global";
+
         // ── State ─────────────────────────────────────────────────────────────
         private bool isSetup = false;
         private bool expanded = false;
@@ -84,9 +86,15 @@ namespace ReplayTimerMod
 
         // ── Settings strip live refs ──────────────────────────────────────────
         private Text? ghostToggleLbl;
+        private Image? ghostToggleBtnImg;
         private Text? alphaLbl;
         private Text? trackingToggleLbl;
         private Image? trackingToggleBtnImg;
+        private Text? savePolicyLbl;
+        private Image? savePolicyBtnImg;
+        private Text? maxSavedReplaysLbl;
+        private Text? settingsContextLbl;
+        private Image? settingsContextBtnImg;
 
         // ─────────────────────────────────────────────────────────────────────
         // SETUP
@@ -101,7 +109,7 @@ namespace ReplayTimerMod
             TH = UIStyle.H(28);
             HDR = UIStyle.H(34);
             SUBHDR = UIStyle.H(28);
-            STGSH = UIStyle.H(36);
+            STGSH = UIStyle.H(64);
             PW = UIStyle.W(680);
             PH = UIStyle.H(576);
             LW = UIStyle.W(200);
@@ -189,9 +197,153 @@ namespace ReplayTimerMod
             expanded = !expanded;
             panelGO!.SetActive(expanded);
             if (expanded)
+            {
                 RebuildLeft();
+                RefreshSettingsBar();
+            }
             else
                 ResetClearAllConfirm();
+        }
+
+        private ReplaySelectionState? SelectionState => PBManager.SelectionState;
+
+        private string? SelectedSnapshotId => SelectionState?.SelectedSnapshotId;
+
+        private static Color CurrentGlobalGhostColor => GhostSettings.GhostColor;
+
+        private bool IsEditingSnapshot(out ReplaySnapshot? snapshot)
+        {
+            snapshot = null;
+            return TryGetSelectedSnapshot(out _, out snapshot);
+        }
+
+        private bool TryGetSelectedSnapshot(out RoomKey key, out ReplaySnapshot? snapshot)
+        {
+            key = default;
+            snapshot = null;
+
+            string? snapshotId = SelectedSnapshotId;
+            if (string.IsNullOrEmpty(snapshotId))
+                return false;
+
+            foreach (var route in PBManager.AllHistories())
+            {
+                snapshot = PBManager.GetSnapshot(route.Key, snapshotId);
+                if (snapshot == null)
+                    continue;
+
+                key = route.Key;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static Color GetResolvedSnapshotColor(ReplaySnapshot snapshot) =>
+            snapshot.ResolveGhostColor(CurrentGlobalGhostColor);
+
+        private static string SavePolicyLabel() =>
+            GhostSettings.SaveAllRunsEnabled ? "Save all" : "PB only";
+
+        private static string MaxSavedReplaysString() =>
+            GhostSettings.MaxSavedReplaysPerRoute.ToString();
+
+        private void OnMaxSavedReplaysMinus() => AdjustMaxSavedReplays(-1);
+
+        private void OnMaxSavedReplaysPlus() => AdjustMaxSavedReplays(1);
+
+        private void AdjustMaxSavedReplays(int delta)
+        {
+            GhostSettings.MaxSavedReplaysPerRoute += delta;
+            int newLimit = GhostSettings.MaxSavedReplaysPerRoute;
+            PBManager.PruneAllHistories(newLimit, persist: true);
+            RefreshSettingsBar();
+            if (selectedScene != null)
+                RebuildRight(selectedScene);
+        }
+
+        private void RefreshSettingsBar()
+        {
+            if (trackingToggleLbl != null)
+            {
+                bool trackingEnabled = GhostSettings.TrackingEnabled;
+                trackingToggleLbl.text = trackingEnabled ? "ON" : "OFF";
+                trackingToggleLbl.color = trackingEnabled ? UIStyle.Accent : UIStyle.Red;
+                if (trackingToggleBtnImg != null)
+                    trackingToggleBtnImg.color = trackingEnabled
+                        ? UIStyle.Accent with { a = 0.22f }
+                        : UIStyle.Red with { a = 0.22f };
+            }
+
+            if (ghostToggleLbl != null)
+            {
+                bool ghostEnabled = GhostSettings.GhostEnabled;
+                ghostToggleLbl.text = ghostEnabled ? "ON" : "OFF";
+                ghostToggleLbl.color = ghostEnabled ? UIStyle.Accent : UIStyle.Subtext;
+                if (ghostToggleBtnImg != null)
+                    ghostToggleBtnImg.color = ghostEnabled
+                        ? UIStyle.Accent with { a = 0.22f }
+                        : UIStyle.Overlay;
+            }
+
+            if (savePolicyLbl != null)
+            {
+                bool saveAllRunsEnabled = GhostSettings.SaveAllRunsEnabled;
+                savePolicyLbl.text = SavePolicyLabel();
+                savePolicyLbl.color = saveAllRunsEnabled ? UIStyle.Accent : UIStyle.Gold;
+                if (savePolicyBtnImg != null)
+                    savePolicyBtnImg.color = saveAllRunsEnabled
+                        ? UIStyle.Accent with { a = 0.22f }
+                        : UIStyle.Gold with { a = 0.18f };
+            }
+
+            if (maxSavedReplaysLbl != null)
+                maxSavedReplaysLbl.text = MaxSavedReplaysString();
+
+            if (IsEditingSnapshot(out var snapshot))
+            {
+                if (settingsContextLbl != null)
+                {
+                    settingsContextLbl.text = FindSnapshotContextLabel(snapshot!);
+                    settingsContextLbl.color = UIStyle.Accent;
+                }
+
+                if (settingsContextBtnImg != null)
+                    settingsContextBtnImg.color = UIStyle.Accent with { a = 0.22f };
+
+                if (alphaLbl != null)
+                    alphaLbl.text = snapshot!.ResolveGhostColor(CurrentGlobalGhostColor).a.ToString("0.00");
+            }
+            else
+            {
+                if (settingsContextLbl != null)
+                {
+                    settingsContextLbl.text = GlobalSettingsContextText;
+                    settingsContextLbl.color = UIStyle.Text;
+                }
+
+                if (settingsContextBtnImg != null)
+                    settingsContextBtnImg.color = UIStyle.Overlay with { a = 0.55f };
+
+                if (alphaLbl != null)
+                    alphaLbl.text = AlphaString();
+            }
+        }
+
+        private string FindSnapshotContextLabel(ReplaySnapshot snapshot)
+        {
+            foreach (var route in PBManager.AllHistories())
+            {
+                for (int i = 0; i < route.Snapshots.Count; i++)
+                {
+                    if (route.Snapshots[i].SnapshotId != snapshot.SnapshotId)
+                        continue;
+
+                    return $"Edit: {SnapshotLabel(route.Snapshots[i], i)}";
+                }
+            }
+
+            return "Edit: Snapshot";
         }
     }
 }

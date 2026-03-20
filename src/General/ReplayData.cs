@@ -1,4 +1,7 @@
-﻿namespace ReplayTimerMod
+﻿using System.Collections.Generic;
+using UnityEngine;
+
+namespace ReplayTimerMod
 {
     public struct FrameData
     {
@@ -72,6 +75,82 @@
             Key = key;
             TotalTime = totalTime;
             Frames = frames;
+        }
+    }
+
+    public sealed class ReplaySnapshot
+    {
+        public string SnapshotId { get; }
+        public long CapturedAtUtcTicks { get; }
+        public RecordedRoom Room { get; }
+        public RoomKey Key => Room.Key;
+        public float TotalTime => Room.TotalTime;
+        public string EncodedData { get; }
+        public bool HasCapturedAt => CapturedAtUtcTicks > 0;
+        public bool HasVisualOverride { get; }
+        public float ColorR { get; }
+        public float ColorG { get; }
+        public float ColorB { get; }
+        public float Alpha { get; }
+        public Color OverrideColor => new Color(ColorR, ColorG, ColorB, Alpha);
+
+        public ReplaySnapshot(string snapshotId, long capturedAtUtcTicks,
+            RecordedRoom room, string? encodedData = null,
+            bool hasVisualOverride = false,
+            float colorR = 1f, float colorG = 1f, float colorB = 1f, float alpha = 0.4f)
+        {
+            SnapshotId = string.IsNullOrEmpty(snapshotId)
+                ? System.Guid.NewGuid().ToString("N")
+                : snapshotId;
+            CapturedAtUtcTicks = capturedAtUtcTicks;
+            Room = room;
+            EncodedData = encodedData ?? ReplayShareEncoder.Encode(room);
+            HasVisualOverride = hasVisualOverride;
+            ColorR = Mathf.Clamp01(colorR);
+            ColorG = Mathf.Clamp01(colorG);
+            ColorB = Mathf.Clamp01(colorB);
+            Alpha = Mathf.Clamp01(alpha);
+        }
+
+        public Color ResolveGhostColor(Color globalColor) =>
+            HasVisualOverride
+                ? OverrideColor
+                : new Color(globalColor.r, globalColor.g, globalColor.b, globalColor.a);
+
+        public ReplaySnapshot WithVisualOverride(bool hasVisualOverride, Color color) =>
+            new ReplaySnapshot(
+                SnapshotId,
+                CapturedAtUtcTicks,
+                Room,
+                EncodedData,
+                hasVisualOverride,
+                color.r,
+                color.g,
+                color.b,
+                color.a);
+
+        public static ReplaySnapshot CreateNew(RecordedRoom room,
+            string? encodedData = null, long? capturedAtUtcTicks = null) =>
+            new ReplaySnapshot(
+                System.Guid.NewGuid().ToString("N"),
+                capturedAtUtcTicks ?? System.DateTime.UtcNow.Ticks,
+                room,
+                encodedData);
+    }
+
+    public sealed class RouteReplayHistory
+    {
+        public RoomKey Key { get; }
+        public IList<ReplaySnapshot> Snapshots { get; }
+        public ReplaySnapshot Current { get; }
+        public int Count => Snapshots.Count;
+
+        public RouteReplayHistory(RoomKey key, IList<ReplaySnapshot> snapshots,
+            ReplaySnapshot current)
+        {
+            Key = key;
+            Snapshots = snapshots;
+            Current = current;
         }
     }
 }

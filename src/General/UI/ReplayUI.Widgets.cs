@@ -61,13 +61,14 @@ namespace ReplayTimerMod
             cg.blocksRaycasts = false;
 
             var t = go.AddComponent<Text>();
-            t.font = UIStyle.Arial ?? UIStyle.Trajan;
+            t.font = UIStyle.Arial;// ?? UIStyle.Trajan;
             t.fontSize = fontSize;
             t.color = color;
             t.alignment = anchor;
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
             t.verticalOverflow = VerticalWrapMode.Truncate;
             t.text = text;
+            t.alignByGeometry = true;
 
             var rt = go.GetComponent<RectTransform>();
             if (fill)

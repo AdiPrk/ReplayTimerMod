@@ -35,9 +35,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="**\*.cs" />
+    <Compile Include="**\*.cs" Exclude="obj\**\*.cs" />
     <Compile Include="..\General\**\*.cs" />
     <None Include="..\..\README.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+      <EmbeddedResource Include="..\..\Resources\Arial.ttf" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(HollowKnightManagedFolder)' != ''">
@@ -85,9 +89,9 @@
 
   <Target Name="ValidateHKReferences" BeforeTargets="CoreCompile">
     <Error Condition="'$(HollowKnightManagedFolder)' == ''"
-           Text="HollowKnightManagedFolder is empty. Set it in .config/local/HollowKnightPath.props." />
+           Text="HollowKnightManagedFolder is empty. Set it in .config/local/HollowKnightPath1578.props." />
     <Error Condition="!Exists('$(HollowKnightManagedFolder)\Assembly-CSharp.dll')"
-           Text="Assembly-CSharp.dll not found under $(HollowKnightManagedFolder). Update .config/local/HollowKnightPath.props to your Hollow Knight_Data/Managed folder." />
+           Text="Assembly-CSharp.dll not found under $(HollowKnightManagedFolder). Update .config/local/HollowKnightPath1578.props to your Hollow Knight_Data/Managed folder." />
   </Target>
 
   <!-- Merge ICSharpCode.SharpZipLib into our output DLL so it does not need to be shipped separately. -->

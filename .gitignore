@@ -438,3 +438,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Thunderstore build artifacts
+thunderstore/dist/
+thunderstore/temp/*.dll
