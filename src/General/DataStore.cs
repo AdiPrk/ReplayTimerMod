@@ -48,10 +48,87 @@ namespace ReplayTimerMod
 
         public static void Init(string baseDirectory)
         {
-            DataDirectory = Path.Combine(baseDirectory, "ReplayMod");
+            DataDirectory = baseDirectory;
             Directory.CreateDirectory(DataDirectory);
             Log.LogInfo($"[DataStore] Directory: {DataDirectory}");
+
+            MigrateFromLegacy();
         }
+
+#if SILKSONG_BUILD
+        private static void MigrateFromLegacy()
+        {
+            try
+            {
+                // Old Silksong path: <AssemblyDir>/../../data/ReplayMod
+                string assemblyDir = Path.GetDirectoryName(
+                    System.Reflection.Assembly.GetExecutingAssembly().Location);
+
+                // holy ugly
+                string legacyDir = Path.Combine(Path.Combine(Path.Combine(assemblyDir, ".."), ".."), Path.Combine("data", "ReplayMod"));
+                legacyDir = Path.GetFullPath(legacyDir);
+
+                if (!Directory.Exists(legacyDir)) return;
+                if (Path.GetFullPath(legacyDir) == Path.GetFullPath(DataDirectory)) return;
+
+                string[] files = Directory.GetFiles(legacyDir, "*.json");
+                if (files.Length == 0) return;
+
+                int moved = 0;
+                foreach (string src in files)
+                {
+                    string dest = Path.Combine(DataDirectory, Path.GetFileName(src));
+                    if (File.Exists(dest)) continue;  // never overwrite newer data
+                    File.Move(src, dest);
+                    moved++;
+                }
+
+                if (moved > 0)
+                    Log.LogInfo($"[DataStore] Migrated {moved} file(s) from legacy path: {legacyDir}");
+            }
+            catch (Exception ex)
+            {
+                Log.LogWarning($"[DataStore] Legacy migration failed: {ex.Message}");
+            }
+        }
+
+#else
+        private static void MigrateFromLegacy()
+        {
+            try
+            {
+                // Old Silksong path: <AssemblyDir>/../../data/ReplayMod
+                string assemblyDir = Path.GetDirectoryName(
+                    System.Reflection.Assembly.GetExecutingAssembly().Location);
+
+                string legacyDir = Path.Combine(assemblyDir, "ReplayMod");
+                legacyDir = Path.GetFullPath(legacyDir);
+
+                if (!Directory.Exists(legacyDir)) return;
+                if (Path.GetFullPath(legacyDir) == Path.GetFullPath(DataDirectory)) return;
+
+                string[] files = Directory.GetFiles(legacyDir, "*.json");
+                if (files.Length == 0) return;
+
+                int moved = 0;
+                foreach (string src in files)
+                {
+                    string dest = Path.Combine(DataDirectory, Path.GetFileName(src));
+                    if (File.Exists(dest)) continue;  // never overwrite newer data
+                    File.Move(src, dest);
+                    moved++;
+                }
+
+                if (moved > 0)
+                    Log.LogInfo($"[DataStore] Migrated {moved} file(s) from legacy path: {legacyDir}");
+            }
+            catch (Exception ex)
+            {
+                Log.LogWarning($"[DataStore] Legacy migration failed: {ex.Message}");
+            }
+        }
+
+#endif
 
         // ── Index I/O ─────────────────────────────────────────────────────────
 

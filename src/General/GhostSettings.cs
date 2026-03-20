@@ -1,148 +1,134 @@
-﻿using BepInEx.Configuration;
+﻿using System.Reflection;
 using UnityEngine;
 
 namespace ReplayTimerMod
 {
-    // Global ghost rendering settings. Backed by BepInEx ConfigEntry<T> so
-    // values persist across sessions in BepInEx/config/io.github.adiprk.replaytimermod.cfg.
-    //
-    // Call GhostSettings.Init(Config) from the plugin's Awake() before any
-    // other code reads these properties.
+    public sealed class GhostSettingsData
+    {
+        public bool  TrackingEnabled         = true;
+        public bool  GhostEnabled            = true;
+        public float ColorR                  = 1f;
+        public float ColorG                  = 1f;
+        public float ColorB                  = 1f;
+        public float Alpha                   = 0.4f;
+        public bool  MultiReplayEnabled      = false;
+        public bool  SaveAllRunsEnabled      = false;
+        public int   MaxSavedReplaysPerRoute = 5;
+    }
+
     public static class GhostSettings
     {
-        private static ConfigEntry<bool>? _ghostEnabled;
-        private static ConfigEntry<float>? _r;
-        private static ConfigEntry<float>? _g;
-        private static ConfigEntry<float>? _b;
-        private static ConfigEntry<float>? _alpha;
-        private static ConfigEntry<bool>? _multiReplayEnabled;
-        private static ConfigEntry<bool>? _saveAllRunsEnabled;
-        private static ConfigEntry<int>? _maxSavedReplaysPerRoute;
-
-        // ── Init ──────────────────────────────────────────────────────────────
-
-        private static ConfigEntry<bool>? _trackingEnabled;
-
-        public static void Init(ConfigFile config)
-        {
-            _trackingEnabled = config.Bind(
-                section: "Mod",
-                key: "TrackingEnabled",
-                defaultValue: true,
-                description: "Master switch. When false, no rooms are recorded and no PBs are updated.");
-
-            _ghostEnabled = config.Bind(
-                section: "Ghost",
-                key: "Enabled",
-                defaultValue: true,
-                description: "Show the ghost during playback.");
-
-            _r = config.Bind(
-                section: "Ghost",
-                key: "ColorR",
-                defaultValue: 1f,
-                new ConfigDescription("Ghost colour red channel (0-1).",
-                    new AcceptableValueRange<float>(0f, 1f)));
-
-            _g = config.Bind(
-                section: "Ghost",
-                key: "ColorG",
-                defaultValue: 1f,
-                new ConfigDescription("Ghost colour green channel (0-1).",
-                    new AcceptableValueRange<float>(0f, 1f)));
-
-            _b = config.Bind(
-                section: "Ghost",
-                key: "ColorB",
-                defaultValue: 1f,
-                new ConfigDescription("Ghost colour blue channel (0-1).",
-                    new AcceptableValueRange<float>(0f, 1f)));
-
-            _alpha = config.Bind(
-                section: "Ghost",
-                key: "Alpha",
-                defaultValue: 0.4f,
-                new ConfigDescription("Ghost opacity (0 = invisible, 1 = fully opaque).",
-                    new AcceptableValueRange<float>(0f, 1f)));
-
-            _multiReplayEnabled = config.Bind(
-                section: "Ghost",
-                key: "MultiReplayEnabled",
-                defaultValue: false,
-                description: "Allow multiple selected replays to play at the same time.");
-
-            _saveAllRunsEnabled = config.Bind(
-                section: "Recording",
-                key: "SaveAllRunsEnabled",
-                defaultValue: false,
-                description: "Save every completed non-duplicate run instead of PB-only.");
-
-            _maxSavedReplaysPerRoute = config.Bind(
-                section: "Recording",
-                key: "MaxSavedReplaysPerRoute",
-                defaultValue: 5,
-                new ConfigDescription("Maximum number of saved replays to keep per route.",
-                    new AcceptableValueRange<int>(1, int.MaxValue)));
-        }
+        private static string _filePath = "";
+        private static readonly GhostSettingsData _d = new GhostSettingsData();
 
         // ── Properties ────────────────────────────────────────────────────────
-        // Fall back to hardcoded defaults when Init() hasn't been called yet
 
         public static bool TrackingEnabled
         {
-            get => _trackingEnabled?.Value ?? true;
-            set { if (_trackingEnabled != null) _trackingEnabled.Value = value; }
+            get => _d.TrackingEnabled;
+            set { _d.TrackingEnabled = value; Save(); }
         }
 
         public static bool GhostEnabled
         {
-            get => _ghostEnabled?.Value ?? true;
-            set { if (_ghostEnabled != null) _ghostEnabled.Value = value; }
-        }
-
-        public static Color GhostColor
-        {
-            get => new Color(
-                _r?.Value ?? 1f,
-                _g?.Value ?? 1f,
-                _b?.Value ?? 1f,
-                _alpha?.Value ?? 0.4f);
-            set
-            {
-                if (_r != null) _r.Value = value.r;
-                if (_g != null) _g.Value = value.g;
-                if (_b != null) _b.Value = value.b;
-                if (_alpha != null) _alpha.Value = value.a;
-            }
-        }
-
-        // Convenience accessor for alpha
-        public static float GhostAlpha
-        {
-            get => _alpha?.Value ?? 0.4f;
-            set { if (_alpha != null) _alpha.Value = Mathf.Clamp01(value); }
+            get => _d.GhostEnabled;
+            set { _d.GhostEnabled = value; Save(); }
         }
 
         public static bool MultiReplayEnabled
         {
-            get => _multiReplayEnabled?.Value ?? false;
-            set { if (_multiReplayEnabled != null) _multiReplayEnabled.Value = value; }
+            get => _d.MultiReplayEnabled;
+            set { _d.MultiReplayEnabled = value; Save(); }
         }
 
         public static bool SaveAllRunsEnabled
         {
-            get => _saveAllRunsEnabled?.Value ?? false;
-            set { if (_saveAllRunsEnabled != null) _saveAllRunsEnabled.Value = value; }
+            get => _d.SaveAllRunsEnabled;
+            set { _d.SaveAllRunsEnabled = value; Save(); }
         }
 
         public static int MaxSavedReplaysPerRoute
         {
-            get => Mathf.Max(1, _maxSavedReplaysPerRoute?.Value ?? 5);
-            set
+            get => Mathf.Max(1, _d.MaxSavedReplaysPerRoute);
+            set { _d.MaxSavedReplaysPerRoute = Mathf.Max(1, value); Save(); }
+        }
+
+        public static Color GhostColor
+        {
+            get => new Color(_d.ColorR, _d.ColorG, _d.ColorB, _d.Alpha);
+            set { _d.ColorR = value.r; _d.ColorG = value.g; _d.ColorB = value.b; _d.Alpha = value.a; Save(); }
+        }
+
+        public static float GhostAlpha
+        {
+            get => _d.Alpha;
+            set { _d.Alpha = Mathf.Clamp01(value); Save(); }
+        }
+
+        // ── Init ─────────────────────────────────────────────────────────────
+
+        public static void Init(string baseDirectory)
+        {
+            _filePath = System.IO.Path.Combine(
+                System.IO.Path.Combine(baseDirectory, "ReplayMod"), "settings.txt");
+            Load();
+        }
+
+        // ── Save / Load ───────────────────────────────────────────────────────
+
+        public static void Save()
+        {
+            if (string.IsNullOrEmpty(_filePath)) return;
+            try
             {
-                if (_maxSavedReplaysPerRoute != null)
-                    _maxSavedReplaysPerRoute.Value = Mathf.Max(1, value);
+                var lines = new System.Collections.Generic.List<string>();
+                foreach (var f in typeof(GhostSettingsData).GetFields(BindingFlags.Public | BindingFlags.Instance))
+                    lines.Add($"{f.Name}={System.Convert.ToString(f.GetValue(_d), System.Globalization.CultureInfo.InvariantCulture)}");
+                System.IO.File.WriteAllLines(_filePath, lines.ToArray());
             }
+            catch (System.Exception ex)
+            {
+                UnityEngine.Debug.LogError($"[GhostSettings] Save failed: {ex.Message}");
+            }
+        }
+
+        private static void Load()
+        {
+            if (!System.IO.File.Exists(_filePath)) return;
+            try
+            {
+                var defaults = new GhostSettingsData();
+                foreach (string line in System.IO.File.ReadAllLines(_filePath))
+                {
+                    int sep = line.IndexOf('=');
+                    if (sep < 0) continue;
+                    string key = line.Substring(0, sep).Trim();
+                    string val = line.Substring(sep + 1).Trim();
+
+                    var f = typeof(GhostSettingsData).GetField(key,
+                        BindingFlags.Public | BindingFlags.Instance);
+                    if (f == null) continue;
+
+                    try { f.SetValue(_d, ParseField(f.FieldType, val, f.GetValue(defaults))); }
+                    catch { /* leave default */ }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                UnityEngine.Debug.LogError($"[GhostSettings] Load failed: {ex.Message}");
+            }
+        }
+
+        private static object ParseField(System.Type t, string val, object fallback)
+        {
+            try
+            {
+                if (t == typeof(bool))  return bool.Parse(val);
+                if (t == typeof(int))   return int.Parse(val, System.Globalization.CultureInfo.InvariantCulture);
+                if (t == typeof(float)) return float.Parse(val, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture);
+            }
+            catch { }
+            return fallback;
         }
     }
 }
