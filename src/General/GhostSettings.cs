@@ -14,6 +14,7 @@ namespace ReplayTimerMod
         public bool  MultiReplayEnabled      = false;
         public bool  SaveAllRunsEnabled      = false;
         public int   MaxSavedReplaysPerRoute = 5;
+        public bool  TimerHudEnabled         = true;
     }
 
     public static class GhostSettings
@@ -63,6 +64,12 @@ namespace ReplayTimerMod
         {
             get => _d.Alpha;
             set { _d.Alpha = Mathf.Clamp01(value); Save(); }
+        }
+
+        public static bool TimerHudEnabled
+        {
+            get => _d.TimerHudEnabled;
+            set { _d.TimerHudEnabled = value; Save(); }
         }
 
         // ── Init ─────────────────────────────────────────────────────────────

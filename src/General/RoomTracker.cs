@@ -19,22 +19,17 @@ namespace ReplayTimerMod
         // ── Public state ─────────────────────────────────────────────────────
         public static bool IsRecording { get; private set; } = false;
         public static string CurrentScene { get; private set; } = "";
+        public static string PreviousScene { get; private set; } = ""; // NEW
         public static string EntryFromScene { get; private set; } = "";
         public static float CurrentRoomTime { get; private set; } = 0f;
 
         // ── Events ───────────────────────────────────────────────────────────
-        // sceneName, entryFromScene
         public static event Action<string, string>? OnRoomEnter;
-
-        // sceneName, entryFromScene, exitToScene, lrTime
         public static event Action<string, string, string, float>? OnRoomExit;
-
         public static event Action? OnRecordingDiscarded;
 
         // ── Private state ────────────────────────────────────────────────────
         private static string lastSceneName = "";
-
-        // Set by OnGateTransitionBegin; consumed and cleared in OnActiveSceneChanged.
         private static bool pendingGateTransition = false;
 
         // ── Savestate reflection ──────────────────────────────────────────────
@@ -67,16 +62,12 @@ namespace ReplayTimerMod
             catch { return false; }
         }
 
-        // ── Init ──────────────────────────────────────────────────────────────
-
         public static void Init()
         {
             lastSceneName = "";
             GameHooks.OnPlayerDead += HandleInvalidation;
             GameHooks.OnGateTransitionBegin += HandleGateTransitionBegin;
         }
-
-        // ── Handlers ─────────────────────────────────────────────────────────
 
         private static void HandleGateTransitionBegin(string destScene, string entryGate)
         {
@@ -112,7 +103,6 @@ namespace ReplayTimerMod
 
             bool toMenu = toName == MENU_TITLE || toName == QUIT_TO_MENU;
 
-            // ── Close out current recording ───────────────────────────────────
             if (IsRecording)
             {
                 if (arrivedViaGate && !isOverTime() && !toMenu)
@@ -141,9 +131,9 @@ namespace ReplayTimerMod
                 }
             }
 
-            // ── Start new recording ───────────────────────────────────────────
             if (arrivedViaGate && !toMenu)
             {
+                PreviousScene = CurrentScene; // UPDATE PREVIOUS SCENE
                 CurrentScene = toName;
                 EntryFromScene = fromName;
                 CurrentRoomTime = 0f;
@@ -154,6 +144,7 @@ namespace ReplayTimerMod
             }
             else
             {
+                PreviousScene = CurrentScene; // UPDATE PREVIOUS SCENE
                 CurrentScene = toName;
                 EntryFromScene = "";
                 CurrentRoomTime = 0f;
@@ -165,7 +156,6 @@ namespace ReplayTimerMod
             bool isOverTime() => CurrentRoomTime > MAX_ROOM_TIME;
         }
 
-        // ── Tick ──────────────────────────────────────────────────────────────
         public static void Tick(bool shouldTick)
         {
             string currentSceneName = GetCurrentSceneName();
@@ -185,15 +175,8 @@ namespace ReplayTimerMod
 
         private static string GetCurrentSceneName()
         {
-            try
-            {
-                return GameManager.instance?.GetSceneNameString() ?? "";
-            }
-            catch
-            {
-                return "";
-            }
+            try { return GameManager.instance?.GetSceneNameString() ?? ""; }
+            catch { return ""; }
         }
-
     }
 }

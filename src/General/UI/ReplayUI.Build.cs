@@ -40,20 +40,14 @@ namespace ReplayTimerMod
             int bodyH = PH - bodyY - 1 - STGSH;
             int scrollBodyH = bodyH - SUBHDR - 1;
 
-            // Both columns now have matching sub-headers. A single HLine at
-            // bodyY + SUBHDR spans the full panel width, visually unifying them.
             BuildLeftSubHeader(bodyY);
             BuildRightSubHeader(bodyY);
             HLine(panelGO.transform, 0, bodyY + SUBHDR, PW);
 
             VLine(panelGO.transform, LW, bodyY, bodyH);
 
-            // Left scroll area starts below its sub-header.
             leftContent = BuildScrollArea(panelGO.transform, "LeftScroll",
                 0, bodyY + SUBHDR + 1, LW, scrollBodyH);
-
-            // Grab the ScrollRect from the grandparent of Content:
-            //   BuildScrollArea returns Content; hierarchy is sr > Viewport > Content.
             leftScrollRect = leftContent.parent.parent.GetComponent<ScrollRect>();
 
             rightContent = BuildScrollArea(panelGO.transform, "RightScroll",
@@ -71,7 +65,6 @@ namespace ReplayTimerMod
             Rect(hdr, 0, 0, PW, HDR);
             HLine(panelGO.transform, 0, HDR, PW);
 
-            // [-] collapse button - far right
             var collBtn = MakeGO("Collapse", hdr.transform);
             Img(collBtn, UIStyle.Overlay);
             Btn(collBtn, TogglePanel);
@@ -82,7 +75,6 @@ namespace ReplayTimerMod
             int btnH = UIStyle.H(22);
             int btnY = (HDR - btnH) / 2;
 
-            // [Clear all] - left of collapse
             int clearW = UIStyle.W(76);
             int clearX = PW - HDR - M - clearW;
             var clearGO = MakeGO("ClearAll", hdr.transform);
@@ -93,7 +85,6 @@ namespace ReplayTimerMod
             clearAllBtnLbl = MakeLbl(clearGO.transform, "Clear all",
                 UIStyle.FontSizeSm - 2, UIStyle.Red, TextAnchor.MiddleCenter, fill: true);
 
-            // [Export all] - copies to clipboard
             int exportW = UIStyle.W(76);
             int exportX = clearX - M - exportW;
             var exportGO = MakeGO("ExportAll", hdr.transform);
@@ -104,7 +95,6 @@ namespace ReplayTimerMod
             exportAllBtnLbl = MakeLbl(exportGO.transform, "Copy all",
                 UIStyle.FontSizeSm - 2, UIStyle.Accent, TextAnchor.MiddleCenter, fill: true);
 
-            // [Download all] - saves to disk
             int dlW = UIStyle.W(82);
             int dlX = exportX - M - dlW;
             var dlGO = MakeGO("DownloadAll", hdr.transform);
@@ -115,7 +105,6 @@ namespace ReplayTimerMod
             downloadAllBtnLbl = MakeLbl(dlGO.transform, "Download all",
                 UIStyle.FontSizeSm - 2, UIStyle.Accent, TextAnchor.MiddleCenter, fill: true);
 
-            // [Open Folder] - small button to jump to the directory
             int openW = UIStyle.W(82);
             int openX = dlX - M - openW;
             var openGO = MakeGO("OpenFolder", hdr.transform);
@@ -125,13 +114,12 @@ namespace ReplayTimerMod
             MakeLbl(openGO.transform, "Open Exports", UIStyle.FontSizeSm - 2,
                 UIStyle.Text, TextAnchor.MiddleCenter, fill: true);
 
-            // Title - fills remaining left space
             MakeLbl(hdr.transform, "Replay Times", UIStyle.FontSizeLg,
                 UIStyle.Text, TextAnchor.MiddleLeft,
                 x: M, w: openX - M - M, h: HDR);
         }
 
-        // ── Left sub-header: [● Go to current room] ──────────────────────────
+        // ── Left sub-header: [Current] [Previous] ──────────────────────────
         private void BuildLeftSubHeader(int bodyY)
         {
             var lhdr = MakeGO("LeftSubHeader", panelGO!.transform);
@@ -141,14 +129,28 @@ namespace ReplayTimerMod
             int btnH = UIStyle.H(20);
             int btnY = (SUBHDR - btnH) / 2;
 
+            int gap = M;
+            int btnW = (LW - (M * 2) - gap) / 2;
+
+            // --- Current Room Button ---
             var jumpBtn = MakeGO("JumpToCurrent", lhdr.transform);
             jumpToCurrentBtnImg = jumpBtn.AddComponent<Image>();
             jumpToCurrentBtnImg.color = UIStyle.Gold with { a = 0.18f };
             jumpBtn.AddComponent<Button>().onClick.AddListener(OnJumpToCurrentClicked);
-            Rect(jumpBtn, M, btnY, LW - M * 2, btnH);
+            Rect(jumpBtn, M, btnY, btnW, btnH);
             jumpToCurrentBtnLbl = MakeLbl(jumpBtn.transform,
-                "● Go to current room", UIStyle.FontSizeSm - 2,
+                "Current", UIStyle.FontSizeSm - 2,
                 UIStyle.Gold, TextAnchor.MiddleCenter, fill: true);
+
+            // --- Previous Room Button ---
+            var lastBtn = MakeGO("JumpToLast", lhdr.transform);
+            jumpToLastBtnImg = lastBtn.AddComponent<Image>();
+            jumpToLastBtnImg.color = UIStyle.Accent with { a = 0.18f };
+            lastBtn.AddComponent<Button>().onClick.AddListener(OnJumpToLastClicked);
+            Rect(lastBtn, M + btnW + gap, btnY, btnW, btnH);
+            jumpToLastBtnLbl = MakeLbl(lastBtn.transform,
+                "Previous", UIStyle.FontSizeSm - 2,
+                UIStyle.Accent, TextAnchor.MiddleCenter, fill: true);
         }
 
         // ── Right sub-header: scene name | [Export scene] [Paste] [Clear scene]
@@ -161,7 +163,6 @@ namespace ReplayTimerMod
             int btnH = UIStyle.H(20);
             int btnY = (SUBHDR - btnH) / 2;
 
-            // [Clear scene] - far right
             int clearW = UIStyle.W(76);
             var clearBtn = MakeGO("ClearScene", rhdr.transform);
             Img(clearBtn, UIStyle.Red with { a = 0.25f });
@@ -170,7 +171,6 @@ namespace ReplayTimerMod
             MakeLbl(clearBtn.transform, "Clear scene", UIStyle.FontSizeSm - 2,
                 UIStyle.Red, TextAnchor.MiddleCenter, fill: true);
 
-            // [Paste] - left of [Clear scene]
             int pasteW = UIStyle.W(52);
             int pasteX = RW - clearW - M - pasteW - M;
             var pasteBtn = MakeGO("Paste", rhdr.transform);
@@ -180,7 +180,6 @@ namespace ReplayTimerMod
             MakeLbl(pasteBtn.transform, "Paste", UIStyle.FontSizeSm - 2,
                 UIStyle.Accent, TextAnchor.MiddleCenter, fill: true);
 
-            // [Copy scene] - left of [Paste]
             int expW = UIStyle.W(72);
             int expX = pasteX - M - expW;
             var expBtn = MakeGO("ExportScene", rhdr.transform);
@@ -190,14 +189,12 @@ namespace ReplayTimerMod
             MakeLbl(expBtn.transform, "Copy scene", UIStyle.FontSizeSm - 2,
                 UIStyle.Accent, TextAnchor.MiddleCenter, fill: true);
 
-            // Status label - brief feedback, left of all buttons
             int statusW = UIStyle.W(110);
             int statusX = expX - M - statusW;
             pasteStatus = MakeLbl(rhdr.transform, "", UIStyle.FontSizeSm - 2,
                 UIStyle.Subtext, TextAnchor.MiddleRight,
                 x: statusX, w: statusW, h: SUBHDR);
 
-            // Scene name - fills remaining left space
             rightHeader = MakeLbl(rhdr.transform, "Select a room",
                 UIStyle.FontSizeSm, UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: M, w: statusX - M, h: SUBHDR);
@@ -222,6 +219,7 @@ namespace ReplayTimerMod
             int ghostLabelW = UIStyle.W(38);
             int saveLabelW = UIStyle.W(34);
             int keepLabelW = UIStyle.W(34);
+            int timerLabelW = UIStyle.W(36); // HUD label
             int halfGap = M / 2;
 
             int contextW = UIStyle.W(272);
@@ -241,6 +239,7 @@ namespace ReplayTimerMod
 
             int x = M;
 
+            // --- ROW 1 ---
             MakeLbl(bar.transform, "Tracking:", UIStyle.FontSizeSm - 1,
                 UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: x, y: topY, w: trackingLabelW, h: btnH);
@@ -316,7 +315,26 @@ namespace ReplayTimerMod
             Rect(keepPlusBtn, x, topY, stepW, btnH);
             MakeLbl(keepPlusBtn.transform, "+", UIStyle.FontSizeSm - 1,
                 UIStyle.Text, TextAnchor.MiddleCenter, fill: true);
+            x += stepW;
 
+            // HUD Toggle appended to the end of Row 1
+            x = BarSeparator(bar.transform, x, topY, btnH);
+
+            MakeLbl(bar.transform, "HUD:", UIStyle.FontSizeSm - 1,
+                UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: x, y: topY, w: timerLabelW, h: btnH);
+            x += timerLabelW + halfGap;
+
+            var timerToggleBtn = MakeGO("TimerToggle", bar.transform);
+            Img(timerToggleBtn, UIStyle.Overlay);
+            Btn(timerToggleBtn, OnTimerToggleClicked);
+            Rect(timerToggleBtn, x, topY, toggleW, btnH);
+            timerToggleLbl = MakeLbl(timerToggleBtn.transform, "OFF",
+                UIStyle.FontSizeSm - 1, UIStyle.Subtext,
+                TextAnchor.MiddleCenter, fill: true);
+            timerToggleBtnImg = timerToggleBtn.GetComponent<Image>();
+
+            // --- ROW 2 ---
             int bottomX = M;
 
             var contextBtn = MakeGO("SettingsContext", bar.transform);
@@ -377,7 +395,6 @@ namespace ReplayTimerMod
             RefreshSettingsBar();
         }
 
-        // Draws a vertical bar separator in the settings strip and advances x.
         private int BarSeparator(Transform parent, int x, int btnY, int btnH)
         {
             x += UIStyle.W(10);
@@ -414,8 +431,6 @@ namespace ReplayTimerMod
 
             var vlg = ct.AddComponent<VerticalLayoutGroup>();
             vlg.childAlignment = TextAnchor.UpperLeft;
-            // vlg.childControlWidth = true;
-            // vlg.childControlHeight = true;
             vlg.childForceExpandWidth = true;
             vlg.childForceExpandHeight = false;
             vlg.spacing = 1;

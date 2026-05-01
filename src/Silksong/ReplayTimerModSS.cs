@@ -17,6 +17,7 @@ namespace ReplayTimerMod
         private FrameRecorder frameRecorder = null!;
         private GhostPlayback ghostPlayback = null!;
         private ReplayUI replayUI = null!;
+        private RoomTimerHUD roomTimerHUD = null!;
         private ReplaySelectionState replaySelectionState = null!;
 
         private bool lateInitDone = false;
@@ -44,6 +45,8 @@ namespace ReplayTimerMod
             ghostPlayback = new GhostPlayback();
             ghostPlayback.SetSelectionState(replaySelectionState);
             replayUI = new ReplayUI();
+            roomTimerHUD = new RoomTimerHUD();
+            replayUI.SetTimerHUD(roomTimerHUD);
 
             RoomTracker.Init();
 
@@ -120,6 +123,7 @@ namespace ReplayTimerMod
             frameRecorder.Tick(shouldTick);
             ghostPlayback.Tick(shouldTick);
             replayUI.Tick();
+            roomTimerHUD.Tick(shouldTick);
         }
 
         private void TryLateInit()
@@ -131,6 +135,12 @@ namespace ReplayTimerMod
             Logger.LogInfo("Hero ready - setting up UI and ghost");
             ghostPlayback.Setup();
             replayUI.Setup();
+            roomTimerHUD.Setup();
+        }
+
+        private void OnDestroy()
+        {
+            roomTimerHUD.Teardown();
         }
 
         private static bool TryGetGameManager(out GameManager gm)

@@ -57,7 +57,6 @@ namespace ReplayTimerMod
             }
         }
 
-        // Opens the export folder in Windows Explorer / File Browser
         private void OnOpenExportFolderClicked()
         {
             string dir = System.IO.Path.Combine(
@@ -245,8 +244,6 @@ namespace ReplayTimerMod
         }
 
         // ── Jump to current room (left sub-header) ────────────────────────────
-        // Selects and scrolls to the scene the player is currently in.
-        // Shows brief feedback on the button itself if no PB exists for it yet.
 
         private void OnJumpToCurrentClicked()
         {
@@ -261,14 +258,11 @@ namespace ReplayTimerMod
             bool hasPB = PBManager.AllPBs().Any(p => p.Key.SceneName == scene);
             if (!hasPB)
             {
-                ShowJumpFeedback($"No PB for {scene}", UIStyle.Subtext);
+                ShowJumpFeedback($"No PB", UIStyle.Subtext);
                 return;
             }
 
-            // Reset any feedback text before rebuilding (RebuildLeft recreates rows,
-            // so the button label is not touched, but we want a clean state).
             ResetJumpFeedback();
-
             SelectScene(scene);
             ScrollToScene(scene);
 
@@ -287,10 +281,54 @@ namespace ReplayTimerMod
         private void ResetJumpFeedback()
         {
             if (jumpToCurrentBtnLbl == null) return;
-            jumpToCurrentBtnLbl.text = "● Go to current room";
+            jumpToCurrentBtnLbl.text = "Current";
             jumpToCurrentBtnLbl.color = UIStyle.Gold;
             if (jumpToCurrentBtnImg != null)
                 jumpToCurrentBtnImg.color = UIStyle.Gold with { a = 0.18f };
+        }
+
+        // ── Jump to previous room (left sub-header) ───────────────────────────
+        
+        private void OnJumpToLastClicked()
+        {
+            string scene = RoomTracker.PreviousScene;
+
+            if (string.IsNullOrEmpty(scene))
+            {
+                ShowJumpLastFeedback("No previous", UIStyle.Subtext);
+                return;
+            }
+
+            bool hasPB = PBManager.AllPBs().Any(p => p.Key.SceneName == scene);
+            if (!hasPB)
+            {
+                ShowJumpLastFeedback($"No PB", UIStyle.Subtext);
+                return;
+            }
+
+            ResetJumpLastFeedback();
+            SelectScene(scene);
+            ScrollToScene(scene);
+
+            Log.LogInfo($"[ReplayUI] Jumped to previous room: {scene}");
+        }
+
+        private void ShowJumpLastFeedback(string msg, Color color)
+        {
+            if (jumpToLastBtnLbl == null) return;
+            jumpToLastBtnLbl.text = msg;
+            jumpToLastBtnLbl.color = color;
+            if (jumpToLastBtnImg != null)
+                jumpToLastBtnImg.color = color with { a = 0.18f };
+        }
+
+        private void ResetJumpLastFeedback()
+        {
+            if (jumpToLastBtnLbl == null) return;
+            jumpToLastBtnLbl.text = "Previous";
+            jumpToLastBtnLbl.color = UIStyle.Accent;
+            if (jumpToLastBtnImg != null)
+                jumpToLastBtnImg.color = UIStyle.Accent with { a = 0.18f };
         }
 
         // ── Ghost settings ────────────────────────────────────────────────────
@@ -402,5 +440,16 @@ namespace ReplayTimerMod
 
         private static string AlphaString() =>
             GhostSettings.GhostAlpha.ToString("0.00");
+            
+        // ── Timer HUD settings ────────────────────────────────────────────────
+        private void OnTimerToggleClicked()
+        {
+            GhostSettings.TimerHudEnabled = !GhostSettings.TimerHudEnabled;
+            if (!GhostSettings.TimerHudEnabled && timerHud != null)
+            {
+                timerHud.Disarm();
+            }
+            RefreshSettingsBar();
+        }
     }
 }
