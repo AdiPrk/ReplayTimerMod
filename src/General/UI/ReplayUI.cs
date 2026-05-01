@@ -1,5 +1,4 @@
-﻿// (Keep all the standard using statements)
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using BepInEx.Logging;
 using GlobalEnums;
@@ -40,8 +39,12 @@ namespace ReplayTimerMod
         private Text? rightHeader;          
         private Text? pasteStatus;          
         private ScrollRect? leftScrollRect;
+
+        // Jump Buttons
         private Text? jumpToCurrentBtnLbl;
         private Image? jumpToCurrentBtnImg;
+        private Text? jumpToLastBtnLbl;
+        private Image? jumpToLastBtnImg;
 
         private int PW, PH;    
         private int LW, RW;    
@@ -76,7 +79,7 @@ namespace ReplayTimerMod
             TH = UIStyle.H(28);
             HDR = UIStyle.H(34);
             SUBHDR = UIStyle.H(28);
-            STGSH = UIStyle.H(64); // Reverted to 64 for a tight 2-row layout
+            STGSH = UIStyle.H(64);
             PW = UIStyle.W(680);
             PH = UIStyle.H(576);
             LW = UIStyle.W(200);
@@ -116,13 +119,20 @@ namespace ReplayTimerMod
                 canvasGO!.SetActive(true);
                 tabGO!.SetActive(true);
                 wasPaused = true;
+                
                 RefreshSettingsBar();
+                
+                // Keep data fresh if the panel was left open from last pause
+                if (expanded)
+                {
+                    RebuildLeft();
+                    if (selectedScene != null) RebuildRight(selectedScene);
+                }
             }
 
             if (!paused && wasPaused)
             {
                 canvasGO!.SetActive(false);
-                expanded = false;
                 ResetClearAllConfirm();
                 wasPaused = false;
                 return;
@@ -130,6 +140,7 @@ namespace ReplayTimerMod
 
             if (!paused) return;
 
+            // Maintain visibility state
             panelGO!.SetActive(expanded);
 
             if (expanded && rebuildPending)

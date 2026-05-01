@@ -119,7 +119,7 @@ namespace ReplayTimerMod
                 x: M, w: openX - M - M, h: HDR);
         }
 
-        // ── Left sub-header: [● Go to current room] ──────────────────────────
+        // ── Left sub-header: [Current] [Previous] ──────────────────────────
         private void BuildLeftSubHeader(int bodyY)
         {
             var lhdr = MakeGO("LeftSubHeader", panelGO!.transform);
@@ -129,14 +129,28 @@ namespace ReplayTimerMod
             int btnH = UIStyle.H(20);
             int btnY = (SUBHDR - btnH) / 2;
 
+            int gap = M;
+            int btnW = (LW - (M * 2) - gap) / 2;
+
+            // --- Current Room Button ---
             var jumpBtn = MakeGO("JumpToCurrent", lhdr.transform);
             jumpToCurrentBtnImg = jumpBtn.AddComponent<Image>();
             jumpToCurrentBtnImg.color = UIStyle.Gold with { a = 0.18f };
             jumpBtn.AddComponent<Button>().onClick.AddListener(OnJumpToCurrentClicked);
-            Rect(jumpBtn, M, btnY, LW - M * 2, btnH);
+            Rect(jumpBtn, M, btnY, btnW, btnH);
             jumpToCurrentBtnLbl = MakeLbl(jumpBtn.transform,
-                "● Go to current room", UIStyle.FontSizeSm - 2,
+                "Current", UIStyle.FontSizeSm - 2,
                 UIStyle.Gold, TextAnchor.MiddleCenter, fill: true);
+
+            // --- Previous Room Button ---
+            var lastBtn = MakeGO("JumpToLast", lhdr.transform);
+            jumpToLastBtnImg = lastBtn.AddComponent<Image>();
+            jumpToLastBtnImg.color = UIStyle.Accent with { a = 0.18f };
+            lastBtn.AddComponent<Button>().onClick.AddListener(OnJumpToLastClicked);
+            Rect(lastBtn, M + btnW + gap, btnY, btnW, btnH);
+            jumpToLastBtnLbl = MakeLbl(lastBtn.transform,
+                "Previous", UIStyle.FontSizeSm - 2,
+                UIStyle.Accent, TextAnchor.MiddleCenter, fill: true);
         }
 
         // ── Right sub-header: scene name | [Export scene] [Paste] [Clear scene]

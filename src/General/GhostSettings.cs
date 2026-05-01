@@ -14,7 +14,7 @@ namespace ReplayTimerMod
         public bool  MultiReplayEnabled      = false;
         public bool  SaveAllRunsEnabled      = false;
         public int   MaxSavedReplaysPerRoute = 5;
-        public bool  TimerHudEnabled         = false;
+        public bool  TimerHudEnabled         = true;
     }
 
     public static class GhostSettings

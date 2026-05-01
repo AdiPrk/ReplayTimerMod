@@ -13,7 +13,6 @@ namespace ReplayTimerMod
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("RoomTimerHUD");
 
-        // Pushed fully to the top-left, with a tiny safety margin to prevent monitor clipping
         private const int MARGIN_X = 8;
         private const int MARGIN_Y = 8; 
 
@@ -285,10 +284,10 @@ namespace ReplayTimerMod
             int pbRowH    = UIStyle.H(16);
             int rowGap    = UIStyle.H(0);
 
-            // Left-aligned grid definitions
-            int timerW  = UIStyle.W(60);
+            // Left-aligned grid definitions with adjusted width
+            int timerW  = UIStyle.W(60); 
             int deltaW  = UIStyle.W(70);
-            int colGap  = UIStyle.W(8);
+            int colGap  = UIStyle.W(4);  
             int pbLblW  = UIStyle.W(20);
             int pbTimeW = UIStyle.W(60);
 
@@ -308,12 +307,10 @@ namespace ReplayTimerMod
             rootRt.sizeDelta        = new Vector2(innerW, innerH);
             _timerRootGO.SetActive(false);
 
-            // --- Row 1: Time [Left] -> Delta [Right] ---
             int timerRowTop = 0;
             int timerX      = 0;
             int deltaX      = timerX + timerW + colGap;
 
-            // Using LowerLeft aligns the baselines of the differing font sizes perfectly
             _timerText = MakeLbl(_timerRootGO.transform, "0:00.00",
                 timerFontSz, UIStyle.Text, TextAnchor.LowerLeft,
                 x: timerX, y: timerRowTop, w: timerW, h: timerRowH);
@@ -326,7 +323,6 @@ namespace ReplayTimerMod
             _deltaText.alignByGeometry    = false;
             _deltaText.horizontalOverflow = HorizontalWrapMode.Overflow;
 
-            // --- Row 2: PB Label + PB Time (Tucked under the Timer) ---
             int pbRowTop = timerRowTop + timerRowH + rowGap;
             int pbLblX   = 0;
             int pbTimeX  = pbLblX + pbLblW;

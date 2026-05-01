@@ -6,6 +6,7 @@ namespace ReplayTimerMod
     public partial class ReplayUI
     {
         // ── Copy all (header) - clipboard ────────────────────────────────────
+
         private void OnExportAllClicked()
         {
             var all = PBManager.AllPBs().Select(p => p.Value).ToList();
@@ -20,6 +21,7 @@ namespace ReplayTimerMod
         }
 
         // ── Download all (header) - writes file to disk ───────────────────────
+
         private void OnDownloadAllClicked()
         {
             var all = PBManager.AllPBs().Select(p => p.Value).ToList();
@@ -89,6 +91,7 @@ namespace ReplayTimerMod
         }
 
         // ── Export scene (sub-header) ─────────────────────────────────────────
+
         private void OnExportSceneClicked()
         {
             if (selectedScene == null)
@@ -111,6 +114,7 @@ namespace ReplayTimerMod
         }
 
         // ── Per-snapshot ──────────────────────────────────────────────────────
+
         private void CopyReplay(RoomKey key, string snapshotId)
         {
             var snapshot = PBManager.GetHistory(key)
@@ -142,6 +146,7 @@ namespace ReplayTimerMod
         }
 
         // ── Clear scene (sub-header) ──────────────────────────────────────────
+
         private void OnClearSceneClicked()
         {
             if (selectedScene == null) return;
@@ -153,6 +158,7 @@ namespace ReplayTimerMod
         }
 
         // ── Global clear-all (header) - two-click confirm ─────────────────────
+
         private void OnClearAllClicked()
         {
             if (!clearAllPending)
@@ -185,6 +191,7 @@ namespace ReplayTimerMod
         }
 
         // ── Paste ─────────────────────────────────────────────────────────────
+
         private void OnPasteClicked()
         {
             string clip = GUIUtility.systemCopyBuffer ?? "";
@@ -237,6 +244,7 @@ namespace ReplayTimerMod
         }
 
         // ── Jump to current room (left sub-header) ────────────────────────────
+
         private void OnJumpToCurrentClicked()
         {
             string scene = RoomTracker.CurrentScene;
@@ -250,7 +258,7 @@ namespace ReplayTimerMod
             bool hasPB = PBManager.AllPBs().Any(p => p.Key.SceneName == scene);
             if (!hasPB)
             {
-                ShowJumpFeedback($"No PB for {scene}", UIStyle.Subtext);
+                ShowJumpFeedback($"No PB", UIStyle.Subtext);
                 return;
             }
 
@@ -273,13 +281,58 @@ namespace ReplayTimerMod
         private void ResetJumpFeedback()
         {
             if (jumpToCurrentBtnLbl == null) return;
-            jumpToCurrentBtnLbl.text = "● Go to current room";
+            jumpToCurrentBtnLbl.text = "Current";
             jumpToCurrentBtnLbl.color = UIStyle.Gold;
             if (jumpToCurrentBtnImg != null)
                 jumpToCurrentBtnImg.color = UIStyle.Gold with { a = 0.18f };
         }
 
+        // ── Jump to previous room (left sub-header) ───────────────────────────
+        
+        private void OnJumpToLastClicked()
+        {
+            string scene = RoomTracker.PreviousScene;
+
+            if (string.IsNullOrEmpty(scene))
+            {
+                ShowJumpLastFeedback("No previous", UIStyle.Subtext);
+                return;
+            }
+
+            bool hasPB = PBManager.AllPBs().Any(p => p.Key.SceneName == scene);
+            if (!hasPB)
+            {
+                ShowJumpLastFeedback($"No PB", UIStyle.Subtext);
+                return;
+            }
+
+            ResetJumpLastFeedback();
+            SelectScene(scene);
+            ScrollToScene(scene);
+
+            Log.LogInfo($"[ReplayUI] Jumped to previous room: {scene}");
+        }
+
+        private void ShowJumpLastFeedback(string msg, Color color)
+        {
+            if (jumpToLastBtnLbl == null) return;
+            jumpToLastBtnLbl.text = msg;
+            jumpToLastBtnLbl.color = color;
+            if (jumpToLastBtnImg != null)
+                jumpToLastBtnImg.color = color with { a = 0.18f };
+        }
+
+        private void ResetJumpLastFeedback()
+        {
+            if (jumpToLastBtnLbl == null) return;
+            jumpToLastBtnLbl.text = "Previous";
+            jumpToLastBtnLbl.color = UIStyle.Accent;
+            if (jumpToLastBtnImg != null)
+                jumpToLastBtnImg.color = UIStyle.Accent with { a = 0.18f };
+        }
+
         // ── Ghost settings ────────────────────────────────────────────────────
+
         private void OnTrackingToggle()
         {
             GhostSettings.TrackingEnabled = !GhostSettings.TrackingEnabled;
@@ -298,18 +351,6 @@ namespace ReplayTimerMod
             RefreshSettingsBar();
         }
 
-        // ── Timer HUD settings ────────────────────────────────────────────────
-        private void OnTimerToggleClicked()
-        {
-            GhostSettings.TimerHudEnabled = !GhostSettings.TimerHudEnabled;
-            if (!GhostSettings.TimerHudEnabled && timerHud != null)
-            {
-                timerHud.Disarm();
-            }
-            RefreshSettingsBar();
-        }
-
-        // ──────────────────────────────────────────────────────────────────────
         private void OnEditGlobalContext()
         {
             SelectionState?.SelectSnapshot(null);
@@ -346,13 +387,15 @@ namespace ReplayTimerMod
         }
 
         private void OnAlphaMinus() => AdjustAlpha(-0.05f);
+
         private void OnAlphaPlus() => AdjustAlpha(0.05f);
 
         private void AdjustAlpha(float delta)
         {
             if (TryGetSelectedSnapshot(out var key, out var snapshot) && snapshot != null)
             {
-                if (!snapshot.HasVisualOverride) return;
+                if (!snapshot.HasVisualOverride)
+                    return;
 
                 Color color = snapshot.ResolveGhostColor(CurrentGlobalGhostColor);
                 color.a = Mathf.Clamp01(Mathf.Round((color.a + delta) * 20f) / 20f);
@@ -363,7 +406,8 @@ namespace ReplayTimerMod
             else
             {
                 GhostSettings.GhostAlpha = Mathf.Round((GhostSettings.GhostAlpha + delta) * 20f) / 20f;
-                if (selectedScene != null) RebuildRight(selectedScene);
+                if (selectedScene != null)
+                    RebuildRight(selectedScene);
             }
 
             RefreshSettingsBar();
@@ -373,7 +417,8 @@ namespace ReplayTimerMod
         {
             if (TryGetSelectedSnapshot(out var key, out var snapshot) && snapshot != null)
             {
-                if (!snapshot.HasVisualOverride) return;
+                if (!snapshot.HasVisualOverride)
+                    return;
 
                 Color color = snapshot.ResolveGhostColor(CurrentGlobalGhostColor);
                 color.r = rgb.r;
@@ -386,7 +431,8 @@ namespace ReplayTimerMod
             else
             {
                 GhostSettings.GhostColor = new Color(rgb.r, rgb.g, rgb.b, GhostSettings.GhostAlpha);
-                if (selectedScene != null) RebuildRight(selectedScene);
+                if (selectedScene != null)
+                    RebuildRight(selectedScene);
             }
 
             RefreshSettingsBar();
@@ -394,5 +440,16 @@ namespace ReplayTimerMod
 
         private static string AlphaString() =>
             GhostSettings.GhostAlpha.ToString("0.00");
+            
+        // ── Timer HUD settings ────────────────────────────────────────────────
+        private void OnTimerToggleClicked()
+        {
+            GhostSettings.TimerHudEnabled = !GhostSettings.TimerHudEnabled;
+            if (!GhostSettings.TimerHudEnabled && timerHud != null)
+            {
+                timerHud.Disarm();
+            }
+            RefreshSettingsBar();
+        }
     }
 }
