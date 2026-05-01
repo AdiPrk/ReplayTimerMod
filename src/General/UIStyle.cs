@@ -44,15 +44,6 @@ namespace ReplayTimerMod
         private static Font? _arial;
         public static Font? Arial => _arial;
 
-        // public static void LoadFonts()
-        // {
-        //     foreach (Font f in Resources.FindObjectsOfTypeAll<Font>())
-        //     {
-        //         if (f.name == "ARIAL") _arial = f;
-        //         if (f.name == "TrajanPro-Regular") _trajan = f;
-        //     }
-        // }
-
         public static void LoadFonts()
         {
             foreach (var name in System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceNames())

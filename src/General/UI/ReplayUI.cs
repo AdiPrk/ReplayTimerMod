@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿// (Keep all the standard using statements)
+using System.Collections.Generic;
 using System.Linq;
 using BepInEx.Logging;
 using GlobalEnums;
@@ -7,28 +8,6 @@ using UnityEngine.UI;
 
 namespace ReplayTimerMod
 {
-    // ─────────────────────────────────────────────────────────────────────────
-    // ReplayUI - pause-only two-column replay browser.
-    //
-    // Left column  : alphabetical scene list. Click to populate right column.
-    //   Sub-header : [● Go to current room]
-    //   Each row   : scene name (gold + ● prefix when it's the current room)
-    // Right column : routes for the selected scene.
-    //   Sub-header : scene name | [Paste] [Clear scene]
-    //   Each row   : route  time  [Copy]  [✕]
-    // Header       : "Replay Times" | [Clear all / Are you sure?] [-]
-    // Bottom strip : Ghost [ON/OFF]  Alpha [−] 0.40 [+]  Color ■ ■ ■ ■ ■ ■
-    //
-    // [Clear all]  - two-click confirm; first click shows "Are you sure?",
-    //               second click deletes every replay across all scenes.
-    //               Resets to default state whenever the panel is closed.
-    // [Clear scene]- immediately deletes all entries for the selected scene.
-    // [Paste]      - reads clipboard, decodes RTM3 string, imports replay.
-    // [Copy]       - encodes entry to RTM3 string, writes to clipboard.
-    // [✕]          - deletes that single entry.
-    //
-    // Canvas is enabled only while the game is paused.
-    // ─────────────────────────────────────────────────────────────────────────
     public partial class ReplayUI
     {
         private static readonly ManualLogSource Log =
@@ -36,55 +15,43 @@ namespace ReplayTimerMod
 
         private const string GlobalSettingsContextText = "Edit: Global";
 
-        // ── State ─────────────────────────────────────────────────────────────
         private bool isSetup = false;
         private bool expanded = false;
         private string? selectedScene = null;
-
-        // Set by OnPBUpdated() whenever a new PB is recorded
         private bool rebuildPending = false;
-
         private bool wasPaused = false;
-
-        // Two-click confirm for the global clear-all button.
         private bool clearAllPending = false;
+
+        private RoomTimerHUD? timerHud;
+
         private Image? clearAllBtnImg;
         private Text? clearAllBtnLbl;
-
-        // Export button feedback refs.
         private Image? exportAllBtnImg;
         private Text? exportAllBtnLbl;
         private Image? downloadAllBtnImg;
         private Text? downloadAllBtnLbl;
 
-        // ── Unity objects ─────────────────────────────────────────────────────
         private GameObject? canvasGO;
         private GameObject? tabGO;
         private GameObject? panelGO;
 
         private Transform? leftContent;
         private Transform? rightContent;
-        private Text? rightHeader;          // scene name in right sub-header
-        private Text? pasteStatus;          // brief feedback next to [Paste]
-
-        // Left column scroll control
+        private Text? rightHeader;          
+        private Text? pasteStatus;          
         private ScrollRect? leftScrollRect;
-
-        // "Go to current room" button label
         private Text? jumpToCurrentBtnLbl;
         private Image? jumpToCurrentBtnImg;
 
-        // ── Pixel sizes (computed once in Setup from screen resolution) ───────
-        private int PW, PH;    // panel width/height
-        private int LW, RW;    // left/right column widths
-        private int RH;        // row height
-        private int M;         // general margin
-        private int TW, TH;    // tab button width/height
-        private int HDR;       // panel header height
-        private int SUBHDR;    // sub-header height (both columns share this value)
-        private int STGSH;     // settings strip height
+        private int PW, PH;    
+        private int LW, RW;    
+        private int RH;        
+        private int M;         
+        private int TW, TH;    
+        private int HDR;       
+        private int SUBHDR;    
+        private int STGSH;     
 
-        // ── Settings strip live refs ──────────────────────────────────────────
         private Text? ghostToggleLbl;
         private Image? ghostToggleBtnImg;
         private Text? alphaLbl;
@@ -95,10 +62,10 @@ namespace ReplayTimerMod
         private Text? maxSavedReplaysLbl;
         private Text? settingsContextLbl;
         private Image? settingsContextBtnImg;
+        
+        private Text? timerToggleLbl;
+        private Image? timerToggleBtnImg;
 
-        // ─────────────────────────────────────────────────────────────────────
-        // SETUP
-        // ─────────────────────────────────────────────────────────────────────
         public void Setup()
         {
             UIStyle.LoadFonts();
@@ -109,7 +76,7 @@ namespace ReplayTimerMod
             TH = UIStyle.H(28);
             HDR = UIStyle.H(34);
             SUBHDR = UIStyle.H(28);
-            STGSH = UIStyle.H(64);
+            STGSH = UIStyle.H(64); // Reverted to 64 for a tight 2-row layout
             PW = UIStyle.W(680);
             PH = UIStyle.H(576);
             LW = UIStyle.W(200);
@@ -132,9 +99,11 @@ namespace ReplayTimerMod
             Log.LogInfo("[ReplayUI] Setup complete");
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // TICK
-        // ─────────────────────────────────────────────────────────────────────
+        public void SetTimerHUD(RoomTimerHUD hud)
+        {
+            timerHud = hud;
+        }
+
         public void Tick()
         {
             if (!isSetup) return;
@@ -147,6 +116,7 @@ namespace ReplayTimerMod
                 canvasGO!.SetActive(true);
                 tabGO!.SetActive(true);
                 wasPaused = true;
+                RefreshSettingsBar();
             }
 
             if (!paused && wasPaused)
@@ -181,17 +151,8 @@ namespace ReplayTimerMod
             catch { return false; }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // PUBLIC API
-        // ─────────────────────────────────────────────────────────────────────
-        public void OnPBUpdated()
-        {
-            rebuildPending = true;
-        }
+        public void OnPBUpdated() => rebuildPending = true;
 
-        // ─────────────────────────────────────────────────────────────────────
-        // PANEL TOGGLE
-        // ─────────────────────────────────────────────────────────────────────
         private void TogglePanel()
         {
             expanded = !expanded;
@@ -206,9 +167,7 @@ namespace ReplayTimerMod
         }
 
         private ReplaySelectionState? SelectionState => PBManager.SelectionState;
-
         private string? SelectedSnapshotId => SelectionState?.SelectedSnapshotId;
-
         private static Color CurrentGlobalGhostColor => GhostSettings.GhostColor;
 
         private bool IsEditingSnapshot(out ReplaySnapshot? snapshot)
@@ -223,19 +182,16 @@ namespace ReplayTimerMod
             snapshot = null;
 
             string? snapshotId = SelectedSnapshotId;
-            if (string.IsNullOrEmpty(snapshotId))
-                return false;
+            if (string.IsNullOrEmpty(snapshotId)) return false;
 
             foreach (var route in PBManager.AllHistories())
             {
                 snapshot = PBManager.GetSnapshot(route.Key, snapshotId);
-                if (snapshot == null)
-                    continue;
+                if (snapshot == null) continue;
 
                 key = route.Key;
                 return true;
             }
-
             return false;
         }
 
@@ -249,7 +205,6 @@ namespace ReplayTimerMod
             GhostSettings.MaxSavedReplaysPerRoute.ToString();
 
         private void OnMaxSavedReplaysMinus() => AdjustMaxSavedReplays(-1);
-
         private void OnMaxSavedReplaysPlus() => AdjustMaxSavedReplays(1);
 
         private void AdjustMaxSavedReplays(int delta)
@@ -258,8 +213,7 @@ namespace ReplayTimerMod
             int newLimit = GhostSettings.MaxSavedReplaysPerRoute;
             PBManager.PruneAllHistories(newLimit, persist: true);
             RefreshSettingsBar();
-            if (selectedScene != null)
-                RebuildRight(selectedScene);
+            if (selectedScene != null) RebuildRight(selectedScene);
         }
 
         private void RefreshSettingsBar()
@@ -307,10 +261,8 @@ namespace ReplayTimerMod
                     settingsContextLbl.text = FindSnapshotContextLabel(snapshot!);
                     settingsContextLbl.color = UIStyle.Accent;
                 }
-
                 if (settingsContextBtnImg != null)
                     settingsContextBtnImg.color = UIStyle.Accent with { a = 0.22f };
-
                 if (alphaLbl != null)
                     alphaLbl.text = snapshot!.ResolveGhostColor(CurrentGlobalGhostColor).a.ToString("0.00");
             }
@@ -321,12 +273,21 @@ namespace ReplayTimerMod
                     settingsContextLbl.text = GlobalSettingsContextText;
                     settingsContextLbl.color = UIStyle.Text;
                 }
-
                 if (settingsContextBtnImg != null)
                     settingsContextBtnImg.color = UIStyle.Overlay with { a = 0.55f };
-
                 if (alphaLbl != null)
                     alphaLbl.text = AlphaString();
+            }
+
+            if (timerToggleLbl != null)
+            {
+                bool timerEnabled = GhostSettings.TimerHudEnabled;
+                timerToggleLbl.text = timerEnabled ? "ON" : "OFF";
+                timerToggleLbl.color = timerEnabled ? UIStyle.Accent : UIStyle.Subtext;
+                if (timerToggleBtnImg != null)
+                    timerToggleBtnImg.color = timerEnabled
+                        ? UIStyle.Accent with { a = 0.22f }
+                        : UIStyle.Overlay;
             }
         }
 
@@ -336,13 +297,10 @@ namespace ReplayTimerMod
             {
                 for (int i = 0; i < route.Snapshots.Count; i++)
                 {
-                    if (route.Snapshots[i].SnapshotId != snapshot.SnapshotId)
-                        continue;
-
-                    return $"Edit: {SnapshotLabel(route.Snapshots[i], i)}";
+                    if (route.Snapshots[i].SnapshotId == snapshot.SnapshotId)
+                        return $"Edit: {SnapshotLabel(route.Snapshots[i], i)}";
                 }
             }
-
             return "Edit: Snapshot";
         }
     }

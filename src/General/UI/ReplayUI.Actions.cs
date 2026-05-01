@@ -6,7 +6,6 @@ namespace ReplayTimerMod
     public partial class ReplayUI
     {
         // ── Copy all (header) - clipboard ────────────────────────────────────
-
         private void OnExportAllClicked()
         {
             var all = PBManager.AllPBs().Select(p => p.Value).ToList();
@@ -21,7 +20,6 @@ namespace ReplayTimerMod
         }
 
         // ── Download all (header) - writes file to disk ───────────────────────
-
         private void OnDownloadAllClicked()
         {
             var all = PBManager.AllPBs().Select(p => p.Value).ToList();
@@ -57,7 +55,6 @@ namespace ReplayTimerMod
             }
         }
 
-        // Opens the export folder in Windows Explorer / File Browser
         private void OnOpenExportFolderClicked()
         {
             string dir = System.IO.Path.Combine(
@@ -92,7 +89,6 @@ namespace ReplayTimerMod
         }
 
         // ── Export scene (sub-header) ─────────────────────────────────────────
-
         private void OnExportSceneClicked()
         {
             if (selectedScene == null)
@@ -115,7 +111,6 @@ namespace ReplayTimerMod
         }
 
         // ── Per-snapshot ──────────────────────────────────────────────────────
-
         private void CopyReplay(RoomKey key, string snapshotId)
         {
             var snapshot = PBManager.GetHistory(key)
@@ -147,7 +142,6 @@ namespace ReplayTimerMod
         }
 
         // ── Clear scene (sub-header) ──────────────────────────────────────────
-
         private void OnClearSceneClicked()
         {
             if (selectedScene == null) return;
@@ -159,7 +153,6 @@ namespace ReplayTimerMod
         }
 
         // ── Global clear-all (header) - two-click confirm ─────────────────────
-
         private void OnClearAllClicked()
         {
             if (!clearAllPending)
@@ -192,7 +185,6 @@ namespace ReplayTimerMod
         }
 
         // ── Paste ─────────────────────────────────────────────────────────────
-
         private void OnPasteClicked()
         {
             string clip = GUIUtility.systemCopyBuffer ?? "";
@@ -245,9 +237,6 @@ namespace ReplayTimerMod
         }
 
         // ── Jump to current room (left sub-header) ────────────────────────────
-        // Selects and scrolls to the scene the player is currently in.
-        // Shows brief feedback on the button itself if no PB exists for it yet.
-
         private void OnJumpToCurrentClicked()
         {
             string scene = RoomTracker.CurrentScene;
@@ -265,10 +254,7 @@ namespace ReplayTimerMod
                 return;
             }
 
-            // Reset any feedback text before rebuilding (RebuildLeft recreates rows,
-            // so the button label is not touched, but we want a clean state).
             ResetJumpFeedback();
-
             SelectScene(scene);
             ScrollToScene(scene);
 
@@ -294,7 +280,6 @@ namespace ReplayTimerMod
         }
 
         // ── Ghost settings ────────────────────────────────────────────────────
-
         private void OnTrackingToggle()
         {
             GhostSettings.TrackingEnabled = !GhostSettings.TrackingEnabled;
@@ -313,6 +298,18 @@ namespace ReplayTimerMod
             RefreshSettingsBar();
         }
 
+        // ── Timer HUD settings ────────────────────────────────────────────────
+        private void OnTimerToggleClicked()
+        {
+            GhostSettings.TimerHudEnabled = !GhostSettings.TimerHudEnabled;
+            if (!GhostSettings.TimerHudEnabled && timerHud != null)
+            {
+                timerHud.Disarm();
+            }
+            RefreshSettingsBar();
+        }
+
+        // ──────────────────────────────────────────────────────────────────────
         private void OnEditGlobalContext()
         {
             SelectionState?.SelectSnapshot(null);
@@ -349,15 +346,13 @@ namespace ReplayTimerMod
         }
 
         private void OnAlphaMinus() => AdjustAlpha(-0.05f);
-
         private void OnAlphaPlus() => AdjustAlpha(0.05f);
 
         private void AdjustAlpha(float delta)
         {
             if (TryGetSelectedSnapshot(out var key, out var snapshot) && snapshot != null)
             {
-                if (!snapshot.HasVisualOverride)
-                    return;
+                if (!snapshot.HasVisualOverride) return;
 
                 Color color = snapshot.ResolveGhostColor(CurrentGlobalGhostColor);
                 color.a = Mathf.Clamp01(Mathf.Round((color.a + delta) * 20f) / 20f);
@@ -368,8 +363,7 @@ namespace ReplayTimerMod
             else
             {
                 GhostSettings.GhostAlpha = Mathf.Round((GhostSettings.GhostAlpha + delta) * 20f) / 20f;
-                if (selectedScene != null)
-                    RebuildRight(selectedScene);
+                if (selectedScene != null) RebuildRight(selectedScene);
             }
 
             RefreshSettingsBar();
@@ -379,8 +373,7 @@ namespace ReplayTimerMod
         {
             if (TryGetSelectedSnapshot(out var key, out var snapshot) && snapshot != null)
             {
-                if (!snapshot.HasVisualOverride)
-                    return;
+                if (!snapshot.HasVisualOverride) return;
 
                 Color color = snapshot.ResolveGhostColor(CurrentGlobalGhostColor);
                 color.r = rgb.r;
@@ -393,8 +386,7 @@ namespace ReplayTimerMod
             else
             {
                 GhostSettings.GhostColor = new Color(rgb.r, rgb.g, rgb.b, GhostSettings.GhostAlpha);
-                if (selectedScene != null)
-                    RebuildRight(selectedScene);
+                if (selectedScene != null) RebuildRight(selectedScene);
             }
 
             RefreshSettingsBar();
