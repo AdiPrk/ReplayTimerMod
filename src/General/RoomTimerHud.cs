@@ -287,7 +287,7 @@ namespace ReplayTimerMod
             // Left-aligned grid definitions with adjusted width
             int timerW  = UIStyle.W(60); 
             int deltaW  = UIStyle.W(70);
-            int colGap  = UIStyle.W(4);  
+            int colGap  = UIStyle.W(6);  
             int pbLblW  = UIStyle.W(20);
             int pbTimeW = UIStyle.W(60);
 
