@@ -310,6 +310,14 @@ namespace ReplayTimerMod
             if (activeTab == TabKind.Config) RefreshConfigValues();
         }
 
+        private void OnOnlineToggle()
+        {
+            bool enabling = !GhostSettings.OnlineEnabled;
+            GhostSettings.OnlineEnabled = enabling;
+            _onOnlineToggle?.Invoke(enabling);
+            if (activeTab == TabKind.Config) RefreshConfigValues();
+        }
+
         private void OnMaxSavedReplaysMinus() => AdjustMaxSaved(-1);
         private void OnMaxSavedReplaysPlus() => AdjustMaxSaved(1);
 

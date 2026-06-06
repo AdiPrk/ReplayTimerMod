@@ -19,11 +19,15 @@ namespace ReplayTimerMod
         private ReplayUI replayUI = null!;
         private RoomTimerHUD roomTimerHUD = null!;
         private ReplaySelectionState replaySelectionState = null!;
+        private NetworkClient networkClient;
 
         private bool lateInitDone = false;
 
         private void Awake()
         {
+            System.Net.ServicePointManager.ServerCertificateValidationCallback =
+        (sender, certificate, chain, sslPolicyErrors) => true;
+        
             Instance = this;
             Logger.LogInfo($"Plugin {Name} ({Id}) has loaded!");
 
@@ -101,6 +105,13 @@ namespace ReplayTimerMod
                 || result.Kind == ResultKind.NewPB
                 || result.Kind == ResultKind.SavedHistory)
                 replayUI.OnPBUpdated();
+
+            if (networkClient != null && (result.Kind == ResultKind.FirstRun || result.Kind == ResultKind.NewPB))
+            {
+                var snapshot = PBManager.GetPBSnapshot(key);
+                if (snapshot != null)
+                    networkClient.EnqueueUpload(snapshot, result);
+            }
         }
 
         private void OnRecordingDiscarded()
@@ -124,6 +135,7 @@ namespace ReplayTimerMod
             ghostPlayback.Tick(shouldTick);
             replayUI.Tick();
             roomTimerHUD.Tick(shouldTick);
+            if (networkClient != null) networkClient.Tick();
         }
 
         private void TryLateInit()
@@ -136,10 +148,57 @@ namespace ReplayTimerMod
             ghostPlayback.Setup();
             replayUI.Setup();
             roomTimerHUD.Setup();
+
+            replayUI.SetOnlineToggleHandler(OnOnlineToggled);
+
+            if (GhostSettings.OnlineEnabled)
+                StartNetworking();
+        }
+
+        private void StartNetworking()
+        {
+            if (networkClient != null && networkClient.IsStarted)
+                return;
+
+            GhostSettings.EnsureDeviceId();
+
+            if (networkClient == null)
+            {
+                string version = System.Reflection.Assembly
+                    .GetExecutingAssembly()
+                    .GetName().Version?.ToString() ?? "0.0.0";
+
+                networkClient = new NetworkClient(
+                    GhostSettings.DeviceId,
+                    "silksong",
+                    version,
+                    GhostSettings.ApiBaseUrl);
+                networkClient.OnRankReceived += roomTimerHUD.ShowRank;
+                networkClient.OnDisplayNameReceived += name =>
+                {
+                    if (string.IsNullOrEmpty(GhostSettings.DisplayName))
+                        GhostSettings.DisplayName = name;
+                };
+            }
+
+            networkClient.Start();
+            Logger.LogInfo("Online features started");
+        }
+
+        private void OnOnlineToggled(bool enabled)
+        {
+            if (enabled)
+                StartNetworking();
+            else if (networkClient != null)
+            {
+                networkClient.Stop();
+                Logger.LogInfo("Online features stopped");
+            }
         }
 
         private void OnDestroy()
         {
+            if (networkClient != null) networkClient.Stop();
             roomTimerHUD.Teardown();
         }
 

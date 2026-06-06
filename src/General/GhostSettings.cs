@@ -15,6 +15,10 @@ namespace ReplayTimerMod
         public bool  SaveAllRunsEnabled      = false;
         public int   MaxSavedReplaysPerRoute = 5;
         public bool  TimerHudEnabled         = true;
+        public bool   OnlineEnabled  = false;
+        public string DeviceId       = "";
+        public string DisplayName    = "";
+        public string ApiBaseUrl     = "https://oqsfhqbakarleqahxiyo.supabase.co/functions/v1";
     }
 
     public static class GhostSettings
@@ -70,6 +74,41 @@ namespace ReplayTimerMod
         {
             get => _d.TimerHudEnabled;
             set { _d.TimerHudEnabled = value; Save(); }
+        }
+
+        public static bool OnlineEnabled
+        {
+            get => _d.OnlineEnabled;
+            set { _d.OnlineEnabled = value; Save(); }
+        }
+
+        public static string DeviceId
+        {
+            get => _d.DeviceId;
+            set { _d.DeviceId = value; Save(); }
+        }
+
+        public static string DisplayName
+        {
+            get => _d.DisplayName;
+            set { _d.DisplayName = value; Save(); }
+        }
+
+        public static string ApiBaseUrl
+        {
+            get => _d.ApiBaseUrl;
+            set { _d.ApiBaseUrl = value; Save(); }
+        }
+
+        /// <summary>
+        /// Ensures a device ID exists, generating one if needed.
+        /// Called when online features are first enabled.
+        /// </summary>
+        public static void EnsureDeviceId()
+        {
+            if (!string.IsNullOrEmpty(_d.DeviceId)) return;
+            _d.DeviceId = System.Guid.NewGuid().ToString("N");
+            Save();
         }
 
         // ── Init ─────────────────────────────────────────────────────────────
@@ -130,9 +169,10 @@ namespace ReplayTimerMod
         {
             try
             {
-                if (t == typeof(bool))  return bool.Parse(val);
-                if (t == typeof(int))   return int.Parse(val, System.Globalization.CultureInfo.InvariantCulture);
-                if (t == typeof(float)) return float.Parse(val, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture);
+                if (t == typeof(bool))   return bool.Parse(val);
+                if (t == typeof(int))    return int.Parse(val, System.Globalization.CultureInfo.InvariantCulture);
+                if (t == typeof(float))  return float.Parse(val, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture);
+                if (t == typeof(string)) return val;
             }
             catch { }
             return fallback;

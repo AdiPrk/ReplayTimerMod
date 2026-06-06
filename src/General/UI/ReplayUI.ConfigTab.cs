@@ -34,6 +34,8 @@ namespace ReplayTimerMod
             exportAllCfgLbl = null;
             exportAllCfgBg = null;
             clearAllPending = false;
+            onlineToggleLbl = null;
+            onlineToggleBg = null;
         }
 
         private void BuildConfigContent()
@@ -49,6 +51,23 @@ namespace ReplayTimerMod
             int gap = UIStyle.W(4);
 
             ButtonRef br;
+
+            // -- Online --
+            AddSectionHeader(rightContent, "Online");
+
+            var onlineRow = AddConfigRow(rightContent, "Upload PBs", rowH, labelW);
+            br = MakeButton(onlineRow.transform, "OnlineToggle",
+                GhostSettings.OnlineEnabled ? "ON" : "OFF",
+                UIStyle.FontSizeSm - 1,
+                GhostSettings.OnlineEnabled ? UIStyle.Accent : UIStyle.Subtext,
+                GhostSettings.OnlineEnabled
+                    ? UIStyle.Accent with { a = 0.22f }
+                    : UIStyle.Overlay,
+                labelW, (rowH - btnH) / 2, toggleW, btnH, OnOnlineToggle);
+            onlineToggleBg = br.bg;
+            onlineToggleLbl = br.label;
+
+            AddSectionSeparator(rightContent);
 
             // -- Recording --
             AddSectionHeader(rightContent, "Recording");
@@ -253,6 +272,17 @@ namespace ReplayTimerMod
                     editContextBg.color = UIStyle.Overlay with { a = 0.55f };
                 if (alphaLbl != null)
                     alphaLbl.text = GhostSettings.GhostAlpha.ToString("0.00");
+            }
+
+            if (onlineToggleLbl != null)
+            {
+                bool on = GhostSettings.OnlineEnabled;
+                onlineToggleLbl.text = on ? "ON" : "OFF";
+                onlineToggleLbl.color = on ? UIStyle.Accent : UIStyle.Subtext;
+                if (onlineToggleBg != null)
+                    onlineToggleBg.color = on
+                        ? UIStyle.Accent with { a = 0.22f }
+                        : UIStyle.Overlay;
             }
         }
 

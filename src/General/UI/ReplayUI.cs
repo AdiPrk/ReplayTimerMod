@@ -70,9 +70,17 @@ namespace ReplayTimerMod
         private Image? clearAllCfgBg;
         private Text? exportAllCfgLbl;
         private Image? exportAllCfgBg;
+        private Text? onlineToggleLbl;
+        private Image? onlineToggleBg;
 
         // Layout dimensions (computed once in Setup)
         private int PW, PH, LW, RW, M, RH;
+        private System.Action<bool> _onOnlineToggle;
+
+        public void SetOnlineToggleHandler(System.Action<bool> handler)
+        {
+            _onOnlineToggle = handler;
+        }
 
         public void Setup()
         {

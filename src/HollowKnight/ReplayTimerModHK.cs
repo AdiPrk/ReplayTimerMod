@@ -12,6 +12,7 @@ namespace ReplayTimerMod
         private ReplayUI replayUI = null!;
         private RoomTimerHUD roomTimerHUD = null!;
         private ReplaySelectionState replaySelectionState = null!;
+        private NetworkClient networkClient;
 
         private bool lateInitDone = false;
 
@@ -22,6 +23,9 @@ namespace ReplayTimerMod
 
         public override void Initialize()
         {
+            System.Net.ServicePointManager.ServerCertificateValidationCallback =
+    (sender, certificate, chain, sslPolicyErrors) => true;
+    
             Instance = this;
             Log("Initialize");
 
@@ -71,6 +75,7 @@ namespace ReplayTimerMod
             ghostPlayback.Tick(shouldTick);
             replayUI.Tick();
             roomTimerHUD.Tick(shouldTick);
+            if (networkClient != null) networkClient.Tick();
         }
 
         private void TryLateInit()
@@ -83,6 +88,56 @@ namespace ReplayTimerMod
             ghostPlayback.Setup();
             replayUI.Setup();
             roomTimerHUD.Setup();
+            replayUI.SetOnlineToggleHandler(OnOnlineToggled);
+            
+            if (GhostSettings.OnlineEnabled)
+                StartNetworking();
+        }
+
+        /// <summary>
+        /// Creates the NetworkClient (if needed) and starts it.
+        /// Called from TryLateInit on startup, or from OnOnlineToggled
+        /// when the user flips the toggle mid-session.
+        /// </summary>
+        private void StartNetworking()
+        {
+            if (networkClient != null && networkClient.IsStarted)
+                return;
+
+            GhostSettings.EnsureDeviceId();
+
+            if (networkClient == null)
+            {
+                networkClient = new NetworkClient(
+                    GhostSettings.DeviceId,
+#if V1221
+                    "hk_1221",
+#else
+                    "hk_1578",
+#endif
+                    GetVersion(),
+                    GhostSettings.ApiBaseUrl);
+                networkClient.OnRankReceived += roomTimerHUD.ShowRank;
+                networkClient.OnDisplayNameReceived += name =>
+                {
+                    if (string.IsNullOrEmpty(GhostSettings.DisplayName))
+                        GhostSettings.DisplayName = name;
+                };
+            }
+
+            networkClient.Start();
+            Log("Online features started");
+        }
+
+        private void OnOnlineToggled(bool enabled)
+        {
+            if (enabled)
+                StartNetworking();
+            else if (networkClient != null)
+            {
+                networkClient.Stop();
+                Log("Online features stopped");
+            }
         }
 
         private void OnRoomEnter(string sceneName, string entryFromScene)
@@ -127,6 +182,13 @@ namespace ReplayTimerMod
                 || result.Kind == ResultKind.NewPB
                 || result.Kind == ResultKind.SavedHistory)
                 replayUI.OnPBUpdated();
+
+            if (networkClient != null && (result.Kind == ResultKind.FirstRun || result.Kind == ResultKind.NewPB))
+            {
+                var snapshot = PBManager.GetPBSnapshot(key);
+                if (snapshot != null)
+                    networkClient.EnqueueUpload(snapshot, result);
+            }
         }
 
         private void OnRecordingDiscarded()
