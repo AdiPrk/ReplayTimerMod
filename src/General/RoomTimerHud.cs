@@ -32,6 +32,7 @@ namespace ReplayTimerMod
         private Text? _deltaText;
         private Text? _pbLabelText;
         private Text? _pbTimeText;
+        private Text? _rankText;
 
         private bool _setup = false;
 
@@ -118,6 +119,7 @@ namespace ReplayTimerMod
 
         private void HandleRoomEnter(string sceneName, string entryFromScene)
         {
+            if (_rankText != null) _rankText.gameObject.SetActive(false);
             if (_state != HudState.Ready) return;
 
             _entryPbTime = BestPBForEntry(sceneName, entryFromScene);
@@ -151,6 +153,8 @@ namespace ReplayTimerMod
 
         private void HandleDiscarded()
         {
+            if (_rankText != null) _rankText.gameObject.SetActive(false);
+
             if (GhostSettings.TimerHudEnabled)
             {
                 _state = HudState.Ready;
@@ -292,7 +296,7 @@ namespace ReplayTimerMod
             int pbTimeW = UIStyle.W(60);
 
             int innerW = timerW + colGap + deltaW;
-            int innerH = timerRowH + rowGap + pbRowH;
+            int innerH = timerRowH + rowGap + pbRowH + rowGap + pbRowH;
 
             int mX = UIStyle.W(MARGIN_X);
             int mY = UIStyle.H(MARGIN_Y);
@@ -336,6 +340,14 @@ namespace ReplayTimerMod
                 pbFontSz, UIStyle.Gold, TextAnchor.MiddleLeft,
                 x: pbTimeX, y: pbRowTop, w: pbTimeW, h: pbRowH);
             _pbTimeText.alignByGeometry = false;
+
+            int rankRowTop = pbRowTop + pbRowH + rowGap;
+
+            _rankText = MakeLbl(_timerRootGO.transform, "",
+                pbFontSz, UIStyle.Accent, TextAnchor.MiddleLeft,
+                x: 0, y: rankRowTop, w: innerW, h: pbRowH);
+            _rankText.alignByGeometry = false;
+            _rankText.gameObject.SetActive(false);
         }
 
         private static Text MakeLbl(Transform parent, string text,
@@ -419,6 +431,22 @@ namespace ReplayTimerMod
                     && GameManager.instance.ui.uiState == UIState.PAUSED;
             }
             catch { return false; }
+        }
+
+        /// <summary>
+        /// Shows the global rank below the PB row. Called from the main thread
+        /// when the upload response arrives with rank data.
+        /// </summary>
+        public void ShowRank(RankInfo rankInfo)
+        {
+            // Only show rank if we're in the Finished state and the rank
+            // matches the room we just finished
+            if (_state != HudState.Finished) return;
+            if (_rankText == null) return;
+
+            _rankText.text = $"#{rankInfo.Rank} / {rankInfo.TotalRunners}";
+            _rankText.color = UIStyle.Accent;
+            _rankText.gameObject.SetActive(true);
         }
     }
 }

@@ -67,6 +67,12 @@ namespace ReplayTimerMod
             return snapshot?.Room;
         }
 
+        public static ReplaySnapshot? GetPBSnapshot(RoomKey key)
+        {
+            ReplaySnapshot snapshot;
+            return currentPbs.TryGetValue(key, out snapshot) ? snapshot : null;
+        }
+
         public static IList<ReplaySnapshot> GetHistory(RoomKey key)
         {
             if (!histories.TryGetValue(key, out var history))

@@ -1,35 +1,32 @@
 using System.Linq;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace ReplayTimerMod
 {
     public partial class ReplayUI
     {
-        // ── Copy all (header) - clipboard ────────────────────────────────────
+        // -- Config tab: Copy all --
 
         private void OnExportAllClicked()
         {
             var all = PBManager.AllPBs().Select(p => p.Value).ToList();
             if (all.Count == 0)
             {
-                ShowExportFeedback("Nothing to copy", UIStyle.Subtext);
+                ShowButtonFeedback(exportAllCfgLbl, exportAllCfgBg, "Nothing to copy", UIStyle.Subtext);
                 return;
             }
             GUIUtility.systemCopyBuffer = ReplayShareEncoder.EncodeCollection(all);
-            ShowExportFeedback($"{all.Count} copied", UIStyle.Accent);
+            ShowButtonFeedback(exportAllCfgLbl, exportAllCfgBg, all.Count + " copied", UIStyle.Accent);
             Log.LogInfo($"[ReplayUI] Copied {all.Count} replays to clipboard");
         }
 
-        // ── Download all (header) - writes file to disk ───────────────────────
+        // -- Config tab: Export All (save to disk) --
 
         private void OnDownloadAllClicked()
         {
             var all = PBManager.AllPBs().Select(p => p.Value).ToList();
-            if (all.Count == 0)
-            {
-                ShowDownloadFeedback("Nothing to save", UIStyle.Subtext);
-                return;
-            }
+            if (all.Count == 0) return;
 
             try
             {
@@ -39,20 +36,15 @@ namespace ReplayTimerMod
                     "export");
                 System.IO.Directory.CreateDirectory(dir);
 
-                string datePart = System.DateTime.Now.ToString("yyyy-MM-dd_HHmm");
-                string countPart = $"{all.Count}";
-                string fileName = $"Re_{datePart}_{countPart}.rtmc.txt";
-
+                string stamp = System.DateTime.Now.ToString("yyyy-MM-dd_HHmm");
+                string fileName = $"Re_{stamp}_{all.Count}.rtmc.txt";
                 string path = System.IO.Path.Combine(dir, fileName);
 
                 System.IO.File.WriteAllText(path, ReplayShareEncoder.EncodeCollection(all));
-
-                ShowDownloadFeedback($"Saved {all.Count} to /export/", UIStyle.Accent);
                 Log.LogInfo($"[ReplayUI] Saved {all.Count} replays to {path}");
             }
             catch (System.Exception ex)
             {
-                ShowDownloadFeedback("Save failed", UIStyle.Red);
                 Log.LogError($"[ReplayUI] Download all failed: {ex.Message}");
             }
         }
@@ -65,38 +57,49 @@ namespace ReplayTimerMod
                 "export");
 
             if (System.IO.Directory.Exists(dir))
-            {
                 System.Diagnostics.Process.Start(dir);
-            }
-            else
+        }
+
+        // -- Config tab: Clear all (two-click confirm) --
+
+        private void OnClearAllClicked()
+        {
+            if (!clearAllPending)
             {
-                ShowDownloadFeedback("Nothing Exported", UIStyle.Red);
+                clearAllPending = true;
+                ShowButtonFeedback(clearAllCfgLbl, clearAllCfgBg, "Are you sure?", UIStyle.Red);
+                if (clearAllCfgBg != null) clearAllCfgBg.color = UIStyle.Red with { a = 0.55f };
+                return;
             }
+
+            PBManager.DeleteAll();
+            selectedScene = null;
+            clearAllPending = false;
+            RefreshCurrentView();
+            Log.LogInfo("[ReplayUI] All replays cleared");
         }
 
-        private void ShowExportFeedback(string msg, Color color)
+        private void ResetClearAllConfirm()
         {
-            if (exportAllBtnLbl == null) return;
-            exportAllBtnLbl.text = msg;
-            exportAllBtnLbl.color = color;
-            if (exportAllBtnImg != null) exportAllBtnImg.color = color with { a = 0.30f };
+            clearAllPending = false;
+            ShowButtonFeedback(clearAllCfgLbl, clearAllCfgBg, "Clear all data", UIStyle.Red);
+            if (clearAllCfgBg != null) clearAllCfgBg.color = UIStyle.Red with { a = 0.15f };
+            ShowButtonFeedback(exportAllCfgLbl, exportAllCfgBg, "Copy all", UIStyle.Accent);
+            if (exportAllCfgBg != null) exportAllCfgBg.color = UIStyle.Accent with { a = 0.18f };
         }
 
-        private void ShowDownloadFeedback(string msg, Color color)
+        private static void ShowButtonFeedback(Text? label, Image? bg, string msg, Color color)
         {
-            if (downloadAllBtnLbl == null) return;
-            downloadAllBtnLbl.text = msg;
-            downloadAllBtnLbl.color = color;
-            if (downloadAllBtnImg != null) downloadAllBtnImg.color = color with { a = 0.30f };
+            if (label != null) { label.text = msg; label.color = color; }
         }
 
-        // ── Export scene (sub-header) ─────────────────────────────────────────
+        // -- Scene-level actions --
 
         private void OnExportSceneClicked()
         {
             if (selectedScene == null)
             {
-                ShowPasteStatus("Select a scene first", UIStyle.Subtext);
+                ShowPasteStatus("Select a room first", UIStyle.Subtext);
                 return;
             }
             var entries = PBManager.AllPBs()
@@ -109,11 +112,72 @@ namespace ReplayTimerMod
                 return;
             }
             GUIUtility.systemCopyBuffer = ReplayShareEncoder.EncodeCollection(entries);
-            ShowPasteStatus($"{entries.Count} routes copied", UIStyle.Accent);
+            ShowPasteStatus(entries.Count + " routes copied", UIStyle.Accent);
             Log.LogInfo($"[ReplayUI] Exported {entries.Count} routes for {selectedScene}");
         }
 
-        // ── Per-snapshot ──────────────────────────────────────────────────────
+        private void OnClearSceneClicked()
+        {
+            if (selectedScene == null) return;
+            PBManager.DeleteScene(selectedScene);
+            selectedScene = null;
+            ClearSelectedScene();
+            RebuildSceneList();
+        }
+
+        // -- Paste --
+
+        private void OnPasteClicked()
+        {
+            string clip = GUIUtility.systemCopyBuffer ?? "";
+            if (string.IsNullOrEmpty(clip))
+            {
+                ShowPasteStatus("Clipboard empty", UIStyle.Red);
+                return;
+            }
+
+            var rooms = ReplayShareEncoder.DecodeShareString(clip);
+            if (rooms.Count == 0)
+            {
+                ShowPasteStatus("Invalid data", UIStyle.Red);
+                return;
+            }
+
+            int imported = 0, duplicates = 0;
+            foreach (var room in rooms)
+            {
+                if (PBManager.ImportPB(room)) imported++;
+                else duplicates++;
+            }
+
+            selectedScene = rooms[0].Key.SceneName;
+            RebuildSceneList();
+            UpdateRightSubHeader();
+            RebuildRightContent();
+
+            string status;
+            if (rooms.Count == 1)
+                status = imported > 0 ? rooms[0].Key.SceneName : "Duplicate replay";
+            else
+            {
+                status = imported > 0 ? imported + " imported" : "No new replays";
+                if (duplicates > 0) status += " (" + duplicates + " dup)";
+            }
+
+            ShowPasteStatus(status, imported > 0 ? UIStyle.Gold : UIStyle.Subtext);
+            Log.LogInfo($"[ReplayUI] Pasted {rooms.Count} replay(s): {imported} imported, {duplicates} duplicates");
+        }
+
+        private void ShowPasteStatus(string msg, Color color)
+        {
+            if (pasteStatusLbl != null)
+            {
+                pasteStatusLbl.text = msg;
+                pasteStatusLbl.color = color;
+            }
+        }
+
+        // -- Snapshot actions --
 
         private void CopyReplay(RoomKey key, string snapshotId)
         {
@@ -124,7 +188,6 @@ namespace ReplayTimerMod
                 Log.LogWarning($"[ReplayUI] No snapshot for {key}#{snapshotId}");
                 return;
             }
-
             GUIUtility.systemCopyBuffer = snapshot.EncodedData;
             Log.LogInfo($"[ReplayUI] Copied {key}#{snapshotId}");
         }
@@ -132,237 +195,23 @@ namespace ReplayTimerMod
         private void DeleteSnapshot(RoomKey key, string snapshotId)
         {
             PBManager.DeleteSnapshot(key, snapshotId);
-            if (selectedScene != null) RebuildRight(selectedScene);
-            else RefreshSettingsBar();
-            RebuildLeft();
+            RebuildSceneList();
+            if (selectedScene != null && activeTab == TabKind.Runs)
+                RebuildRightContent();
         }
 
         private void DeleteRoute(RoomKey key)
         {
             PBManager.DeletePB(key);
-            if (selectedScene != null) RebuildRight(selectedScene);
-            else RefreshSettingsBar();
-            RebuildLeft();
-        }
-
-        // ── Clear scene (sub-header) ──────────────────────────────────────────
-
-        private void OnClearSceneClicked()
-        {
-            if (selectedScene == null) return;
-            PBManager.DeleteScene(selectedScene);
-            selectedScene = null;
-            ClearRight();
-            RebuildLeft();
-            RefreshSettingsBar();
-        }
-
-        // ── Global clear-all (header) - two-click confirm ─────────────────────
-
-        private void OnClearAllClicked()
-        {
-            if (!clearAllPending)
-            {
-                clearAllPending = true;
-                if (clearAllBtnLbl != null) clearAllBtnLbl.text = "Are you sure?";
-                if (clearAllBtnImg != null) clearAllBtnImg.color = UIStyle.Red with { a = 0.55f };
-            }
-            else
-            {
-                PBManager.DeleteAll();
-                selectedScene = null;
-                ClearRight();
-                RebuildLeft();
-                RefreshSettingsBar();
-                ResetClearAllConfirm();
-                Log.LogInfo("[ReplayUI] All replays cleared");
-            }
-        }
-
-        private void ResetClearAllConfirm()
-        {
-            clearAllPending = false;
-            if (clearAllBtnLbl != null) clearAllBtnLbl.text = "Clear all";
-            if (clearAllBtnImg != null) clearAllBtnImg.color = UIStyle.Red with { a = 0.22f };
-            if (exportAllBtnLbl != null) exportAllBtnLbl.text = "Copy all";
-            if (exportAllBtnImg != null) exportAllBtnImg.color = UIStyle.Accent with { a = 0.22f };
-            if (downloadAllBtnLbl != null) downloadAllBtnLbl.text = "Download all";
-            if (downloadAllBtnImg != null) downloadAllBtnImg.color = UIStyle.Accent with { a = 0.15f };
-        }
-
-        // ── Paste ─────────────────────────────────────────────────────────────
-
-        private void OnPasteClicked()
-        {
-            string clip = GUIUtility.systemCopyBuffer ?? "";
-            if (string.IsNullOrEmpty(clip))
-            {
-                ShowPasteStatus("✕ Clipboard empty", UIStyle.Red);
-                return;
-            }
-
-            var rooms = ReplayShareEncoder.DecodeShareString(clip);
-            if (rooms.Count == 0)
-            {
-                ShowPasteStatus("✕ Invalid data", UIStyle.Red);
-                return;
-            }
-
-            int imported = 0;
-            int duplicates = 0;
-            foreach (var room in rooms)
-            {
-                if (PBManager.ImportPB(room)) imported++;
-                else duplicates++;
-            }
-
-            selectedScene = rooms[0].Key.SceneName;
-            RebuildLeft();
-            RebuildRight(selectedScene);
-            RefreshSettingsBar();
-
-            string status;
-            if (rooms.Count == 1)
-            {
-                status = imported > 0 ? rooms[0].Key.SceneName : "Duplicate replay";
-            }
-            else
-            {
-                status = imported > 0 ? $"{imported} imported" : "No new replays";
-                if (duplicates > 0) status += $" ({duplicates} duplicate)";
-            }
-
-            ShowPasteStatus(status, imported > 0 ? UIStyle.Gold : UIStyle.Subtext);
-            Log.LogInfo($"[ReplayUI] Pasted {rooms.Count} replay(s): {imported} imported, {duplicates} duplicates");
-        }
-
-        private void ShowPasteStatus(string msg, Color color)
-        {
-            if (pasteStatus == null) return;
-            pasteStatus.text = msg;
-            pasteStatus.color = color;
-        }
-
-        // ── Jump to current room (left sub-header) ────────────────────────────
-
-        private void OnJumpToCurrentClicked()
-        {
-            string scene = RoomTracker.CurrentScene;
-
-            if (string.IsNullOrEmpty(scene))
-            {
-                ShowJumpFeedback("Not in a room", UIStyle.Subtext);
-                return;
-            }
-
-            bool hasPB = PBManager.AllPBs().Any(p => p.Key.SceneName == scene);
-            if (!hasPB)
-            {
-                ShowJumpFeedback($"No PB", UIStyle.Subtext);
-                return;
-            }
-
-            ResetJumpFeedback();
-            SelectScene(scene);
-            ScrollToScene(scene);
-
-            Log.LogInfo($"[ReplayUI] Jumped to current room: {scene}");
-        }
-
-        private void ShowJumpFeedback(string msg, Color color)
-        {
-            if (jumpToCurrentBtnLbl == null) return;
-            jumpToCurrentBtnLbl.text = msg;
-            jumpToCurrentBtnLbl.color = color;
-            if (jumpToCurrentBtnImg != null)
-                jumpToCurrentBtnImg.color = color with { a = 0.18f };
-        }
-
-        private void ResetJumpFeedback()
-        {
-            if (jumpToCurrentBtnLbl == null) return;
-            jumpToCurrentBtnLbl.text = "Current";
-            jumpToCurrentBtnLbl.color = UIStyle.Gold;
-            if (jumpToCurrentBtnImg != null)
-                jumpToCurrentBtnImg.color = UIStyle.Gold with { a = 0.18f };
-        }
-
-        // ── Jump to previous room (left sub-header) ───────────────────────────
-        
-        private void OnJumpToLastClicked()
-        {
-            string scene = RoomTracker.PreviousScene;
-
-            if (string.IsNullOrEmpty(scene))
-            {
-                ShowJumpLastFeedback("No previous", UIStyle.Subtext);
-                return;
-            }
-
-            bool hasPB = PBManager.AllPBs().Any(p => p.Key.SceneName == scene);
-            if (!hasPB)
-            {
-                ShowJumpLastFeedback($"No PB", UIStyle.Subtext);
-                return;
-            }
-
-            ResetJumpLastFeedback();
-            SelectScene(scene);
-            ScrollToScene(scene);
-
-            Log.LogInfo($"[ReplayUI] Jumped to previous room: {scene}");
-        }
-
-        private void ShowJumpLastFeedback(string msg, Color color)
-        {
-            if (jumpToLastBtnLbl == null) return;
-            jumpToLastBtnLbl.text = msg;
-            jumpToLastBtnLbl.color = color;
-            if (jumpToLastBtnImg != null)
-                jumpToLastBtnImg.color = color with { a = 0.18f };
-        }
-
-        private void ResetJumpLastFeedback()
-        {
-            if (jumpToLastBtnLbl == null) return;
-            jumpToLastBtnLbl.text = "Previous";
-            jumpToLastBtnLbl.color = UIStyle.Accent;
-            if (jumpToLastBtnImg != null)
-                jumpToLastBtnImg.color = UIStyle.Accent with { a = 0.18f };
-        }
-
-        // ── Ghost settings ────────────────────────────────────────────────────
-
-        private void OnTrackingToggle()
-        {
-            GhostSettings.TrackingEnabled = !GhostSettings.TrackingEnabled;
-            RefreshSettingsBar();
-        }
-
-        private void OnGhostToggle()
-        {
-            GhostSettings.GhostEnabled = !GhostSettings.GhostEnabled;
-            RefreshSettingsBar();
-        }
-
-        private void OnSavePolicyToggle()
-        {
-            GhostSettings.SaveAllRunsEnabled = !GhostSettings.SaveAllRunsEnabled;
-            RefreshSettingsBar();
-        }
-
-        private void OnEditGlobalContext()
-        {
-            SelectionState?.SelectSnapshot(null);
-            RefreshSettingsBar();
-            if (selectedScene != null) RebuildRight(selectedScene);
+            RebuildSceneList();
+            if (selectedScene != null && activeTab == TabKind.Runs)
+                RebuildRightContent();
         }
 
         private void SelectSnapshotForEditing(RoomKey key, string snapshotId)
         {
             var snapshot = PBManager.GetSnapshot(key, snapshotId);
-            if (snapshot == null)
-                return;
+            if (snapshot == null) return;
 
             if (!snapshot.HasVisualOverride)
             {
@@ -372,84 +221,173 @@ namespace ReplayTimerMod
             }
 
             SelectionState?.SelectSnapshot(snapshotId);
-            RefreshSettingsBar();
-            if (selectedScene == key.SceneName)
-                RebuildRight(key.SceneName);
+            if (activeTab == TabKind.Runs && selectedScene == key.SceneName)
+                RebuildRightContent();
+            if (activeTab == TabKind.Config)
+                RefreshConfigValues();
         }
 
         private void ToggleSnapshotPlayback(RoomKey key, string snapshotId)
         {
             SelectionState?.TogglePlayback(snapshotId);
-            if (selectedScene == key.SceneName)
-                RebuildRight(key.SceneName);
-            else
-                RefreshSettingsBar();
+            if (activeTab == TabKind.Runs && selectedScene == key.SceneName)
+                RebuildRightContent();
+        }
+
+        // -- Jump navigation --
+
+        private void OnJumpToCurrentClicked()
+        {
+            string scene = RoomTracker.CurrentScene;
+            if (string.IsNullOrEmpty(scene))
+            {
+                ShowButtonFeedback(jumpCurrentLbl, jumpCurrentBg, "Not in a room", UIStyle.Subtext);
+                return;
+            }
+            if (!PBManager.AllPBs().Any(p => p.Key.SceneName == scene))
+            {
+                ShowButtonFeedback(jumpCurrentLbl, jumpCurrentBg, "No PB", UIStyle.Subtext);
+                return;
+            }
+
+            ResetJumpFeedback();
+            if (activeTab != TabKind.Runs)
+                SwitchTab(TabKind.Runs);
+            SelectScene(scene);
+            ScrollToScene(scene);
+        }
+
+        private void OnJumpToLastClicked()
+        {
+            string scene = RoomTracker.PreviousScene;
+            if (string.IsNullOrEmpty(scene))
+            {
+                ShowButtonFeedback(jumpPreviousLbl, jumpPreviousBg, "No previous", UIStyle.Subtext);
+                return;
+            }
+            if (!PBManager.AllPBs().Any(p => p.Key.SceneName == scene))
+            {
+                ShowButtonFeedback(jumpPreviousLbl, jumpPreviousBg, "No PB", UIStyle.Subtext);
+                return;
+            }
+
+            ResetJumpLastFeedback();
+            if (activeTab != TabKind.Runs)
+                SwitchTab(TabKind.Runs);
+            SelectScene(scene);
+            ScrollToScene(scene);
+        }
+
+        private void ResetJumpFeedback()
+        {
+            if (jumpCurrentLbl != null) { jumpCurrentLbl.text = "Current"; jumpCurrentLbl.color = UIStyle.Gold; }
+            if (jumpCurrentBg != null) jumpCurrentBg.color = UIStyle.Gold with { a = 0.18f };
+        }
+
+        private void ResetJumpLastFeedback()
+        {
+            if (jumpPreviousLbl != null) { jumpPreviousLbl.text = "Previous"; jumpPreviousLbl.color = UIStyle.Accent; }
+            if (jumpPreviousBg != null) jumpPreviousBg.color = UIStyle.Accent with { a = 0.18f };
+        }
+
+        // -- Settings toggles --
+
+        private void OnTrackingToggle()
+        {
+            GhostSettings.TrackingEnabled = !GhostSettings.TrackingEnabled;
+            if (activeTab == TabKind.Config) RefreshConfigValues();
+        }
+
+        private void OnGhostToggle()
+        {
+            GhostSettings.GhostEnabled = !GhostSettings.GhostEnabled;
+            if (activeTab == TabKind.Config) RefreshConfigValues();
+        }
+
+        private void OnSavePolicyToggle()
+        {
+            GhostSettings.SaveAllRunsEnabled = !GhostSettings.SaveAllRunsEnabled;
+            if (activeTab == TabKind.Config) RefreshConfigValues();
+        }
+
+        private void OnOnlineToggle()
+        {
+            bool enabling = !GhostSettings.OnlineEnabled;
+            GhostSettings.OnlineEnabled = enabling;
+            _onOnlineToggle?.Invoke(enabling);
+            if (activeTab == TabKind.Config) RefreshConfigValues();
+        }
+
+        private void OnMaxSavedReplaysMinus() => AdjustMaxSaved(-1);
+        private void OnMaxSavedReplaysPlus() => AdjustMaxSaved(1);
+
+        private void AdjustMaxSaved(int delta)
+        {
+            GhostSettings.MaxSavedReplaysPerRoute += delta;
+            PBManager.PruneAllHistories(GhostSettings.MaxSavedReplaysPerRoute, persist: true);
+            if (activeTab == TabKind.Config) RefreshConfigValues();
+            if (activeTab == TabKind.Runs && selectedScene != null)
+                RebuildRightContent();
+        }
+
+        private void OnEditGlobalContext()
+        {
+            SelectionState?.SelectSnapshot(null);
+            if (activeTab == TabKind.Config) RefreshConfigValues();
+            if (activeTab == TabKind.Runs && selectedScene != null)
+                RebuildRightContent();
         }
 
         private void OnAlphaMinus() => AdjustAlpha(-0.05f);
-
         private void OnAlphaPlus() => AdjustAlpha(0.05f);
 
         private void AdjustAlpha(float delta)
         {
             if (TryGetSelectedSnapshot(out var key, out var snapshot) && snapshot != null)
             {
-                if (!snapshot.HasVisualOverride)
-                    return;
+                if (!snapshot.HasVisualOverride) return;
 
                 Color color = snapshot.ResolveGhostColor(CurrentGlobalGhostColor);
                 color.a = Mathf.Clamp01(Mathf.Round((color.a + delta) * 20f) / 20f);
-                if (PBManager.UpdateSnapshotVisuals(key, snapshot.SnapshotId, true, color)
-                    && selectedScene == key.SceneName)
-                    RebuildRight(key.SceneName);
+                PBManager.UpdateSnapshotVisuals(key, snapshot.SnapshotId, true, color);
             }
             else
             {
                 GhostSettings.GhostAlpha = Mathf.Round((GhostSettings.GhostAlpha + delta) * 20f) / 20f;
-                if (selectedScene != null)
-                    RebuildRight(selectedScene);
             }
 
-            RefreshSettingsBar();
+            if (activeTab == TabKind.Config) RefreshConfigValues();
+            if (activeTab == TabKind.Runs && selectedScene != null)
+                RebuildRightContent();
         }
 
         private void OnColorSwatch(Color rgb)
         {
             if (TryGetSelectedSnapshot(out var key, out var snapshot) && snapshot != null)
             {
-                if (!snapshot.HasVisualOverride)
-                    return;
+                if (!snapshot.HasVisualOverride) return;
 
                 Color color = snapshot.ResolveGhostColor(CurrentGlobalGhostColor);
                 color.r = rgb.r;
                 color.g = rgb.g;
                 color.b = rgb.b;
-                if (PBManager.UpdateSnapshotVisuals(key, snapshot.SnapshotId, true, color)
-                    && selectedScene == key.SceneName)
-                    RebuildRight(key.SceneName);
+                PBManager.UpdateSnapshotVisuals(key, snapshot.SnapshotId, true, color);
             }
             else
             {
                 GhostSettings.GhostColor = new Color(rgb.r, rgb.g, rgb.b, GhostSettings.GhostAlpha);
-                if (selectedScene != null)
-                    RebuildRight(selectedScene);
             }
 
-            RefreshSettingsBar();
+            if (activeTab == TabKind.Config) RefreshConfigValues();
+            if (activeTab == TabKind.Runs && selectedScene != null)
+                RebuildRightContent();
         }
 
-        private static string AlphaString() =>
-            GhostSettings.GhostAlpha.ToString("0.00");
-            
-        // ── Timer HUD settings ────────────────────────────────────────────────
         private void OnTimerToggleClicked()
         {
             GhostSettings.TimerHudEnabled = !GhostSettings.TimerHudEnabled;
-            if (!GhostSettings.TimerHudEnabled && timerHud != null)
-            {
-                timerHud.Disarm();
-            }
-            RefreshSettingsBar();
+            if (!GhostSettings.TimerHudEnabled) timerHud?.Disarm();
+            if (activeTab == TabKind.Config) RefreshConfigValues();
         }
     }
 }
