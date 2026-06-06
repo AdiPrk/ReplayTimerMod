@@ -44,6 +44,7 @@ namespace ReplayTimerMod
             ghostPlayback.SetSelectionState(replaySelectionState);
             replayUI = new ReplayUI();
             roomTimerHUD = new RoomTimerHUD();
+            replayUI.SetTimerHUD(roomTimerHUD);
 
             RoomTracker.Init();
 
