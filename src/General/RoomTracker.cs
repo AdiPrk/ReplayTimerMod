@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Reflection;
 using BepInEx.Logging;
 using UnityEngine;
 using GlobalEnums;
@@ -23,50 +22,70 @@ namespace ReplayTimerMod
         public static string EntryFromScene { get; private set; } = "";
         public static float CurrentRoomTime { get; private set; } = 0f;
 
+        /// <summary>
+        /// True if a DebugMod debug ability (noclip, invincibility, infinite
+        /// resources, timescale changes, etc.) was detected during the room
+        /// currently being recorded. The moment this becomes true, the
+        /// in-progress recording is cancelled (see <see cref="OnRunCancelled"/>)
+        /// and <see cref="IsRecording"/> goes false, so <see cref="OnRoomExit"/>
+        /// will not fire for this room. Resets to false when a new room
+        /// recording starts. Kept available as a sticky per-room record/guard
+        /// for consumers that want an extra belt-and-suspenders check.
+        /// </summary>
+        public static bool RoomUsedDebugAbilities { get; private set; } = false;
+
         // ── Events ───────────────────────────────────────────────────────────
         public static event Action<string, string>? OnRoomEnter;
         public static event Action<string, string, string, float>? OnRoomExit;
+        /// <summary>
+        /// Fired when an in-progress room recording is discarded for any
+        /// reason (death, non-gate exit, over time, savestate load, cheat
+        /// cancellation, etc.). Consumers should always discard/stop their
+        /// own recording state here. Check
+        /// <see cref="KeepGhostPlaybackOnDiscard"/> at the same time to decide
+        /// whether ghost playback should also be stopped.
+        /// </summary>
         public static event Action? OnRecordingDiscarded;
+
+        /// <summary>
+        /// Valid only for the duration of an <see cref="OnRecordingDiscarded"/>
+        /// invocation (set immediately beforehand). True when the discard was
+        /// caused by a cheat-cancellation (see <see cref="OnRunCancelled"/>):
+        /// the in-progress recording is invalid and must be discarded, but the
+        /// player isn't leaving the room, so ghost playback should keep
+        /// running uninterrupted. False for every other discard reason (death,
+        /// non-gate exit, over time, savestate load, etc.), where ghost
+        /// playback should stop as before.
+        /// </summary>
+        public static bool KeepGhostPlaybackOnDiscard { get; private set; } = false;
+
+        /// <summary>
+        /// Fired when an in-progress room recording is cancelled because a
+        /// DebugMod cheat/debug ability was detected mid-room. The string is
+        /// a short, human-readable reason suitable for display in the timer
+        /// UI. <see cref="OnRecordingDiscarded"/> always fires first (with
+        /// <see cref="KeepGhostPlaybackOnDiscard"/> set to true), so the
+        /// cancelled run is never saved or uploaded, but ghost playback for
+        /// the room keeps going.
+        /// </summary>
+        public static event Action<string>? OnRunCancelled;
 
         // ── Private state ────────────────────────────────────────────────────
         private static string lastSceneName = "";
         private static bool pendingGateTransition = false;
-
-        // ── Savestate reflection ──────────────────────────────────────────────
-        private static PropertyInfo? _savestateLoadingProp;
-        private static bool _savestateReflectionResolved = false;
-
-        private static bool IsDebugModSavestateLoading()
-        {
-            try
-            {
-                if (!_savestateReflectionResolved)
-                {
-                    _savestateReflectionResolved = true;
-                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-                    {
-                        if (asm.GetName().Name == "DebugMod")
-                        {
-                            var t = asm.GetType("SaveState")
-                                 ?? asm.GetType("DebugMod.SaveStates.SaveState");
-                            if (t != null)
-                                _savestateLoadingProp = t.GetProperty(
-                                    "loadingSavestate",
-                                    BindingFlags.Public | BindingFlags.Static);
-                            break;
-                        }
-                    }
-                }
-                return _savestateLoadingProp?.GetValue(null, null) != null;
-            }
-            catch { return false; }
-        }
+        private static int _debugModHookRetryCooldown = 0;
+        private static bool _wasLoadingSavestate = false;
 
         public static void Init()
         {
             lastSceneName = "";
+            RoomUsedDebugAbilities = false;
+            _wasLoadingSavestate = false;
+
             GameHooks.OnPlayerDead += HandleInvalidation;
             GameHooks.OnGateTransitionBegin += HandleGateTransitionBegin;
+
+            DebugModBridge.TryHook();
         }
 
         private static void HandleGateTransitionBegin(string destScene, string entryGate)
@@ -75,12 +94,19 @@ namespace ReplayTimerMod
             Log.LogDebug($"[Gate] pending -> {destScene} via '{entryGate}'");
         }
 
-        private static void HandleInvalidation()
+        /// <summary>Standard invalidation - ghost playback should stop (see
+        /// <see cref="KeepGhostPlaybackOnDiscard"/>). Used directly as an
+        /// Action handler (GameHooks.OnPlayerDead, etc.), so this overload
+        /// must stay parameterless.</summary>
+        private static void HandleInvalidation() => HandleInvalidation(keepGhostPlayback: false);
+
+        private static void HandleInvalidation(bool keepGhostPlayback)
         {
             if (IsRecording)
             {
                 Log.LogInfo($"[RoomTracker] Invalidated in {CurrentScene} - discarding");
                 IsRecording = false;
+                KeepGhostPlaybackOnDiscard = keepGhostPlayback;
                 OnRecordingDiscarded?.Invoke();
             }
             CurrentRoomTime = 0f;
@@ -89,7 +115,14 @@ namespace ReplayTimerMod
 
         private static void OnActiveSceneChanged(string fromName, string toName)
         {
-            if (IsDebugModSavestateLoading() || fromName == "Room_Mender_House" || toName == "Room_Mender_House")
+            // Primary same-room/cross-room savestate detection happens every
+            // frame in Tick() via IsLoadingSavestate transitions. This is a
+            // defensive fallback in case a load is somehow still reported as
+            // "in progress" right at the moment of a scene change, plus the
+            // long-standing "Room_Mender_House" special case (HollowKnight.
+            // DebugMod's savestate loader bounces through this scene as a
+            // fast-loading dummy room while restoring state).
+            if (DebugModBridge.IsLoadingSavestate || fromName == "Room_Mender_House" || toName == "Room_Mender_House")
             {
                 Log.LogInfo("[RoomTracker] Savestate detected - invalidating");
                 HandleInvalidation();
@@ -138,6 +171,7 @@ namespace ReplayTimerMod
                 EntryFromScene = fromName;
                 CurrentRoomTime = 0f;
                 IsRecording = true;
+                RoomUsedDebugAbilities = false;
 
                 Log.LogInfo($"[RoomTracker] Enter: {CurrentScene} from {EntryFromScene}");
                 OnRoomEnter?.Invoke(CurrentScene, EntryFromScene);
@@ -158,6 +192,36 @@ namespace ReplayTimerMod
 
         public static void Tick(bool shouldTick)
         {
+            // Lazily hook into DebugMod, retrying periodically in case it loads
+            // after this mod. Once hooked this is a no-op.
+            if (!DebugModBridge.IsAvailable)
+            {
+                if (_debugModHookRetryCooldown <= 0)
+                {
+                    DebugModBridge.TryHook();
+                    _debugModHookRetryCooldown = 60; // ~once per second at 60fps
+                }
+                else
+                {
+                    _debugModHookRetryCooldown--;
+                }
+            }
+
+            // Poll for savestate-load start/finish every frame, regardless of
+            // scene changes. This is the only mechanism that catches "set +
+            // load savestate in the same room" (no scene-change event fires
+            // for a same-scene reload), and it works identically for
+            // cross-room loads. Unlike load/finish *events* - which
+            // HollowKnight.DebugMod doesn't expose at all - this only relies
+            // on the simple loadingSavestate flag both mods provide.
+            bool isLoadingNow = DebugModBridge.IsLoadingSavestate;
+            if (isLoadingNow != _wasLoadingSavestate)
+            {
+                _wasLoadingSavestate = isLoadingNow;
+                Log.LogInfo($"[RoomTracker] Savestate load {(isLoadingNow ? "started" : "finished")} - invalidating");
+                HandleInvalidation();
+            }
+
             string currentSceneName = GetCurrentSceneName();
             if (!string.IsNullOrEmpty(currentSceneName) && currentSceneName != lastSceneName)
             {
@@ -167,6 +231,21 @@ namespace ReplayTimerMod
             }
 
             if (!IsRecording) return;
+
+            if (!RoomUsedDebugAbilities)
+            {
+                DebugAbilityKind? ability = DebugModBridge.GetActiveDebugAbility();
+                if (ability.HasValue)
+                {
+                    RoomUsedDebugAbilities = true;
+                    Log.LogInfo($"[RoomTracker] Debug ability '{ability.Value}' detected during {CurrentScene} - cancelling run");
+
+                    HandleInvalidation(keepGhostPlayback: true);
+                    OnRunCancelled?.Invoke(CheatMessages.For(ability.Value));
+                    return;
+                }
+            }
+
             if (shouldTick)
             {
                 CurrentRoomTime += Time.unscaledDeltaTime;

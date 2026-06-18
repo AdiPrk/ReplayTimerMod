@@ -43,12 +43,12 @@ namespace ReplayTimerMod
         private readonly Action<Action> _postToMain;
 
         // Thread lifecycle
-        private Thread _thread;
+        private Thread? _thread;
         private volatile bool _alive;
 
         // Events (invoked on main thread via _postToMain)
-        public event Action<UploadPayload, UploadResponse> OnUploadSuccess;
-        public event Action<string> OnDisplayNameReceived;
+        public event Action<UploadPayload, UploadResponse>? OnUploadSuccess;
+        public event Action<string>? OnDisplayNameReceived;
 
         public UploadWorker(string apiBaseUrl, string deviceId,
             Action<Action> postToMain)
@@ -130,7 +130,7 @@ namespace ReplayTimerMod
 
                 while (_alive)
                 {
-                    UploadPayload payload = null;
+                    UploadPayload? payload = null;
                     lock (_queueLock)
                     {
                         if (_queue.Count == 0) break;

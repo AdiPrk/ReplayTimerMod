@@ -34,11 +34,19 @@ namespace ReplayTimerMod
         // Fired for ALL BeginSceneTransition calls except death respawns.
         // This includes regular gate transitions (which use subclasses of
         // SceneLoadInfo), vanilla spawns (which use the base class), AND
-        // savestate loads (which also use a subclass).
+        // savestate loads (which also use a subclass - DebugMod always calls
+        // BeginSceneTransition while restoring a savestate, even for same-room
+        // loads where the destination scene is identical to the current one).
         //
-        // Savestate loads are filtered out in RoomTracker.OnActiveSceneChanged
-        // via the DebugMod reflection check - by the time that runs,
-        // pendingGateTransition gets cleared before it can start a recording.
+        // Savestate loads are primarily handled in RoomTracker.Tick(), which
+        // polls DebugModBridge.IsLoadingSavestate every frame and invalidates
+        // on true/false transitions - this catches same-room and cross-room
+        // loads alike, for both Silksong.DebugMod and HollowKnight.DebugMod
+        // (the latter has no BeforeLoad/AfterLoad events to hook).
+        // RoomTracker.OnActiveSceneChanged also re-checks IsLoadingSavestate
+        // as a defensive fallback right at scene-change time, clearing
+        // pendingGateTransition again before it can start a recording for the
+        // restored room.
         //
         // Vanilla spawns (from.name == Menu_Title) are filtered in RoomTracker.
         public static event Action<string, string>? OnGateTransitionBegin;

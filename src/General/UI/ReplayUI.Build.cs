@@ -115,8 +115,8 @@ namespace ReplayTimerMod
 
             int btnH = UIStyle.H(18);
             int btnY = (h - btnH) / 2;
-            int btnW = UIStyle.W(56);
             int gap = UIStyle.W(4);
+            int btnW = (LW - M * 2 - gap) / 2;
 
             var curRef = MakeButton(footer.transform, "JumpCurrent", "Current",
                 UIStyle.FontSizeSm - 2, UIStyle.Gold, UIStyle.Gold with { a = 0.18f },
@@ -129,11 +129,6 @@ namespace ReplayTimerMod
                 M + btnW + gap, btnY, btnW, btnH, OnJumpToLastClicked);
             jumpPreviousBg = prevRef.bg;
             jumpPreviousLbl = prevRef.label;
-
-            sceneCountLbl = MakeLbl(footer.transform, "",
-                UIStyle.FontSizeSm - 3, UIStyle.Overlay, TextAnchor.MiddleRight,
-                x: M + btnW + gap + btnW + gap, y: 0,
-                w: LW - (M + btnW + gap + btnW + gap) - M, h: h);
         }
 
         private void BuildTabBar(int y, int h)

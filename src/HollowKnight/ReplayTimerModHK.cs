@@ -12,11 +12,23 @@ namespace ReplayTimerMod
         private ReplayUI replayUI = null!;
         private RoomTimerHUD roomTimerHUD = null!;
         private ReplaySelectionState replaySelectionState = null!;
-        private NetworkClient networkClient;
+        private NetworkClient? networkClient;
 
         private bool lateInitDone = false;
 
-        public static ReplayTimerModHK? Instance { get; private set; }
+        public static ReplayTimerModHK Instance { get; private set; } = null!;
+
+        private static string GameTag
+        {
+            get
+            {
+#if V1221
+                return "hk_1221";
+#else
+                return "hk_1578";
+#endif
+            }
+        }
 
         public override string GetVersion() =>
             Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0";
@@ -24,21 +36,22 @@ namespace ReplayTimerMod
         public override void Initialize()
         {
             System.Net.ServicePointManager.ServerCertificateValidationCallback =
-    (sender, certificate, chain, sslPolicyErrors) => true;
-    
+                (sender, certificate, chain, sslPolicyErrors) => true;
+
             Instance = this;
             Log("Initialize");
 
             GameHooks.Init();
 
-            string baseDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
+            string baseDirectory = Path.GetDirectoryName(
+                Assembly.GetExecutingAssembly().Location) ?? ".";
 
-            // HK build uses lightweight in-memory config backing for now.
             GhostSettings.Init(baseDirectory);
 
-            string dataDir = Path.Combine(Path.Combine(baseDirectory, "ReplayMod"), "data");
+            string dataDir = Path.Combine(
+                Path.Combine(baseDirectory, "ReplayMod"), "data");
             DataStore.Init(dataDir);
-            
+
             replaySelectionState = new ReplaySelectionState();
             PBManager.SetSelectionState(replaySelectionState);
             PBManager.Init();
@@ -68,7 +81,8 @@ namespace ReplayTimerMod
             TryLateInit();
 
             bool shouldTick = false;
-            try { shouldTick = LoadRemover.ShouldTick(); } catch { Log("couldnt check tick timer"); }
+            try { shouldTick = LoadRemover.ShouldTick(); }
+            catch { Log("couldnt check tick timer"); }
 
             RoomTracker.Tick(shouldTick);
             frameRecorder.Tick(shouldTick);
@@ -88,17 +102,17 @@ namespace ReplayTimerMod
             ghostPlayback.Setup();
             replayUI.Setup();
             roomTimerHUD.Setup();
+
+            // Set game tag for leaderboard cache keys
+            replayUI.SetGameTag(GameTag);
+
+            // Wire the online toggle handler
             replayUI.SetOnlineToggleHandler(OnOnlineToggled);
-            
+
             if (GhostSettings.OnlineEnabled)
                 StartNetworking();
         }
 
-        /// <summary>
-        /// Creates the NetworkClient (if needed) and starts it.
-        /// Called from TryLateInit on startup, or from OnOnlineToggled
-        /// when the user flips the toggle mid-session.
-        /// </summary>
         private void StartNetworking()
         {
             if (networkClient != null && networkClient.IsStarted)
@@ -110,11 +124,7 @@ namespace ReplayTimerMod
             {
                 networkClient = new NetworkClient(
                     GhostSettings.DeviceId,
-#if V1221
-                    "hk_1221",
-#else
-                    "hk_1578",
-#endif
+                    GameTag,
                     GetVersion(),
                     GhostSettings.ApiBaseUrl);
                 networkClient.OnRankReceived += roomTimerHUD.ShowRank;
@@ -123,6 +133,11 @@ namespace ReplayTimerMod
                     if (string.IsNullOrEmpty(GhostSettings.DisplayName))
                         GhostSettings.DisplayName = name;
                 };
+
+                // Wire leaderboard: NetworkClient writes to ReplayUI's cache.
+                // ReplayUI subscribes to events internally via SetNetworkClient.
+                networkClient.SetLeaderboardCache(replayUI.LeaderboardCacheRef);
+                replayUI.SetNetworkClient(networkClient);
             }
 
             networkClient.Start();
@@ -144,7 +159,6 @@ namespace ReplayTimerMod
         {
             if (!GhostSettings.TrackingEnabled)
             {
-                // Start playback but don't record.
                 ghostPlayback.StartPlayback(sceneName, entryFromScene);
                 return;
             }
@@ -153,7 +167,8 @@ namespace ReplayTimerMod
             ghostPlayback.StartPlayback(sceneName, entryFromScene);
         }
 
-        private void OnRoomExit(string sceneName, string entryFromScene, string exitToScene, float lrTime)
+        private void OnRoomExit(string sceneName, string entryFromScene,
+            string exitToScene, float lrTime)
         {
             ghostPlayback.StopPlayback();
 
@@ -163,8 +178,17 @@ namespace ReplayTimerMod
                 return;
             }
 
-            RoomKey key = new RoomKey(sceneName, entryFromScene, exitToScene);
+            // Belt-and-suspenders: RoomTracker cancels the run the instant a
+            // DebugMod cheat/debug ability is detected, so this should never
+            // actually be true here - but if it ever is, never save/upload it.
+            if (RoomTracker.RoomUsedDebugAbilities)
+            {
+                Log("[ReplayTimerModHK] Discarding room exit - debug abilities were used");
+                frameRecorder.DiscardRecording();
+                return;
+            }
 
+            RoomKey key = new RoomKey(sceneName, entryFromScene, exitToScene);
             bool saveAllRuns = GhostSettings.SaveAllRunsEnabled;
 
             if (!saveAllRuns && !PBManager.WouldBePB(key, lrTime))
@@ -174,8 +198,7 @@ namespace ReplayTimerMod
             }
 
             RecordedRoom? recording = frameRecorder.FinishRecording(key, lrTime);
-            if (recording == null)
-                return;
+            if (recording == null) return;
 
             var result = PBManager.Evaluate(recording, saveAllRuns);
             if (result.Kind == ResultKind.FirstRun
@@ -183,7 +206,9 @@ namespace ReplayTimerMod
                 || result.Kind == ResultKind.SavedHistory)
                 replayUI.OnPBUpdated();
 
-            if (networkClient != null && (result.Kind == ResultKind.FirstRun || result.Kind == ResultKind.NewPB))
+            if (networkClient != null
+                && (result.Kind == ResultKind.FirstRun
+                    || result.Kind == ResultKind.NewPB))
             {
                 var snapshot = PBManager.GetPBSnapshot(key);
                 if (snapshot != null)
@@ -193,7 +218,12 @@ namespace ReplayTimerMod
 
         private void OnRecordingDiscarded()
         {
-            ghostPlayback.StopPlayback();
+            // Cheat-cancelled runs invalidate the recording but the player
+            // hasn't left the room - keep the ghost replay going so it can
+            // still be watched.
+            if (!RoomTracker.KeepGhostPlaybackOnDiscard)
+                ghostPlayback.StopPlayback();
+
             frameRecorder.DiscardRecording();
         }
     }

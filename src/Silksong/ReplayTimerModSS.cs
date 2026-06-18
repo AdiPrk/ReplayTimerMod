@@ -19,23 +19,22 @@ namespace ReplayTimerMod
         private ReplayUI replayUI = null!;
         private RoomTimerHUD roomTimerHUD = null!;
         private ReplaySelectionState replaySelectionState = null!;
-        private NetworkClient networkClient;
+        private NetworkClient? networkClient;
 
         private bool lateInitDone = false;
 
         private void Awake()
         {
             System.Net.ServicePointManager.ServerCertificateValidationCallback =
-        (sender, certificate, chain, sslPolicyErrors) => true;
-        
+                (sender, certificate, chain, sslPolicyErrors) => true;
+
             Instance = this;
             Logger.LogInfo($"Plugin {Name} ({Id}) has loaded!");
 
             new Harmony(Id).PatchAll(Assembly.GetExecutingAssembly());
 
-            // Bind GhostSettings to BepInEx config before any other system
-            // reads those properties.
-            string baseDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
+            string baseDirectory = Path.GetDirectoryName(
+                Assembly.GetExecutingAssembly().Location) ?? ".";
 
             GhostSettings.Init(baseDirectory);
 
@@ -63,7 +62,6 @@ namespace ReplayTimerMod
         {
             if (!GhostSettings.TrackingEnabled)
             {
-                // Start playback, but don't record
                 ghostPlayback.StartPlayback(sceneName, entryFromScene);
                 return;
             }
@@ -83,13 +81,19 @@ namespace ReplayTimerMod
                 return;
             }
 
-            RoomKey key = new RoomKey(sceneName, entryFromScene, exitToScene);
+            // Belt-and-suspenders: RoomTracker cancels the run the instant a
+            // DebugMod cheat/debug ability is detected, so this should never
+            // actually be true here - but if it ever is, never save/upload it.
+            if (RoomTracker.RoomUsedDebugAbilities)
+            {
+                Logger.LogInfo("[ReplayTimerModSS] Discarding room exit - debug abilities were used");
+                frameRecorder.DiscardRecording();
+                return;
+            }
 
+            RoomKey key = new RoomKey(sceneName, entryFromScene, exitToScene);
             bool saveAllRuns = GhostSettings.SaveAllRunsEnabled;
 
-            // PB-only mode preserves the existing fast path so we avoid paying the
-            // cost of frames.ToArray() on missed attempts. Save-all mode opts into
-            // materializing every completed run and relies on PBManager dedupe.
             if (!saveAllRuns && !PBManager.WouldBePB(key, lrTime))
             {
                 frameRecorder.DiscardRecording();
@@ -97,8 +101,7 @@ namespace ReplayTimerMod
             }
 
             RecordedRoom? recording = frameRecorder.FinishRecording(key, lrTime);
-            if (recording == null)
-                return;
+            if (recording == null) return;
 
             var result = PBManager.Evaluate(recording, saveAllRuns);
             if (result.Kind == ResultKind.FirstRun
@@ -106,7 +109,9 @@ namespace ReplayTimerMod
                 || result.Kind == ResultKind.SavedHistory)
                 replayUI.OnPBUpdated();
 
-            if (networkClient != null && (result.Kind == ResultKind.FirstRun || result.Kind == ResultKind.NewPB))
+            if (networkClient != null
+                && (result.Kind == ResultKind.FirstRun
+                    || result.Kind == ResultKind.NewPB))
             {
                 var snapshot = PBManager.GetPBSnapshot(key);
                 if (snapshot != null)
@@ -116,7 +121,12 @@ namespace ReplayTimerMod
 
         private void OnRecordingDiscarded()
         {
-            ghostPlayback.StopPlayback();
+            // Cheat-cancelled runs invalidate the recording but the player
+            // hasn't left the room - keep the ghost replay going so it can
+            // still be watched.
+            if (!RoomTracker.KeepGhostPlaybackOnDiscard)
+                ghostPlayback.StopPlayback();
+
             frameRecorder.DiscardRecording();
         }
 
@@ -149,6 +159,10 @@ namespace ReplayTimerMod
             replayUI.Setup();
             roomTimerHUD.Setup();
 
+            // Set game tag for leaderboard cache keys
+            replayUI.SetGameTag("silksong");
+
+            // Wire the online toggle handler
             replayUI.SetOnlineToggleHandler(OnOnlineToggled);
 
             if (GhostSettings.OnlineEnabled)
@@ -164,8 +178,7 @@ namespace ReplayTimerMod
 
             if (networkClient == null)
             {
-                string version = System.Reflection.Assembly
-                    .GetExecutingAssembly()
+                string version = Assembly.GetExecutingAssembly()
                     .GetName().Version?.ToString() ?? "0.0.0";
 
                 networkClient = new NetworkClient(
@@ -179,6 +192,11 @@ namespace ReplayTimerMod
                     if (string.IsNullOrEmpty(GhostSettings.DisplayName))
                         GhostSettings.DisplayName = name;
                 };
+
+                // Wire leaderboard: NetworkClient writes to ReplayUI's cache.
+                // ReplayUI subscribes to events internally via SetNetworkClient.
+                networkClient.SetLeaderboardCache(replayUI.LeaderboardCacheRef);
+                replayUI.SetNetworkClient(networkClient);
             }
 
             networkClient.Start();
@@ -202,7 +220,7 @@ namespace ReplayTimerMod
             roomTimerHUD.Teardown();
         }
 
-        private static bool TryGetGameManager(out GameManager gm)
+        private static bool TryGetGameManager(out GameManager? gm)
         {
             if (cachedGameManager != null)
             {

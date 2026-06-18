@@ -180,11 +180,22 @@ namespace ReplayTimerMod
                     x: deltaX, w: deltaW, h: h);
             }
 
-            // Label
+            // Label — "#N" for your own runs; downloaded replays append
+            // the owner's runner name in accent so it's clear whose run
+            // this is. Rich text keeps it in one layout slot.
             int labelEnd = string.IsNullOrEmpty(delta) ? timeX : deltaX;
             int labelW = labelEnd - x - sp;
             Color labelColor = editing ? UIStyle.Text : UIStyle.Subtext;
-            MakeLbl(row.transform, "#" + (index + 1),
+
+            string labelText = "#" + (index + 1);
+            string? owner = ReplayOwners.Get(snapshot.SnapshotId);
+            if (!string.IsNullOrEmpty(owner))
+            {
+                string accentHex = ColorUtility.ToHtmlStringRGB(UIStyle.Accent);
+                labelText += "  <color=#" + accentHex + ">\u25B8 " + owner + "</color>";
+            }
+
+            MakeLbl(row.transform, labelText,
                 UIStyle.FontSizeSm - 1, labelColor, TextAnchor.MiddleLeft,
                 x: x, w: labelW, h: h);
         }
@@ -194,6 +205,7 @@ namespace ReplayTimerMod
             if (deleteConfirmId == snapshotId)
             {
                 deleteConfirmId = null;
+                ReplayOwners.Remove(snapshotId); // drop owner tag with the replay
                 DeleteSnapshot(key, snapshotId);
             }
             else

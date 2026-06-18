@@ -8,16 +8,16 @@ namespace ReplayTimerMod
     /// </summary>
     internal sealed class UploadPayload
     {
-        public string SnapshotId;
-        public string Game;
-        public string SceneName;
-        public string EntryFrom;
-        public string ExitTo;
+        public string SnapshotId = "";
+        public string Game = "";
+        public string SceneName = "";
+        public string EntryFrom = "";
+        public string ExitTo = "";
         public float TotalTime;
         public int FrameCount;
         public long CapturedAtUtcTicks;
-        public string ReplayData;   // base64 RTM3 string (already encoded)
-        public string ModVersion;
+        public string ReplayData = "";   // base64 RTM3 string (already encoded)
+        public string ModVersion = "";
 
         // Retry state (managed by UploadWorker)
         public int RetryCount;
@@ -29,11 +29,11 @@ namespace ReplayTimerMod
     /// </summary>
     internal sealed class UploadResponse
     {
-        public string RunId;
+        public string RunId = "";
         public int Rank;           // -1 if not returned
         public int TotalRunners;   // -1 if not returned
         public bool IsPB;
-        public string DisplayName; // server-assigned name (first upload)
+        public string DisplayName = ""; // server-assigned name (first upload)
 
         public bool HasRank => Rank > 0 && TotalRunners > 0;
     }
@@ -43,9 +43,9 @@ namespace ReplayTimerMod
     /// </summary>
     internal sealed class ConfigResponse
     {
-        public string MinModVersion;
+        public string MinModVersion = "";
         public bool Maintenance;
-        public string Announcement; // null if none
+        public string? Announcement; // null if none
     }
 
     /// <summary>

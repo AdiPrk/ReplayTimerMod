@@ -265,8 +265,15 @@ namespace ReplayTimerMod
 
             var diamondLine = instance.DiamondGo.AddComponent<LineRenderer>();
             diamondLine.useWorldSpace = true;
+#if V1221
+            // Unity 5.2 (HK 1221 / net35) — old API only
             diamondLine.SetVertexCount(5);
             diamondLine.SetWidth(0.06f, 0.06f);
+#else
+            diamondLine.positionCount = 5;
+            diamondLine.startWidth = 0.06f;
+            diamondLine.endWidth = 0.06f;
+#endif
             diamondLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             diamondLine.receiveShadows = false;
 

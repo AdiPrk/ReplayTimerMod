@@ -36,6 +36,29 @@ namespace ReplayTimerMod
 
         private bool _setup = false;
 
+        // ── Cancellation banner ─────────────────────────────────────────────
+        // Drops down from above, holds, then slides back up out of view when
+        // a run is cancelled (e.g. DebugMod cheat detected mid-room). Sits to
+        // the right of the ticking timer number - close enough to read as
+        // part of that little widget, but clear of the game's own HUD in the
+        // corner. A quick "pop", not a big attention-grabbing banner.
+        private enum BannerState { Hidden, SlidingIn, Visible, SlidingOut }
+        private BannerState _bannerState = BannerState.Hidden;
+        private float _bannerHoldTimer = 0f;
+        private float _bannerY = 0f;
+        private int   _bannerWidth = 0;
+        private int   _bannerHeight = 0;
+        private int   _timerWidgetWidth = 0;
+        private int   _timerRowHeight = 0;
+
+        private const float BannerSlideSpeed  = 1400f; // px/sec - quick pop, not a slow reveal
+        private const float BannerHoldSeconds = 4.6f;  // ~5s total incl. slide in/out
+        private const int   BANNER_GAP_X = 16;          // gap between the timer widget and the banner
+
+        private GameObject?    _bannerGO;
+        private RectTransform? _bannerRt;
+        private Text?          _bannerText;
+
         public bool IsRunning  => _state == HudState.Running;
         public bool IsFinished => _state == HudState.Finished;
         public bool IsReady    => _state == HudState.Ready;
@@ -53,6 +76,7 @@ namespace ReplayTimerMod
             RoomTracker.OnRoomEnter          += HandleRoomEnter;
             RoomTracker.OnRoomExit           += HandleRoomExit;
             RoomTracker.OnRecordingDiscarded += HandleDiscarded;
+            RoomTracker.OnRunCancelled        += HandleRunCancelled;
 
             _setup = true;
             Log.LogInfo("[RoomTimerHUD] Setup complete");
@@ -65,6 +89,7 @@ namespace ReplayTimerMod
             RoomTracker.OnRoomEnter          -= HandleRoomEnter;
             RoomTracker.OnRoomExit           -= HandleRoomExit;
             RoomTracker.OnRecordingDiscarded -= HandleDiscarded;
+            RoomTracker.OnRunCancelled        -= HandleRunCancelled;
 
             if (_canvasGO != null) Object.Destroy(_canvasGO);
             _setup = false;
@@ -75,8 +100,10 @@ namespace ReplayTimerMod
             if (!_setup || _canvasGO == null) return;
             Object.DontDestroyOnLoad(_canvasGO);
 
-            bool shouldShow = GhostSettings.TimerHudEnabled && !IsPaused();
-            if (!shouldShow)
+            bool shouldShow   = GhostSettings.TimerHudEnabled && !IsPaused();
+            bool bannerActive = _bannerState != BannerState.Hidden;
+
+            if (!shouldShow && !bannerActive)
             {
                 if (!GhostSettings.TimerHudEnabled && _state != HudState.Hidden)
                     _state = HudState.Hidden;
@@ -92,29 +119,41 @@ namespace ReplayTimerMod
 
             if (!_canvasGO.activeSelf) _canvasGO.SetActive(true);
 
-            switch (_state)
+            if (shouldShow)
             {
-                case HudState.Hidden:
-                    SetReadyVisible(false);
-                    SetTimerVisible(false);
-                    break;
+                switch (_state)
+                {
+                    case HudState.Hidden:
+                        SetReadyVisible(false);
+                        SetTimerVisible(false);
+                        break;
 
-                case HudState.Ready:
-                    SetReadyVisible(true);
-                    SetTimerVisible(false);
-                    break;
+                    case HudState.Ready:
+                        SetReadyVisible(true);
+                        SetTimerVisible(false);
+                        break;
 
-                case HudState.Running:
-                    SetReadyVisible(false);
-                    SetTimerVisible(true);
-                    RefreshRunning();
-                    break;
+                    case HudState.Running:
+                        SetReadyVisible(false);
+                        SetTimerVisible(true);
+                        RefreshRunning();
+                        break;
 
-                case HudState.Finished:
-                    SetReadyVisible(false);
-                    SetTimerVisible(true);
-                    break;
+                    case HudState.Finished:
+                        SetReadyVisible(false);
+                        SetTimerVisible(true);
+                        break;
+                }
             }
+            else
+            {
+                // Timer HUD itself is hidden/paused, but a cancellation banner
+                // is still animating - keep the canvas alive just for that.
+                SetReadyVisible(false);
+                SetTimerVisible(false);
+            }
+
+            UpdateBanner();
         }
 
         private void HandleRoomEnter(string sceneName, string entryFromScene)
@@ -159,6 +198,73 @@ namespace ReplayTimerMod
             {
                 _state = HudState.Ready;
             }
+        }
+
+        /// <summary>
+        /// Fired by RoomTracker when an in-progress run is cancelled (e.g. a
+        /// DebugMod cheat/debug ability was detected). Drops a small banner
+        /// down from above next to the ticking timer, holds for a few
+        /// seconds, then slides it back up out of view. Independent of the
+        /// main HUD state - it'll show even if the timer HUD is hidden or the
+        /// game is paused.
+        /// </summary>
+        private void HandleRunCancelled(string reason)
+        {
+            if (_bannerGO == null || _bannerRt == null || _bannerText == null) return;
+
+            _bannerText.text = reason;
+
+            _bannerY         = HiddenBannerY();
+            _bannerHoldTimer = 0f;
+            _bannerState     = BannerState.SlidingIn;
+
+            _bannerRt.anchoredPosition = new Vector2(_bannerRt.anchoredPosition.x, _bannerY);
+            _bannerGO.SetActive(true);
+
+            Log.LogInfo($"[RoomTimerHUD] Run cancelled banner: {reason}");
+        }
+
+        private void UpdateBanner()
+        {
+            if (_bannerGO == null || _bannerRt == null) return;
+            if (_bannerState == BannerState.Hidden) return;
+
+            float dt       = Time.unscaledDeltaTime;
+            float shownY   = ShownBannerY();
+            float hiddenY  = HiddenBannerY();
+
+            switch (_bannerState)
+            {
+                case BannerState.SlidingIn:
+                    // Dropping down: Y decreases from hiddenY towards shownY.
+                    _bannerY = Mathf.MoveTowards(_bannerY, shownY, BannerSlideSpeed * dt);
+                    if (_bannerY <= shownY)
+                    {
+                        _bannerY         = shownY;
+                        _bannerHoldTimer = 0f;
+                        _bannerState     = BannerState.Visible;
+                    }
+                    break;
+
+                case BannerState.Visible:
+                    _bannerHoldTimer += dt;
+                    if (_bannerHoldTimer >= BannerHoldSeconds)
+                        _bannerState = BannerState.SlidingOut;
+                    break;
+
+                case BannerState.SlidingOut:
+                    // Retracting back up: Y increases from shownY towards hiddenY.
+                    _bannerY = Mathf.MoveTowards(_bannerY, hiddenY, BannerSlideSpeed * dt);
+                    if (_bannerY >= hiddenY)
+                    {
+                        _bannerY     = hiddenY;
+                        _bannerState = BannerState.Hidden;
+                        _bannerGO.SetActive(false);
+                    }
+                    break;
+            }
+
+            _bannerRt.anchoredPosition = new Vector2(_bannerRt.anchoredPosition.x, _bannerY);
         }
 
         private void RefreshRunning()
@@ -254,6 +360,7 @@ namespace ReplayTimerMod
 
             BuildReadyIndicator(_canvasGO.transform);
             BuildTimerWidget(_canvasGO.transform);
+            BuildBanner(_canvasGO.transform);
         }
 
         private void BuildReadyIndicator(Transform canvasRoot)
@@ -297,6 +404,8 @@ namespace ReplayTimerMod
 
             int innerW = timerW + colGap + deltaW;
             int innerH = timerRowH + rowGap + pbRowH + rowGap + pbRowH;
+            _timerWidgetWidth = innerW;
+            _timerRowHeight   = timerRowH;
 
             int mX = UIStyle.W(MARGIN_X);
             int mY = UIStyle.H(MARGIN_Y);
@@ -349,6 +458,50 @@ namespace ReplayTimerMod
             _rankText.alignByGeometry = false;
             _rankText.gameObject.SetActive(false);
         }
+
+        /// <summary>
+        /// Small one-line notice anchored at the same top margin as the
+        /// timer widget, just to its right (roughly level with the ticking
+        /// timer number). Matches the widget's scale and plain outlined-text
+        /// style (no background panel) so it pops in as a small addition to
+        /// that corner rather than a separate attention-grabbing element.
+        /// Starts off-screen above the top edge; HandleRunCancelled/
+        /// UpdateBanner drop it down into place, hold it briefly, then slide
+        /// it back up out of view.
+        /// </summary>
+        private void BuildBanner(Transform canvasRoot)
+        {
+            _bannerWidth  = UIStyle.W(220);
+            _bannerHeight = _timerRowHeight;
+
+            int mX = UIStyle.W(MARGIN_X);
+            int bannerX = mX + _timerWidgetWidth + UIStyle.W(BANNER_GAP_X);
+
+            _bannerGO = new GameObject("RunCancelledBanner");
+            _bannerGO.transform.SetParent(canvasRoot, false);
+
+            _bannerRt = _bannerGO.AddComponent<RectTransform>();
+            _bannerRt.anchorMin = _bannerRt.anchorMax = new Vector2(0f, 1f);
+            _bannerRt.pivot     = new Vector2(0f, 1f);
+            _bannerRt.sizeDelta = new Vector2(_bannerWidth, _bannerHeight);
+            _bannerRt.anchoredPosition = new Vector2(bannerX, HiddenBannerY());
+
+            _bannerText = MakeLbl(_bannerGO.transform, "",
+                UIStyle.H(13), UIStyle.Red, TextAnchor.LowerLeft,
+                x: 0, y: 0, w: _bannerWidth, h: _bannerHeight);
+            _bannerText.alignByGeometry    = false;
+            _bannerText.horizontalOverflow = HorizontalWrapMode.Overflow;
+
+            _bannerGO.SetActive(false);
+        }
+
+        /// <summary>Y position (anchored top, pivot 0/1) that lines the banner
+        /// up with the timer widget's top margin - its resting/visible spot.</summary>
+        private float ShownBannerY() => -UIStyle.H(MARGIN_Y);
+
+        /// <summary>Y position that puts the banner fully off-screen above the
+        /// top edge, ready to drop down.</summary>
+        private float HiddenBannerY() => _bannerHeight + UIStyle.H(20);
 
         private static Text MakeLbl(Transform parent, string text,
             int fontSize, Color color, TextAnchor anchor,
