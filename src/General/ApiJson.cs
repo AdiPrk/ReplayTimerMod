@@ -489,6 +489,33 @@ namespace ReplayTimerMod
             sb.Append('"');
         }
 
+        /// <summary>
+        /// Escapes a string for use inside a JSON value (without quotes).
+        /// </summary>
+        public static string EscapeString(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s ?? "";
+            var sb = new StringBuilder(s.Length);
+            foreach (char c in s)
+            {
+                switch (c)
+                {
+                    case '"':  sb.Append("\\\""); break;
+                    case '\\': sb.Append("\\\\"); break;
+                    case '\n': sb.Append("\\n");  break;
+                    case '\r': sb.Append("\\r");  break;
+                    case '\t': sb.Append("\\t");  break;
+                    default:
+                        if (c < 0x20)
+                            sb.Append("\\u").Append(((int)c).ToString("x4"));
+                        else
+                            sb.Append(c);
+                        break;
+                }
+            }
+            return sb.ToString();
+        }
+
         // ── Flat JSON parser ───────────────────────────────────────────────
 
         private static Dictionary<string, string?> ParseFlat(string json)

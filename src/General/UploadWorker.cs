@@ -118,8 +118,9 @@ namespace ReplayTimerMod
             int delaySec = 1 << payload.RetryCount;
             payload.RetryAfterTicks = DateTime.UtcNow.AddSeconds(delaySec).Ticks;
 
-            Log.LogInfo("[UploadWorker] Retry " + payload.RetryCount + "/" + MaxRetries
-                + " for " + payload.SceneName + " in " + delaySec + "s: " + status);
+            Log.LogWarning("[UploadWorker] Retry " + payload.RetryCount + "/" + MaxRetries
+                + " for " + payload.SceneName + " in " + delaySec + "s: " + status
+                + " " + message);
 
             _queue.Enqueue(payload);
         }

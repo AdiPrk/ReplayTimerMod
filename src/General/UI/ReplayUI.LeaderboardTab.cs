@@ -490,7 +490,8 @@ namespace ReplayTimerMod
                 {
                     string rid = entry.RunId;
                     string rname = entry.RunnerName ?? "";
-                    Btn(ghostGO, () => OnGhostDownloadClicked(rid, rname));
+                    bool isMe = entry.IsYou;
+                    Btn(ghostGO, () => OnGhostDownloadClicked(rid, rname, isMe));
                     var ghostBtn = ghostGO.GetComponent<Button>();
                     if (ghostBtn != null)
                     {
@@ -787,7 +788,7 @@ namespace ReplayTimerMod
 
         // ── Ghost download flow ────────────────────────────────────────
 
-        private void OnGhostDownloadClicked(string runId, string runnerName)
+        private void OnGhostDownloadClicked(string runId, string runnerName, bool isYou)
         {
             if (_networkClient == null || !_networkClient.IsStarted) return;
             if (string.IsNullOrEmpty(runId)) return;
@@ -843,10 +844,10 @@ namespace ReplayTimerMod
                 if (imported)
                 {
                     // Tag the imported snapshot with its owner so the Runs
-                    // tab can show whose run it is. The fresh import is the
-                    // history entry with the newest CapturedAt (CreateNew
-                    // stamps it with the import time).
-                    TagImportedSnapshot(room, runnerName);
+                    // tab can show whose run it is — but NOT for your own
+                    // replays, which should appear as normal personal runs.
+                    if (!isYou)
+                        TagImportedSnapshot(room, runnerName);
 
                     Log.LogInfo("[Leaderboard] Ghost imported: " +
                         room.Key.SceneName + "[" + room.Key.EntryFromScene +

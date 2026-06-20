@@ -83,7 +83,6 @@ namespace ReplayTimerMod
 
         private string? _pollScene;
         private float _pollTimer;
-        private bool _pollInFlight;
         private int _consecutiveNoChange;   // for adaptive interval
         private bool _lastPollWasChange;
         private bool _menuOpen;             // set by UI, controls scene index cadence
@@ -211,7 +210,6 @@ namespace ReplayTimerMod
         {
             _pollScene = scene;
             _pollTimer = 999f; // trigger immediately
-            _pollInFlight = false;
             _consecutiveNoChange = 0;
             _lastPollWasChange = false;
             _menuOpen = true;
@@ -227,7 +225,6 @@ namespace ReplayTimerMod
         public void StopLeaderboardPolling()
         {
             _pollScene = null;
-            _pollInFlight = false;
             _menuOpen = false;
         }
 
@@ -538,6 +535,27 @@ namespace ReplayTimerMod
         {
             if (string.IsNullOrEmpty(url)) return url;
             return url.EndsWith("/") ? url.Substring(0, url.Length - 1) : url;
+        }
+
+        // ── Force refresh (after name change, etc.) ────────────────────────
+
+        /// <summary>
+        /// Invalidates all cached versions so the next poll fetches fresh
+        /// data. Also resets the scene index timer for an immediate re-check.
+        /// Call after a display name change so updated names appear quickly.
+        /// </summary>
+        public void ForceRefreshAll()
+        {
+            if (_leaderboardCache != null)
+                _leaderboardCache.InvalidateAllRoomVersions();
+
+            _sceneIndexTimer = 999f; // trigger immediate scene index poll
+
+            // If currently viewing a room, the next poll (5-12s) will
+            // fetch fresh data. Reset the adaptive interval to be fast.
+            _consecutiveNoChange = 0;
+            _lastPollWasChange = true;
+            _pollTimer = 999f; // trigger immediate room poll
         }
 
         // ── Public state queries ───────────────────────────────────────────

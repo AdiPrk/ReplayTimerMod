@@ -84,6 +84,19 @@ namespace ReplayTimerMod
         private Image? exportAllCfgBg;
         private Text? onlineToggleLbl;
         private Image? onlineToggleBg;
+        private InputField? nameInput;
+        private Text? nameStatusLbl;
+        private Image? nameSaveBg;
+        private Text? nameSaveLbl;
+        private UnityEngine.Networking.UnityWebRequest? _nameRequest;
+        private string _lastSavedName = "";
+
+        /// <summary>
+        /// Fired when the user successfully saves a new display name
+        /// via the config tab. The mod entry point subscribes to this
+        /// to persist the name and start networking if needed.
+        /// </summary>
+        public event System.Action<string>? OnDisplayNameSet;
 
         // Layout dimensions (computed once in Setup)
         private int PW, PH, LW, RW, M, RH;
@@ -213,6 +226,19 @@ namespace ReplayTimerMod
 
             // Revert expired ✓/✗ download states back to idle (in place)
             TickGhostStateExpiry();
+
+            // Poll in-flight name-save request
+            TickNameSave();
+        }
+
+        /// <summary>
+        /// Public entry point to refresh the config tab toggle states.
+        /// Called by mod entry point after programmatic state changes.
+        /// </summary>
+        public void RefreshConfigTab()
+        {
+            if (activeTab == TabKind.Config)
+                RefreshConfigValues();
         }
 
         public void OnPBUpdated() => rebuildPending = true;

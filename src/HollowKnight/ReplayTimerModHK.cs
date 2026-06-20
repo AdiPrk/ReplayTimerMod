@@ -13,7 +13,6 @@ namespace ReplayTimerMod
         private RoomTimerHUD roomTimerHUD = null!;
         private ReplaySelectionState replaySelectionState = null!;
         private NetworkClient? networkClient;
-
         private bool lateInitDone = false;
 
         public static ReplayTimerModHK Instance { get; private set; } = null!;
@@ -106,7 +105,11 @@ namespace ReplayTimerMod
             // Wire the online toggle handler
             replayUI.SetOnlineToggleHandler(OnOnlineToggled);
 
-            if (GhostSettings.OnlineEnabled)
+            // When name is set via the config tab, start networking
+            replayUI.OnDisplayNameSet += OnDisplayNameSet;
+
+            if (GhostSettings.OnlineEnabled
+                && !string.IsNullOrEmpty(GhostSettings.DisplayName))
                 StartNetworking();
         }
 
@@ -144,12 +147,33 @@ namespace ReplayTimerMod
         private void OnOnlineToggled(bool enabled)
         {
             if (enabled)
-                StartNetworking();
+            {
+                // Networking only starts once a display name is set.
+                // The config tab shows a name input when online is enabled.
+                if (!string.IsNullOrEmpty(GhostSettings.DisplayName))
+                    StartNetworking();
+            }
             else if (networkClient != null)
             {
                 networkClient.Stop();
                 Log("Online features stopped");
             }
+        }
+
+        private void OnDisplayNameSet(string name)
+        {
+            GhostSettings.DisplayName = name;
+            GhostSettings.Save();
+            Log("Display name set: " + name);
+
+            // If online is enabled but networking hasn't started yet
+            // (was waiting for the name), start it now.
+            if (GhostSettings.OnlineEnabled)
+                StartNetworking();
+
+            // Force refresh so leaderboards show the new name immediately
+            if (networkClient != null)
+                networkClient.ForceRefreshAll();
         }
 
         private void OnRoomEnter(string sceneName, string entryFromScene)

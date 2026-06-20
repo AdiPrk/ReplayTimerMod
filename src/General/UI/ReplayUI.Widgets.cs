@@ -78,6 +78,13 @@ namespace ReplayTimerMod
             t.fontSize = fontSize;
             t.color = color;
             t.alignment = anchor;
+            // Never interpret rich-text markup in labels. Display names (and any
+            // server-supplied text) render through here; disabling rich text
+            // means a name like "<color=#f00>x" or "<size=400>" is shown as
+            // literal characters instead of being interpreted. Defense in depth:
+            // new names are ASCII-only and can't contain '<'/'>' anyway, but this
+            // also neutralizes any legacy name stored before validation existed.
+            t.supportRichText = false;
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
             t.verticalOverflow = VerticalWrapMode.Truncate;
             t.text = text;

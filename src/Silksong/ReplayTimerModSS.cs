@@ -20,7 +20,6 @@ namespace ReplayTimerMod
         private RoomTimerHUD roomTimerHUD = null!;
         private ReplaySelectionState replaySelectionState = null!;
         private NetworkClient? networkClient;
-
         private bool lateInitDone = false;
 
         private void Awake()
@@ -164,7 +163,10 @@ namespace ReplayTimerMod
             // Wire the online toggle handler
             replayUI.SetOnlineToggleHandler(OnOnlineToggled);
 
-            if (GhostSettings.OnlineEnabled)
+            replayUI.OnDisplayNameSet += OnDisplayNameSet;
+
+            if (GhostSettings.OnlineEnabled
+                && !string.IsNullOrEmpty(GhostSettings.DisplayName))
                 StartNetworking();
         }
 
@@ -205,12 +207,28 @@ namespace ReplayTimerMod
         private void OnOnlineToggled(bool enabled)
         {
             if (enabled)
-                StartNetworking();
+            {
+                if (!string.IsNullOrEmpty(GhostSettings.DisplayName))
+                    StartNetworking();
+            }
             else if (networkClient != null)
             {
                 networkClient.Stop();
                 Logger.LogInfo("Online features stopped");
             }
+        }
+
+        private void OnDisplayNameSet(string name)
+        {
+            GhostSettings.DisplayName = name;
+            GhostSettings.Save();
+            Logger.LogInfo("Display name set: " + name);
+
+            if (GhostSettings.OnlineEnabled)
+                StartNetworking();
+
+            if (networkClient != null)
+                networkClient.ForceRefreshAll();
         }
 
         private void OnDestroy()

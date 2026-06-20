@@ -36,6 +36,10 @@ namespace ReplayTimerMod
             clearAllPending = false;
             onlineToggleLbl = null;
             onlineToggleBg = null;
+            nameInput = null;
+            nameStatusLbl = null;
+            nameSaveBg = null;
+            nameSaveLbl = null;
         }
 
         private void BuildConfigContent()
@@ -66,6 +70,80 @@ namespace ReplayTimerMod
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnOnlineToggle);
             onlineToggleBg = br.bg;
             onlineToggleLbl = br.label;
+
+            // Display name row (visible when online is enabled)
+            if (GhostSettings.OnlineEnabled)
+            {
+                var nameRow = AddConfigRow(rightContent, "Name", rowH, labelW);
+                int inputW = UIStyle.W(130);
+                int inputH = btnH + UIStyle.H(4);
+                int saveBtnW = UIStyle.W(40);
+
+                // InputField background
+                var inputGO = MakeGO("NameInput", nameRow.transform);
+                Img(inputGO, UIStyle.Surface);
+                Rect(inputGO, labelW, (rowH - inputH) / 2, inputW, inputH);
+
+                // Text child
+                var textGO = MakeGO("Text", inputGO.transform);
+                var textComp = textGO.AddComponent<Text>();
+                textComp.font = UIStyle.Arial;
+                textComp.fontSize = UIStyle.FontSizeSm - 1;
+                textComp.color = UIStyle.Text;
+                textComp.alignment = TextAnchor.MiddleLeft;
+                textComp.supportRichText = false;
+                var textRT = textGO.GetComponent<RectTransform>();
+                textRT.anchorMin = Vector2.zero;
+                textRT.anchorMax = Vector2.one;
+                textRT.offsetMin = new Vector2(UIStyle.H(4), 1);
+                textRT.offsetMax = new Vector2(-UIStyle.H(4), -1);
+
+                // Placeholder child
+                var phGO = MakeGO("Placeholder", inputGO.transform);
+                var phText = phGO.AddComponent<Text>();
+                phText.font = UIStyle.Arial;
+                phText.fontSize = UIStyle.FontSizeSm - 1;
+                phText.color = UIStyle.Subtext with { a = 0.5f };
+                phText.fontStyle = FontStyle.Italic;
+                phText.alignment = TextAnchor.MiddleLeft;
+                phText.text = "Enter name...";
+                var phRT = phGO.GetComponent<RectTransform>();
+                phRT.anchorMin = Vector2.zero;
+                phRT.anchorMax = Vector2.one;
+                phRT.offsetMin = new Vector2(UIStyle.H(4), 1);
+                phRT.offsetMax = new Vector2(-UIStyle.H(4), -1);
+
+                // InputField component
+                nameInput = inputGO.AddComponent<InputField>();
+                nameInput.textComponent = textComp;
+                nameInput.placeholder = phText;
+                nameInput.characterLimit = NameValidator.MaxLength;
+                nameInput.text = GhostSettings.DisplayName ?? "";
+                _lastSavedName = nameInput.text;
+                nameInput.onEndEdit.AddListener(OnNameEndEdit);
+
+                // Save button
+                int saveX = labelW + inputW + gap;
+                br = MakeButton(nameRow.transform, "NameSave", "Save",
+                    UIStyle.FontSizeSm - 2, UIStyle.Base, UIStyle.Accent,
+                    saveX, (rowH - btnH) / 2, saveBtnW, btnH, OnNameSave);
+                nameSaveBg = br.bg;
+                nameSaveLbl = br.label;
+
+                // Status row (for feedback: "Saved!", errors, etc.)
+                var statusRow = MakeGO("NameStatus", rightContent);
+                Img(statusRow, Color.clear);
+                var statusLE = statusRow.AddComponent<LayoutElement>();
+                statusLE.minHeight = statusLE.preferredHeight = UIStyle.H(16);
+                nameStatusLbl = MakeLbl(statusRow.transform, "",
+                    UIStyle.FontSizeSm - 2, UIStyle.Subtext,
+                    TextAnchor.MiddleLeft,
+                    x: UIStyle.W(8), w: UIStyle.W(280), h: UIStyle.H(16));
+
+                // Show hint if no name set yet
+                if (string.IsNullOrEmpty(GhostSettings.DisplayName))
+                    nameStatusLbl.text = "Set a name to start uploading";
+            }
 
             AddSectionSeparator(rightContent);
 
@@ -328,6 +406,160 @@ namespace ReplayTimerMod
             Img(sep, UIStyle.Overlay with { a = 0.4f });
             var le = sep.AddComponent<LayoutElement>();
             le.minHeight = le.preferredHeight = 1;
+        }
+
+        // ── Name save logic ────────────────────────────────────────────────
+
+        private void OnNameEndEdit(string text)
+        {
+            // Submit on Enter key
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+                OnNameSave();
+        }
+
+        private void OnNameSave()
+        {
+            if (nameInput == null) return;
+            if (_nameRequest != null) return; // already saving
+
+            string name = nameInput.text.Trim();
+
+            // Don't save if unchanged
+            if (name == _lastSavedName && !string.IsNullOrEmpty(name))
+            {
+                SetNameStatus("No changes", UIStyle.Subtext);
+                return;
+            }
+
+            var check = NameValidator.Validate(name);
+            if (!check.Valid)
+            {
+                SetNameStatus(check.Error, UIStyle.Red);
+                return;
+            }
+            // Use the canonical form so what we send matches what passed validation.
+            name = check.Canonical;
+
+            SetNameStatus("Saving...", UIStyle.Subtext);
+            SetNameSaveEnabled(false);
+
+            GhostSettings.EnsureDeviceId();
+            string json = "{\"display_name\":\"" + ApiJson.EscapeString(name) + "\"}";
+            byte[] body = System.Text.Encoding.UTF8.GetBytes(json);
+
+            _nameRequest = new UnityEngine.Networking.UnityWebRequest(
+                GhostSettings.ApiBaseUrl + "/set-name", "POST");
+            _nameRequest.uploadHandler =
+                new UnityEngine.Networking.UploadHandlerRaw(body);
+            _nameRequest.downloadHandler =
+                new UnityEngine.Networking.DownloadHandlerBuffer();
+            _nameRequest.SetRequestHeader("Content-Type",
+                "application/json; charset=utf-8");
+            _nameRequest.SetRequestHeader("X-Device-Id",
+                GhostSettings.DeviceId);
+
+#if V1221
+            _nameRequest.Send();
+#else
+            _nameRequest.timeout = 10;
+            _nameRequest.SendWebRequest();
+#endif
+        }
+
+        /// <summary>
+        /// Polls the in-flight name-save request. Called from Tick().
+        /// </summary>
+        private void TickNameSave()
+        {
+            if (_nameRequest == null || !_nameRequest.isDone) return;
+
+            bool success;
+#if V1221
+            success = !_nameRequest.isError;
+#else
+            success = _nameRequest.result ==
+                UnityEngine.Networking.UnityWebRequest.Result.Success;
+#endif
+
+            if (success)
+            {
+                string resp = _nameRequest.downloadHandler?.text ?? "";
+                _nameRequest.Dispose();
+                _nameRequest = null;
+
+                // Parse the confirmed display_name from response
+                string? confirmedName = ParseNameFromResponse(resp);
+                if (confirmedName != null)
+                {
+                    _lastSavedName = confirmedName;
+                    if (nameInput != null)
+                        nameInput.text = confirmedName;
+                    SetNameStatus("Saved!", UIStyle.Green);
+                    OnDisplayNameSet?.Invoke(confirmedName);
+                }
+                else
+                {
+                    SetNameStatus("Unexpected response", UIStyle.Red);
+                }
+            }
+            else
+            {
+                string err = _nameRequest.downloadHandler?.text
+                    ?? _nameRequest.error ?? "";
+                _nameRequest.Dispose();
+                _nameRequest = null;
+
+                string msg = ParseErrorFromResponse(err);
+                SetNameStatus(msg, UIStyle.Red);
+            }
+
+            SetNameSaveEnabled(true);
+        }
+
+        private void SetNameStatus(string text, Color color)
+        {
+            if (nameStatusLbl != null)
+            {
+                nameStatusLbl.text = text;
+                nameStatusLbl.color = color;
+            }
+        }
+
+        private void SetNameSaveEnabled(bool enabled)
+        {
+            if (nameSaveBg != null)
+                nameSaveBg.color = enabled ? UIStyle.Accent : UIStyle.Overlay;
+            if (nameSaveLbl != null)
+                nameSaveLbl.color = enabled ? UIStyle.Base : UIStyle.Subtext;
+        }
+
+        private static string? ParseNameFromResponse(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return null;
+            int idx = json.IndexOf("\"display_name\"");
+            if (idx < 0) return null;
+            int q1 = json.IndexOf('"', json.IndexOf(':', idx + 14) + 1);
+            if (q1 < 0) return null;
+            int q2 = json.IndexOf('"', q1 + 1);
+            return q2 > q1 ? json.Substring(q1 + 1, q2 - q1 - 1) : null;
+        }
+
+        private static string ParseErrorFromResponse(string response)
+        {
+            if (string.IsNullOrEmpty(response))
+                return "Connection failed. Try again.";
+            int idx = response.IndexOf("\"error\"");
+            if (idx >= 0)
+            {
+                int q1 = response.IndexOf('"', response.IndexOf(':', idx + 7) + 1);
+                if (q1 >= 0)
+                {
+                    int q2 = response.IndexOf('"', q1 + 1);
+                    if (q2 > q1)
+                        return response.Substring(q1 + 1, q2 - q1 - 1);
+                }
+            }
+            return "Connection failed. Try again.";
         }
     }
 }

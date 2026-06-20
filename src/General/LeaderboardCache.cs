@@ -356,6 +356,18 @@ namespace ReplayTimerMod
             _serverScenesVersion++;
         }
 
+        /// <summary>
+        /// Resets all cached server versions to 0, forcing the next
+        /// leaderboard poll to fetch fresh data. Call this after a
+        /// display name change so updated names appear immediately.
+        /// </summary>
+        public void InvalidateAllRoomVersions()
+        {
+            _roomServerVersions.Clear();
+            _roomFetchedAt.Clear();
+            _sceneIndexVersion = 0;
+        }
+
         // ── Backward compat: UpdateFromManifest is no longer needed ────────
         // Kept as a no-op stub in case any code path still references it.
 
