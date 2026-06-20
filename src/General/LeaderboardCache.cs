@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
 
 namespace ReplayTimerMod
 {
@@ -20,9 +22,9 @@ namespace ReplayTimerMod
         public string EntryFrom = "";
         public string ExitTo = "";
         public int TotalRunners;
-        public int YourRank = -1;                         // -1 if you have no entry
+        public int YourRank = -1;
         public List<LeaderboardEntry> Entries = new List<LeaderboardEntry>();
-        public LeaderboardEntry? YourEntry;                // non-null if your rank > top N
+        public LeaderboardEntry? YourEntry;
     }
 
     /// <summary>
@@ -40,178 +42,334 @@ namespace ReplayTimerMod
     // ── Leaderboard cache ──────────────────────────────────────────────
 
     /// <summary>
-    /// In-memory cache for leaderboard data, keyed by "game:scene".
+    /// In-memory cache for leaderboard data.
+    ///
+    /// Two tiers of data:
+    ///   1. Scene index (lightweight): which scenes have data + aggregate counts.
+    ///      Populated from GET /init and GET /scenes.
+    ///   2. Per-room leaderboards (full): entries, ranks, times.
+    ///      Populated on demand from GET /leaderboard.
     ///
     /// Change detection: every entry carries a content signature. Updates
     /// that don't change the data don't bump the version, so the UI can
-    /// skip rebuilds for identical polling responses. This is what keeps
-    /// hover states and scroll position alive while the 5-second poll and
-    /// 60-second manifest refresh run in the background.
+    /// skip rebuilds for identical polling responses.
+    ///
+    /// Public API is backward-compatible with the old manifest-based design:
+    ///   ManifestLoaded → true when scene index has loaded
+    ///   GetServerScenes() → set of scene names from scene index
+    ///   ServerScenesVersion → bumped when scene set changes
+    ///   Get/GetVersion → per-room leaderboard data
     /// </summary>
     public sealed class LeaderboardCache
     {
-        private readonly object _lock = new object();
+        // ── Scene index (from /init, /scenes) ──────────────────────────────
+
+        private int _sceneIndexVersion;       // server's version stamp
+        private bool _sceneIndexLoaded;
+        private readonly HashSet<string> _serverScenes = new HashSet<string>();
+        private readonly Dictionary<string, SceneInfo> _sceneInfos =
+            new Dictionary<string, SceneInfo>();
+        private int _serverScenesVersion;     // local monotonic, for UI rebuild gating
+
+        // ── Per-room leaderboards (from /leaderboard) ──────────────────────
+
         private readonly Dictionary<string, LeaderboardData> _cache =
             new Dictionary<string, LeaderboardData>();
         private readonly Dictionary<string, int> _signatures =
             new Dictionary<string, int>();
         private readonly Dictionary<string, int> _versions =
             new Dictionary<string, int>();
+        private readonly Dictionary<string, int> _roomServerVersions =
+            new Dictionary<string, int>();
+        private readonly Dictionary<string, float> _roomFetchedAt =
+            new Dictionary<string, float>();
+
+        // ── Scene index API ────────────────────────────────────────────────
+
+        /// <summary>The server's scene-index version stamp.</summary>
+        public int SceneIndexVersion => _sceneIndexVersion;
 
         /// <summary>
-        /// All scene names the server has leaderboard data for.
-        /// Populated by UpdateFromManifest.
+        /// Backward compat: true when the scene index has loaded.
+        /// UI checks this to know whether to show online indicators.
         /// </summary>
-        private readonly HashSet<string> _serverScenes = new HashSet<string>();
+        public bool ManifestLoaded => _sceneIndexLoaded;
 
         /// <summary>
         /// Bumped only when the server scene SET changes (rooms added or
-        /// removed), not on every manifest refresh. The scene list uses
-        /// this to skip pointless rebuilds.
+        /// removed), not on every scene index refresh.
         /// </summary>
-        private int _serverScenesVersion;
+        public int ServerScenesVersion => _serverScenesVersion;
 
-        private bool _manifestLoaded;
-
-        public bool ManifestLoaded
+        /// <summary>
+        /// Copy of all scene names the server has leaderboard data for.
+        /// </summary>
+        public HashSet<string> GetServerScenes()
         {
-            get { lock (_lock) { return _manifestLoaded; } }
+            return new HashSet<string>(_serverScenes);
         }
 
-        public int ServerScenesVersion
+        /// <summary>
+        /// Returns aggregate info for a scene, or null if not in index.
+        /// </summary>
+        public SceneInfo? GetSceneInfo(string scene)
         {
-            get { lock (_lock) { return _serverScenesVersion; } }
+            return _sceneInfos.TryGetValue(scene, out var info) ? info : null;
         }
+
+        /// <summary>
+        /// Updates the scene index from a /scenes or /init response.
+        /// Returns true if the scene set changed.
+        /// </summary>
+        public bool UpdateSceneIndex(int serverVersion, List<SceneInfo> scenes)
+        {
+            _sceneIndexVersion = serverVersion;
+            _sceneIndexLoaded = true;
+
+            // Check if scene set changed.
+            bool setChanged = _serverScenes.Count != scenes.Count;
+            if (!setChanged)
+            {
+                foreach (var s in scenes)
+                {
+                    if (!_serverScenes.Contains(s.SceneName))
+                    {
+                        setChanged = true;
+                        break;
+                    }
+                }
+            }
+
+            _serverScenes.Clear();
+            _sceneInfos.Clear();
+            foreach (var s in scenes)
+            {
+                _serverScenes.Add(s.SceneName);
+                _sceneInfos[s.SceneName] = s;
+            }
+
+            if (setChanged)
+                _serverScenesVersion++;
+
+            return setChanged;
+        }
+
+        // ── Per-room leaderboard API ───────────────────────────────────────
 
         public LeaderboardData? Get(string game, string scene)
         {
             string key = game + ":" + scene;
-            lock (_lock)
-            {
-                return _cache.TryGetValue(key, out var data) ? data : null;
-            }
+            return _cache.TryGetValue(key, out var data) ? data : null;
         }
 
         /// <summary>
-        /// Monotonic version for a room's data. Bumps only when the content
+        /// Monotonic version for a room's data. Bumps only when content
         /// actually changes. Returns 0 for rooms never cached.
         /// </summary>
         public int GetVersion(string game, string scene)
         {
             string key = game + ":" + scene;
-            lock (_lock)
-            {
-                return _versions.TryGetValue(key, out var v) ? v : 0;
-            }
+            return _versions.TryGetValue(key, out var v) ? v : 0;
         }
 
         /// <summary>
-        /// Updates a single room's data. Returns true if the content
-        /// actually changed (version bumped), false if identical.
+        /// The server-side version for this room. Sent in subsequent
+        /// requests as the 'v' param for conditional responses.
+        /// Returns 0 if never fetched.
         /// </summary>
-        public bool Update(string game, string scene, LeaderboardData data)
+        public int GetRoomServerVersion(string game, string scene)
+        {
+            string key = game + ":" + scene;
+            return _roomServerVersions.TryGetValue(key, out var v) ? v : 0;
+        }
+
+        /// <summary>
+        /// Whether cached data for this room is fresh enough to display
+        /// without re-fetching.
+        /// </summary>
+        public bool IsRoomFresh(string game, string scene, float maxAgeSec)
+        {
+            string key = game + ":" + scene;
+            if (!_roomFetchedAt.TryGetValue(key, out var fetchedAt))
+                return false;
+            return (Time.realtimeSinceStartup - fetchedAt) < maxAgeSec;
+        }
+
+        /// <summary>
+        /// Whether we have any cached data for this room (fresh or stale).
+        /// </summary>
+        public bool HasRoomData(string game, string scene)
+        {
+            string key = game + ":" + scene;
+            return _cache.ContainsKey(key);
+        }
+
+        /// <summary>
+        /// Updates a room's leaderboard data from a server response.
+        /// Returns true if the content actually changed (version bumped).
+        /// </summary>
+        public bool UpdateRoom(string game, string scene,
+            int serverVersion, LeaderboardData data)
         {
             string key = game + ":" + scene;
             int sig = ComputeSignature(data);
 
-            lock (_lock)
-            {
-                _cache[key] = data;   // always keep freshest object
+            _cache[key] = data;
+            _roomServerVersions[key] = serverVersion;
+            _roomFetchedAt[key] = Time.realtimeSinceStartup;
 
-                if (_signatures.TryGetValue(key, out var oldSig) && oldSig == sig)
-                    return false;     // identical content — no version bump
+            if (_signatures.TryGetValue(key, out var oldSig) && oldSig == sig)
+                return false;  // identical content — no version bump
 
-                _signatures[key] = sig;
-                _versions[key] = (_versions.TryGetValue(key, out var v) ? v : 0) + 1;
-                return true;
-            }
+            _signatures[key] = sig;
+            _versions[key] = (_versions.TryGetValue(key, out var v) ? v : 0) + 1;
+            return true;
         }
 
         /// <summary>
-        /// Bulk-updates the cache from a parsed manifest response.
-        /// Per-room versions only bump for rooms whose content changed.
-        /// ServerScenesVersion only bumps if the scene set changed.
-        /// Returns true if anything at all changed.
+        /// Backward compat: Update without server version (for old callers).
         /// </summary>
+        public bool Update(string game, string scene, LeaderboardData data)
+        {
+            return UpdateRoom(game, scene,
+                GetRoomServerVersion(game, scene), data);
+        }
+
+        // ── Optimistic upload update ───────────────────────────────────────
+
+        /// <summary>
+        /// Locally updates the cache after a successful upload, without any
+        /// network request. Uses data from the upload payload and response
+        /// to insert/update the player's entry in the cached leaderboard.
+        ///
+        /// Returns true if the cache was modified (and UI should rebuild).
+        /// </summary>
+        public bool ApplyOptimisticUpload(string game, string scene,
+            string entryFrom, string exitTo, float totalTime,
+            int rank, int totalRunners, string displayName)
+        {
+            string key = game + ":" + scene;
+
+            if (!_cache.TryGetValue(key, out var data))
+            {
+                // No cached data for this room. Create a stub so the player
+                // can at least see their own entry if they open the tab.
+                data = new LeaderboardData();
+                _cache[key] = data;
+            }
+
+            // Find or create the route.
+            RouteLeaderboard? route = null;
+            foreach (var r in data.Routes)
+            {
+                if (r.EntryFrom == entryFrom && r.ExitTo == exitTo)
+                {
+                    route = r;
+                    break;
+                }
+            }
+
+            if (route == null)
+            {
+                route = new RouteLeaderboard
+                {
+                    EntryFrom = entryFrom,
+                    ExitTo = exitTo
+                };
+                data.Routes.Add(route);
+            }
+
+            // Remove old "you" entry if present.
+            route.Entries.RemoveAll(e => e.IsYou);
+            if (route.YourEntry != null && route.YourEntry.IsYou)
+                route.YourEntry = null;
+
+            // Create new entry.
+            var newEntry = new LeaderboardEntry
+            {
+                Rank = rank,
+                RunnerName = string.IsNullOrEmpty(displayName) ? "You" : displayName,
+                TotalTime = totalTime,
+                RunId = "",  // not known until next server fetch
+                IsYou = true
+            };
+
+            // Insert at correct position in sorted list.
+            bool inserted = false;
+            for (int i = 0; i < route.Entries.Count; i++)
+            {
+                if (totalTime < route.Entries[i].TotalTime)
+                {
+                    route.Entries.Insert(i, newEntry);
+                    inserted = true;
+                    break;
+                }
+            }
+            if (!inserted)
+                route.Entries.Add(newEntry);
+
+            // Re-rank all visible entries.
+            for (int i = 0; i < route.Entries.Count; i++)
+                route.Entries[i].Rank = i + 1;
+
+            route.TotalRunners = totalRunners;
+            route.YourRank = rank;
+
+            // If the new entry is outside the visible top (shouldn't happen
+            // often with optimistic update), move it to YourEntry.
+            const int TopN = 10;
+            if (route.Entries.Count > TopN)
+            {
+                int youIdx = route.Entries.FindIndex(e => e.IsYou);
+                if (youIdx >= TopN)
+                {
+                    route.YourEntry = route.Entries[youIdx];
+                    route.Entries.RemoveAt(youIdx);
+                }
+            }
+
+            // Bump local version to trigger UI rebuild.
+            _signatures.Remove(key);  // force next signature check to differ
+            _versions[key] = (_versions.TryGetValue(key, out var v) ? v : 0) + 1;
+            _roomFetchedAt[key] = Time.realtimeSinceStartup;
+
+            // Also ensure this scene is in the server scenes set.
+            if (_serverScenes.Add(scene))
+                _serverScenesVersion++;
+
+            return true;
+        }
+
+        // ── Lifecycle ──────────────────────────────────────────────────────
+
+        public void Clear()
+        {
+            _cache.Clear();
+            _signatures.Clear();
+            _versions.Clear();
+            _roomServerVersions.Clear();
+            _roomFetchedAt.Clear();
+            _serverScenes.Clear();
+            _sceneInfos.Clear();
+            _sceneIndexVersion = 0;
+            _sceneIndexLoaded = false;
+            _serverScenesVersion++;
+        }
+
+        // ── Backward compat: UpdateFromManifest is no longer needed ────────
+        // Kept as a no-op stub in case any code path still references it.
+
         public bool UpdateFromManifest(string game,
             Dictionary<string, LeaderboardData> manifest)
         {
             bool anyChanged = false;
-
-            lock (_lock)
-            {
-                // Detect scene-set changes
-                bool setChanged = _serverScenes.Count != manifest.Count;
-                if (!setChanged)
-                {
-                    foreach (var scene in manifest.Keys)
-                    {
-                        if (!_serverScenes.Contains(scene)) { setChanged = true; break; }
-                    }
-                }
-
-                if (setChanged)
-                {
-                    _serverScenes.Clear();
-                    foreach (var scene in manifest.Keys)
-                        _serverScenes.Add(scene);
-                    _serverScenesVersion++;
-                    anyChanged = true;
-                }
-
-                // Per-room content updates with signature gating
-                foreach (var kvp in manifest)
-                {
-                    string key = game + ":" + kvp.Key;
-                    int sig = ComputeSignature(kvp.Value);
-
-                    _cache[key] = kvp.Value;
-
-                    if (_signatures.TryGetValue(key, out var oldSig) && oldSig == sig)
-                        continue;
-
-                    _signatures[key] = sig;
-                    _versions[key] = (_versions.TryGetValue(key, out var v) ? v : 0) + 1;
-                    anyChanged = true;
-                }
-
-                _manifestLoaded = true;
-            }
-
+            foreach (var kvp in manifest)
+                anyChanged |= Update(game, kvp.Key, kvp.Value);
             return anyChanged;
         }
 
-        /// <summary>
-        /// Returns a snapshot of all scene names known to the server.
-        /// Thread-safe copy — caller owns the returned set.
-        /// </summary>
-        public HashSet<string> GetServerScenes()
-        {
-            lock (_lock)
-            {
-                return new HashSet<string>(_serverScenes);
-            }
-        }
+        // ── Signature ──────────────────────────────────────────────────────
 
-        public void Clear()
-        {
-            lock (_lock)
-            {
-                _cache.Clear();
-                _signatures.Clear();
-                _versions.Clear();
-                _serverScenes.Clear();
-                _serverScenesVersion++;
-                _manifestLoaded = false;
-            }
-        }
-
-        // ── Signature ──────────────────────────────────────────────────
-
-        /// <summary>
-        /// Cheap order-sensitive hash over everything the UI renders.
-        /// Two responses with the same signature produce identical UI.
-        /// </summary>
         private static int ComputeSignature(LeaderboardData data)
         {
             unchecked

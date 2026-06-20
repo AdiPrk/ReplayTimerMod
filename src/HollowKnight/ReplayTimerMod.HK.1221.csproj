@@ -82,6 +82,10 @@
       <HintPath>$(HollowKnightManagedFolder)\tk2dRuntime.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.UnityWebRequestModule" Condition="Exists('$(HollowKnightManagedFolder)\UnityEngine.UnityWebRequestModule.dll')">
+      <HintPath>$(HollowKnightManagedFolder)\UnityEngine.UnityWebRequestModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <Target Name="ValidateHKReferences" BeforeTargets="CoreCompile">

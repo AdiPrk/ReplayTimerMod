@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace ReplayTimerMod
 {
     /// <summary>
@@ -25,7 +27,7 @@ namespace ReplayTimerMod
     }
 
     /// <summary>
-    /// Parsed response from POST /api/v1/runs.
+    /// Parsed response from POST /runs.
     /// </summary>
     internal sealed class UploadResponse
     {
@@ -39,7 +41,7 @@ namespace ReplayTimerMod
     }
 
     /// <summary>
-    /// Parsed response from GET /api/v1/config.
+    /// Parsed response from GET /config (or the config portion of /init).
     /// </summary>
     internal sealed class ConfigResponse
     {
@@ -49,7 +51,7 @@ namespace ReplayTimerMod
     }
 
     /// <summary>
-    /// Rank info dispatched to the main thread after a successful upload.
+    /// Rank info dispatched after a successful upload.
     /// </summary>
     public sealed class RankInfo
     {
@@ -70,5 +72,50 @@ namespace ReplayTimerMod
             Rank = rank;
             TotalRunners = totalRunners;
         }
+    }
+
+    // ── New types for the redesigned networking ─────────────────────────
+
+    /// <summary>
+    /// One scene in the scene index. Compact field names match the
+    /// server's JSON (s, r, n) for minimal bandwidth.
+    /// </summary>
+    public sealed class SceneInfo
+    {
+        public string SceneName = "";
+        public int RouteCount;
+        public int RunnerCount;
+    }
+
+    /// <summary>
+    /// Parsed response from GET /init (combined config + scene index).
+    /// </summary>
+    internal sealed class InitResponse
+    {
+        public ConfigResponse Config = new ConfigResponse();
+        public int SceneIndexVersion;
+        public List<SceneInfo> Scenes = new List<SceneInfo>();
+    }
+
+    /// <summary>
+    /// Parsed response from GET /scenes. May be a "no change" response
+    /// (only Version set, Changed=false) or a full update.
+    /// </summary>
+    internal sealed class SceneIndexResponse
+    {
+        public int Version;
+        public bool Changed;
+        public List<SceneInfo> Scenes = new List<SceneInfo>();
+    }
+
+    /// <summary>
+    /// Parsed response from GET /leaderboard with version support.
+    /// May be "no change" (only Version set, Changed=false) or full data.
+    /// </summary>
+    internal sealed class VersionedLeaderboardResponse
+    {
+        public int Version;
+        public bool Changed;
+        public LeaderboardData Data = new LeaderboardData();
     }
 }

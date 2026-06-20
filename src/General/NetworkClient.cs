@@ -1,124 +1,104 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Net;
-using System.Text;
-using System.Threading;
 using BepInEx.Logging;
 using UnityEngine;
 
 namespace ReplayTimerMod
 {
     /// <summary>
-    /// Central networking class for the replay mod.
+    /// Central networking orchestrator.
     ///
-    /// Lifecycle:
-    ///   Created in mod entry point (Initialize/Awake)
-    ///   Start() called after Setup (hero ready)
-    ///   Tick(deltaTime) called every frame from the mod's update loop
-    ///   Stop() called on mod teardown / OnDestroy
+    /// Redesigned for efficiency + responsiveness:
+    ///   - Combined /init endpoint (one round trip on startup)
+    ///   - Lightweight /scenes polling with version (16 bytes when unchanged)
+    ///   - On-demand per-room /leaderboard with version (skip query when unchanged)
+    ///   - Prefetch on room enter (data ready before menu opens)
+    ///   - Optimistic local update after upload (instant rank display)
+    ///   - Request deduplication (no redundant fetches)
+    ///   - Connection health tracking (back off when server is down)
+    ///   - Adaptive polling intervals
     ///
-    /// Threading:
-    ///   All public methods are called from the Unity main thread.
-    ///   Background work (uploads, config fetch, leaderboard fetch) runs on worker threads.
-    ///   Results are dispatched back to the main thread via _mainCallbacks.
-    ///
-    /// Compatibility:
-    ///   Compiles on net35. Uses only ThreadPool, lock, Queue, HttpWebRequest,
-    ///   ManualResetEvent. No Task, no async/await, no ConcurrentQueue.
+    /// Public API is backward-compatible with ReplayUI:
+    ///   OnManifestReady/OnManifestFailed fire for scene index events.
+    ///   StartLeaderboardPolling/StopLeaderboardPolling still work.
+    ///   ManifestFetched, CurrentManifestStatus, LastManifestError preserved.
     /// </summary>
     public sealed class NetworkClient
     {
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("NetworkClient");
 
-        private const int MaxCallbacksPerTick = 4;
-        private const int HttpTimeoutMs = 10000;
-        private const float PollIntervalSeconds = 5.0f;
+        // ── Timeouts ───────────────────────────────────────────────────────
 
-        /// <summary>
-        /// How often (seconds) to re-fetch the full manifest in the background.
-        /// </summary>
-        private const float ManifestRefreshSeconds = 60.0f;
+        private const int HttpTimeoutSec = 10;
+        private const int InitTimeoutSec = 15;
 
-        /// <summary>
-        /// Longer timeout for the manifest request since it returns more data.
-        /// </summary>
-        private const int ManifestTimeoutMs = 30000;
+        // ── Base polling intervals (before health multiplier) ──────────────
+
+        private const float SceneIndexInterval_MenuOpen = 60f;
+        private const float SceneIndexInterval_Gameplay = 120f;
+        private const float RoomPollInterval_Active = 5f;
+        private const float RoomPollInterval_Default = 8f;
+        private const float RoomPollInterval_Idle = 12f;
+        private const float RoomFreshnessThreshold = 30f;
 
         // ── Immutable config ───────────────────────────────────────────────
 
         private readonly string _deviceId;
-        private readonly string _gameTag;       // "hk_1221", "hk_1578", "silksong"
+        private readonly string _gameTag;
         private readonly string _modVersion;
         private readonly string _apiBaseUrl;
 
-        // ── Main-thread callback queue ─────────────────────────────────────
-
-        private readonly object _callbackLock = new object();
-        private readonly Queue<Action> _mainCallbacks = new Queue<Action>();
-
         // ── Sub-components ─────────────────────────────────────────────────
 
+        private HttpService? _http;
         private UploadWorker? _uploadWorker;
+        private readonly ConnectionHealth _health = new ConnectionHealth();
         private bool _started;
 
-        // ── State ──────────────────────────────────────────────────────────
+        // ── Config ─────────────────────────────────────────────────────────
 
         private ConfigResponse? _serverConfig;
         private bool _configFetched;
         private bool _maintenanceMode;
 
-        // ── Leaderboard polling (active room) ──────────────────────────────
-
-        private LeaderboardCache? _leaderboardCache;  // owned by ReplayUI, set via setter
-        private string? _pollScene;
-        private float _pollTimer;
-        private bool _pollInFlight;
-
-        // ── Manifest (all rooms) ───────────────────────────────────────────
+        // ── Scene index (/scenes) ──────────────────────────────────────────
 
         public enum ManifestStatus { NotStarted, Loading, Loaded, Failed }
 
-        private float _manifestTimer;
-        private float _manifestInterval = 0f;   // 0 = fetch immediately
-        private bool _manifestInFlight;
-        private bool _manifestFetched;
-        private int _manifestFailures;
-        private ManifestStatus _manifestStatus = ManifestStatus.NotStarted;
-        private string? _manifestError;
+        private LeaderboardCache? _leaderboardCache;
+        private float _sceneIndexTimer;
+        private float _sceneIndexInterval;
+        private bool _sceneIndexInFlight;
+        private int _sceneIndexFailures;
+        private ManifestStatus _sceneIndexStatus = ManifestStatus.NotStarted;
+        private string? _sceneIndexError;
 
-        public ManifestStatus CurrentManifestStatus => _manifestStatus;
-        public string? LastManifestError => _manifestError;
+        // Backward-compat properties
+        public ManifestStatus CurrentManifestStatus => _sceneIndexStatus;
+        public string? LastManifestError => _sceneIndexError;
+        public bool ManifestFetched => _sceneIndexStatus == ManifestStatus.Loaded;
+
+        // ── Room leaderboard polling ───────────────────────────────────────
+
+        private string? _pollScene;
+        private float _pollTimer;
+        private bool _pollInFlight;
+        private int _consecutiveNoChange;   // for adaptive interval
+        private bool _lastPollWasChange;
+        private bool _menuOpen;             // set by UI, controls scene index cadence
+
+        // ── Request deduplication ──────────────────────────────────────────
+
+        private readonly HashSet<string> _roomFetchInFlight = new HashSet<string>();
 
         // ── Events (fired on main thread) ──────────────────────────────────
 
-        /// <summary>
-        /// Fired after a successful upload returns a rank.
-        /// </summary>
         public event Action<RankInfo>? OnRankReceived;
-
-        /// <summary>
-        /// Fired when the server assigns or updates the display name.
-        /// </summary>
         public event Action<string>? OnDisplayNameReceived;
-
-        /// <summary>
-        /// Fired when leaderboard data has been updated in the cache.
-        /// </summary>
         public event Action? OnLeaderboardUpdated;
-
-        /// <summary>
-        /// Fired when the manifest has been fetched (first time or refresh).
-        /// </summary>
-        public event Action? OnManifestReady;
-
-        /// <summary>
-        /// Fired when a manifest fetch fails, so the UI can surface sync
-        /// status instead of failing silently. Retries happen automatically
-        /// with backoff (10s → 20s → 40s → 60s).
-        /// </summary>
-        public event Action? OnManifestFailed;
+        public event Action? OnManifestReady;   // backward compat: scene index loaded
+        public event Action? OnManifestFailed;  // backward compat: scene index failed
 
         // ── Construction ───────────────────────────────────────────────────
 
@@ -129,10 +109,6 @@ namespace ReplayTimerMod
             _gameTag = gameTag;
             _modVersion = modVersion;
             _apiBaseUrl = TrimTrailingSlash(apiBaseUrl);
-
-            Log.LogInfo($"[NetworkClient] Initialized: game={_gameTag} " +
-                $"device={_deviceId.Substring(0, 8)}... " +
-                $"api={_apiBaseUrl}");
         }
 
         // ── Lifecycle ──────────────────────────────────────────────────────
@@ -142,43 +118,16 @@ namespace ReplayTimerMod
             if (_started) return;
             _started = true;
 
-            // .NET 3.5 / older Mono runtimes (the HK 1.2.2.1 and 1.5.7.8 builds)
-            // default ServicePointManager.SecurityProtocol to SSL3 | TLS1.0.
-            // Supabase (and basically every modern HTTPS host) rejects that
-            // handshake outright, so every HttpWebRequest below would throw
-            // "Could not create SSL/TLS secure channel" - caught and logged
-            // quietly, leaving the leaderboard cache empty forever (shows
-            // "Loading..." indefinitely). 3072 is SecurityProtocolType.Tls12;
-            // it's not a named member on net35's reference assembly, but the
-            // numeric cast compiles and works fine on the Mono runtimes both
-            // games ship with. Silksong's netstandard2.1 runtime already
-            // defaults to TLS1.2+, so OR-ing this in there is a harmless no-op.
-            try
-            {
-                ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072;
-            }
-            catch
-            {
-                // Extremely old runtimes can throw NotSupportedException for
-                // protocol bits they don't recognize at all - fall back to
-                // whatever the platform default already is.
-            }
+            _http = new HttpService();
 
-            _uploadWorker = new UploadWorker(_apiBaseUrl, _deviceId, PostToMain);
+            _uploadWorker = new UploadWorker(_http, _apiBaseUrl, _deviceId, _health);
             _uploadWorker.OnUploadSuccess += HandleUploadSuccess;
             _uploadWorker.OnDisplayNameReceived += HandleDisplayNameReceived;
-            _uploadWorker.Start();
 
-            // Fetch server config on a background thread
-            ThreadPool.QueueUserWorkItem(_ => FetchConfig());
+            // Single startup request: GET /init (config + scene index).
+            FetchInit();
 
-            // Kick off the initial manifest fetch
-            _manifestTimer = 0f;
-            _manifestInterval = 0f;   // immediate first fetch
-            _manifestInFlight = false;
-            _manifestFetched = false;
-            _manifestFailures = 0;
-            _manifestStatus = ManifestStatus.NotStarted;
+            Log.LogInfo("[NetworkClient] Started (redesigned networking)");
         }
 
         public void Stop()
@@ -191,51 +140,31 @@ namespace ReplayTimerMod
             {
                 _uploadWorker.OnUploadSuccess -= HandleUploadSuccess;
                 _uploadWorker.OnDisplayNameReceived -= HandleDisplayNameReceived;
-                _uploadWorker.Stop();
                 _uploadWorker = null;
             }
 
-            lock (_callbackLock)
+            if (_http != null)
             {
-                _mainCallbacks.Clear();
+                _http.CancelAll();
+                _http = null;
             }
 
+            _roomFetchInFlight.Clear();
             _started = false;
             Log.LogInfo("[NetworkClient] Stopped");
         }
 
         public void Tick()
         {
-            if (!_started) return;
+            if (!_started || _http == null) return;
 
-            DrainCallbacks();
-            TickPolling();
-            TickManifest();
-        }
+            _http.Tick();
 
-        private void DrainCallbacks()
-        {
-            int budget = MaxCallbacksPerTick;
-            while (budget > 0)
-            {
-                Action? action = null;
-                lock (_callbackLock)
-                {
-                    if (_mainCallbacks.Count > 0)
-                        action = _mainCallbacks.Dequeue();
-                }
-                if (action == null) break;
+            if (_uploadWorker != null)
+                _uploadWorker.Tick();
 
-                try
-                {
-                    action();
-                }
-                catch (Exception ex)
-                {
-                    Log.LogError($"[NetworkClient] Callback error: {ex.Message}");
-                }
-                budget--;
-            }
+            TickSceneIndex();
+            TickRoomPoll();
         }
 
         // ── Upload API ─────────────────────────────────────────────────────
@@ -244,10 +173,8 @@ namespace ReplayTimerMod
         {
             if (!_started) return;
             if (_maintenanceMode) return;
-
             if (result.Kind != ResultKind.FirstRun
-                && result.Kind != ResultKind.NewPB)
-                return;
+                && result.Kind != ResultKind.NewPB) return;
 
             var payload = new UploadPayload
             {
@@ -265,329 +192,298 @@ namespace ReplayTimerMod
                 RetryAfterTicks = 0
             };
 
-            _uploadWorker?.Enqueue(payload);
+            if (_uploadWorker != null)
+                _uploadWorker.Enqueue(payload);
         }
 
-        // ── Leaderboard polling (per-room, active room only) ───────────────
+        // ── Cache + polling API (for ReplayUI) ─────────────────────────────
 
         public void SetLeaderboardCache(LeaderboardCache cache)
         {
             _leaderboardCache = cache;
         }
 
+        /// <summary>
+        /// Start polling a room's leaderboard (while the UI is viewing it).
+        /// Shows cached data immediately, then polls for updates.
+        /// </summary>
         public void StartLeaderboardPolling(string scene)
         {
             _pollScene = scene;
-            _pollTimer = 999f;
+            _pollTimer = 999f; // trigger immediately
             _pollInFlight = false;
+            _consecutiveNoChange = 0;
+            _lastPollWasChange = false;
+            _menuOpen = true;
+
+            // If we don't have data for this room, trigger an immediate fetch.
+            if (_leaderboardCache != null
+                && !_leaderboardCache.HasRoomData(_gameTag, scene))
+            {
+                FetchRoomLeaderboard(scene);
+            }
         }
 
         public void StopLeaderboardPolling()
         {
             _pollScene = null;
             _pollInFlight = false;
+            _menuOpen = false;
         }
 
         public bool IsLeaderboardPolling => _pollScene != null;
 
-        private void TickPolling()
+        /// <summary>
+        /// Notify NetworkClient that the menu is open (affects scene index cadence).
+        /// </summary>
+        public void SetMenuOpen(bool open)
         {
-            if (_pollScene == null) return;
-            if (_pollInFlight) return;
+            _menuOpen = open;
+        }
+
+        /// <summary>
+        /// Prefetch a room's leaderboard in the background (called on room enter).
+        /// If data is already fresh, this is a no-op.
+        /// </summary>
+        public void PrefetchRoom(string scene)
+        {
+            if (!_started || _http == null) return;
             if (_leaderboardCache == null) return;
 
-            _pollTimer += Time.unscaledDeltaTime;
-            if (_pollTimer < PollIntervalSeconds) return;
+            // Skip if data is fresh enough.
+            if (_leaderboardCache.IsRoomFresh(_gameTag, scene, RoomFreshnessThreshold))
+                return;
 
-            _pollTimer = 0f;
-            _pollInFlight = true;
+            FetchRoomLeaderboard(scene);
+        }
 
-            string scene = _pollScene;
-            string game = _gameTag;
+        // ── Startup: GET /init ─────────────────────────────────────────────
 
-            ThreadPool.QueueUserWorkItem(_ =>
+        private void FetchInit()
+        {
+            if (_http == null) return;
+
+            string url = _apiBaseUrl + "/init?game="
+                + Uri.EscapeDataString(_gameTag);
+
+            var headers = MakeHeaders();
+            headers["X-Mod-Version"] = _modVersion;
+
+            _sceneIndexStatus = ManifestStatus.Loading;
+
+            _http.Get(url, InitTimeoutSec, (success, status, body) =>
             {
-                LeaderboardData? data = FetchLeaderboard(game, scene);
-                PostToMain(() =>
+                if (success)
                 {
-                    _pollInFlight = false;
+                    _health.RecordSuccess();
+                    var init = ApiJson.ParseInitResponse(body);
 
-                    if (_pollScene != scene) return;
+                    // Apply config.
+                    _serverConfig = init.Config;
+                    _configFetched = true;
+                    _maintenanceMode = init.Config.Maintenance;
 
-                    if (data != null && _leaderboardCache != null)
+                    if (_maintenanceMode)
+                        Log.LogInfo("[NetworkClient] Maintenance mode — uploads paused");
+                    if (!string.IsNullOrEmpty(init.Config.Announcement))
+                        Log.LogInfo("[NetworkClient] Announcement: "
+                            + init.Config.Announcement);
+
+                    // Apply scene index.
+                    if (_leaderboardCache != null)
                     {
-                        _leaderboardCache.Update(game, scene, data);
-                        OnLeaderboardUpdated?.Invoke();
+                        _leaderboardCache.UpdateSceneIndex(
+                            init.SceneIndexVersion, init.Scenes);
                     }
-                });
-            });
-        }
 
-        private LeaderboardData? FetchLeaderboard(string game, string scene)
-        {
-            try
-            {
-                string url = _apiBaseUrl + "/leaderboard?game="
-                    + Uri.EscapeDataString(game)
-                    + "&scene=" + Uri.EscapeDataString(scene);
+                    _sceneIndexStatus = ManifestStatus.Loaded;
+                    _sceneIndexError = null;
+                    _sceneIndexFailures = 0;
+                    _sceneIndexInterval = SceneIndexInterval_Gameplay;
 
-                var req = (HttpWebRequest)WebRequest.Create(url);
-                req.Method = "GET";
-                req.Accept = "application/json";
-                req.Timeout = HttpTimeoutMs;
-                req.ReadWriteTimeout = HttpTimeoutMs;
-                req.Headers.Add("X-Device-Id", _deviceId);
+                    Log.LogInfo("[NetworkClient] Init loaded: "
+                        + init.Scenes.Count + " scenes");
 
-                using (var resp = (HttpWebResponse)req.GetResponse())
-                using (var reader = new StreamReader(resp.GetResponseStream(),
-                    Encoding.UTF8))
-                {
-                    string json = reader.ReadToEnd();
-                    return ApiJson.ParseLeaderboardResponse(json);
+                    OnManifestReady?.Invoke();
+                    OnLeaderboardUpdated?.Invoke();
                 }
-            }
-            catch (Exception ex)
-            {
-                Log.LogInfo("[NetworkClient] Leaderboard fetch failed: " + ex.Message);
-                return null;
-            }
+                else
+                {
+                    _health.RecordFailure();
+                    _sceneIndexStatus = ManifestStatus.Failed;
+                    _sceneIndexError = body;
+                    _sceneIndexFailures = 1;
+                    _sceneIndexInterval = 10f;
+
+                    Log.LogWarning("[NetworkClient] Init failed: " + body);
+                    OnManifestFailed?.Invoke();
+                }
+            }, headers);
         }
 
-        // ── Manifest (all rooms at once) ───────────────────────────────────
+        // ── Scene index polling: GET /scenes ───────────────────────────────
 
-        private void TickManifest()
+        private void TickSceneIndex()
         {
-            if (_manifestInFlight) return;
-            if (_leaderboardCache == null) return;
+            if (_http == null || _leaderboardCache == null) return;
+            if (_sceneIndexInFlight) return;
+            if (!_health.ShouldAttemptPolling) return;
 
-            _manifestTimer += Time.unscaledDeltaTime;
-            if (_manifestTimer < _manifestInterval) return;
+            _sceneIndexTimer += Time.unscaledDeltaTime;
 
-            _manifestTimer = 0f;
-            _manifestInFlight = true;
-            if (_manifestStatus != ManifestStatus.Loaded)
-                _manifestStatus = ManifestStatus.Loading;
+            float interval = (_menuOpen
+                ? SceneIndexInterval_MenuOpen
+                : SceneIndexInterval_Gameplay) * _health.PollMultiplier;
 
-            string game = _gameTag;
+            if (_sceneIndexTimer < interval) return;
 
-            ThreadPool.QueueUserWorkItem(_ =>
+            _sceneIndexTimer = 0f;
+            _sceneIndexInFlight = true;
+
+            int cachedVersion = _leaderboardCache.SceneIndexVersion;
+            string url = _apiBaseUrl + "/scenes?game="
+                + Uri.EscapeDataString(_gameTag)
+                + "&v=" + cachedVersion;
+
+            _http.Get(url, HttpTimeoutSec, (success, status, body) =>
             {
-                string? fetchError;
-                var manifest = FetchManifest(game, out fetchError);
-                PostToMain(() =>
+                _sceneIndexInFlight = false;
+
+                if (success)
                 {
-                    _manifestInFlight = false;
+                    _health.RecordSuccess();
+                    var resp = ApiJson.ParseSceneIndexResponse(body);
 
-                    if (manifest != null && _leaderboardCache != null)
+                    if (resp.Changed && _leaderboardCache != null)
                     {
-                        _leaderboardCache.UpdateFromManifest(game, manifest);
-                        _manifestFetched = true;
-                        _manifestFailures = 0;
-                        _manifestStatus = ManifestStatus.Loaded;
-                        _manifestError = null;
-                        _manifestInterval = ManifestRefreshSeconds;
+                        _leaderboardCache.UpdateSceneIndex(
+                            resp.Version, resp.Scenes);
 
-                        Log.LogInfo($"[NetworkClient] Manifest loaded: " +
-                            $"{manifest.Count} rooms");
+                        _sceneIndexStatus = ManifestStatus.Loaded;
+                        _sceneIndexError = null;
+                        _sceneIndexFailures = 0;
 
                         OnManifestReady?.Invoke();
                         OnLeaderboardUpdated?.Invoke();
                     }
+                    // If !Changed, server confirmed our version is current. No-op.
+                }
+                else
+                {
+                    _health.RecordFailure();
+                    _sceneIndexFailures++;
+                    float backoff = 10f * (1 << System.Math.Min(
+                        _sceneIndexFailures - 1, 3));
+                    _sceneIndexInterval = System.Math.Min(backoff, 120f);
+                }
+            }, MakeHeaders());
+        }
+
+        // ── Room leaderboard: on-demand + polling ──────────────────────────
+
+        private void FetchRoomLeaderboard(string scene)
+        {
+            if (_http == null || _leaderboardCache == null) return;
+
+            // Deduplication: skip if already in-flight for this scene.
+            if (_roomFetchInFlight.Contains(scene)) return;
+            _roomFetchInFlight.Add(scene);
+
+            int cachedVersion = _leaderboardCache
+                .GetRoomServerVersion(_gameTag, scene);
+
+            string url = _apiBaseUrl + "/leaderboard?game="
+                + Uri.EscapeDataString(_gameTag)
+                + "&scene=" + Uri.EscapeDataString(scene)
+                + "&v=" + cachedVersion;
+
+            _http.Get(url, HttpTimeoutSec, (success, status, body) =>
+            {
+                _roomFetchInFlight.Remove(scene);
+
+                if (success)
+                {
+                    _health.RecordSuccess();
+                    var resp = ApiJson.ParseVersionedLeaderboardResponse(body);
+
+                    if (resp.Changed && _leaderboardCache != null)
+                    {
+                        bool contentChanged = _leaderboardCache.UpdateRoom(
+                            _gameTag, scene, resp.Version, resp.Data);
+
+                        _lastPollWasChange = true;
+                        _consecutiveNoChange = 0;
+
+                        if (contentChanged)
+                            OnLeaderboardUpdated?.Invoke();
+                    }
                     else
                     {
-                        // Failure: retry with backoff 10s → 20s → 40s → 60s
-                        // instead of waiting the full refresh interval.
-                        _manifestFailures++;
-                        _manifestStatus = ManifestStatus.Failed;
-                        _manifestError = fetchError;
-                        float backoff = 10f * (1 << System.Math.Min(
-                            _manifestFailures - 1, 2));
-                        _manifestInterval = System.Math.Min(
-                            backoff, ManifestRefreshSeconds);
-
-                        Log.LogWarning("[NetworkClient] Manifest fetch failed (" +
-                            (fetchError ?? "unknown") + ") — retrying in " +
-                            _manifestInterval + "s");
-
-                        OnManifestFailed?.Invoke();
+                        // 304 equivalent: version matched, data unchanged.
+                        _lastPollWasChange = false;
+                        _consecutiveNoChange++;
                     }
-                });
-            });
-        }
-
-        private Dictionary<string, LeaderboardData>? FetchManifest(
-            string game, out string? error)
-        {
-            error = null;
-            try
-            {
-                string url = _apiBaseUrl + "/manifest?game="
-                    + Uri.EscapeDataString(game);
-
-                var req = (HttpWebRequest)WebRequest.Create(url);
-                req.Method = "GET";
-                req.Accept = "application/json";
-                req.Timeout = ManifestTimeoutMs;
-                req.ReadWriteTimeout = ManifestTimeoutMs;
-                req.Headers.Add("X-Device-Id", _deviceId);
-                // Do NOT set AutomaticDecompression: the property exists on
-                // net35 but is broken / unimplemented on Unity's old Mono
-                // runtime (throws PlatformNotSupportedException or silently
-                // produces garbage). Decompress manually below instead.
-                req.Headers.Add("Accept-Encoding", "gzip, deflate");
-
-                using (var resp = (HttpWebResponse)req.GetResponse())
-                using (var baseStream = resp.GetResponseStream())
-                using (var stream = DecompressIfNeeded(baseStream, resp.ContentEncoding))
-                using (var reader = new StreamReader(stream, Encoding.UTF8))
-                {
-                    string json = reader.ReadToEnd();
-                    return ApiJson.ParseManifestResponse(json);
                 }
-            }
-            catch (Exception ex)
-            {
-                // Include inner exception and type so the log file shows the
-                // real failure (e.g. TLS handshake, PlatformNotSupported, etc.)
-                error = ex.GetType().Name + ": " + ex.Message;
-                if (ex.InnerException != null)
-                    error += " --> " + ex.InnerException.GetType().Name
-                             + ": " + ex.InnerException.Message;
-                return null;
-            }
+                else
+                {
+                    _health.RecordFailure();
+                    Log.LogInfo("[NetworkClient] Room fetch failed for "
+                        + scene + ": " + body);
+                }
+            }, MakeHeaders());
         }
 
-        /// <summary>
-        /// Wraps <paramref name="stream"/> in the appropriate decompression
-        /// stream based on the Content-Encoding header. Falls back to the
-        /// raw stream if the encoding is unrecognised or decompression isn't
-        /// available - better to return corrupted JSON (which the parser
-        /// silently ignores) than to throw and kill the fetch entirely.
-        /// </summary>
-        private static System.IO.Stream DecompressIfNeeded(
-            System.IO.Stream stream, string contentEncoding)
+        private void TickRoomPoll()
         {
-            if (string.IsNullOrEmpty(contentEncoding))
-                return stream;
+            if (_http == null || _pollScene == null) return;
+            if (!_health.ShouldAttemptPolling) return;
 
-            string enc = contentEncoding.ToLowerInvariant().Trim();
-            try
-            {
-                if (enc == "gzip")
-                    return new System.IO.Compression.GZipStream(
-                        stream, System.IO.Compression.CompressionMode.Decompress);
-                if (enc == "deflate")
-                    return new System.IO.Compression.DeflateStream(
-                        stream, System.IO.Compression.CompressionMode.Decompress);
-            }
-            catch
-            {
-                // GZipStream/DeflateStream unavailable on this runtime - fall
-                // through and return the raw stream.
-            }
-            return stream;
+            _pollTimer += Time.unscaledDeltaTime;
+
+            float interval = ComputeRoomPollInterval() * _health.PollMultiplier;
+            if (_pollTimer < interval) return;
+
+            _pollTimer = 0f;
+            FetchRoomLeaderboard(_pollScene);
         }
 
-        public void InvalidateManifest()
+        private float ComputeRoomPollInterval()
         {
-            _manifestTimer = 0f;
-            _manifestInterval = 0f; // re-fetch on next tick
+            if (_consecutiveNoChange > 3) return RoomPollInterval_Idle;
+            if (_lastPollWasChange) return RoomPollInterval_Active;
+            return RoomPollInterval_Default;
         }
-
-        public bool ManifestFetched => _manifestFetched;
 
         // ── Replay download ─────────────────────────────────────────────────
 
         public void DownloadReplay(string runId, Action<string?> onComplete)
         {
-            if (!_started || string.IsNullOrEmpty(runId)) return;
+            if (!_started || _http == null || string.IsNullOrEmpty(runId)) return;
 
-            string id = runId;
-            ThreadPool.QueueUserWorkItem(_ =>
+            string url = _apiBaseUrl + "/replay?run_id="
+                + Uri.EscapeDataString(runId);
+
+            _http.Get(url, HttpTimeoutSec, (success, status, body) =>
             {
-                string? replayData = FetchReplayBlob(id);
-                PostToMain(() => onComplete(replayData));
-            });
-        }
-
-        private string? FetchReplayBlob(string runId)
-        {
-            try
-            {
-                string url = _apiBaseUrl + "/replay?run_id="
-                    + Uri.EscapeDataString(runId);
-
-                var req = (HttpWebRequest)WebRequest.Create(url);
-                req.Method = "GET";
-                req.Accept = "application/json";
-                req.Timeout = HttpTimeoutMs;
-                req.ReadWriteTimeout = HttpTimeoutMs;
-                req.Headers.Add("X-Device-Id", _deviceId);
-
-                using (var resp = (HttpWebResponse)req.GetResponse())
-                using (var reader = new StreamReader(resp.GetResponseStream(),
-                    Encoding.UTF8))
+                if (success)
                 {
-                    string json = reader.ReadToEnd();
-                    return ApiJson.ParseReplayData(json);
+                    _health.RecordSuccess();
+                    onComplete(ApiJson.ParseReplayData(body));
                 }
-            }
-            catch (Exception ex)
-            {
-                Log.LogInfo("[NetworkClient] Replay download failed: " + ex.Message);
-                return null;
-            }
-        }
-
-        // ── Config fetch ───────────────────────────────────────────────────
-
-        private void FetchConfig()
-        {
-            try
-            {
-                var req = (HttpWebRequest)WebRequest.Create(
-                    _apiBaseUrl + "/config");
-                req.Method = "GET";
-                req.Accept = "application/json";
-                req.Timeout = HttpTimeoutMs;
-                req.ReadWriteTimeout = HttpTimeoutMs;
-                req.Headers.Add("X-Device-Id", _deviceId);
-                req.Headers.Add("X-Mod-Version", _modVersion);
-
-                using (var resp = (HttpWebResponse)req.GetResponse())
-                using (var reader = new StreamReader(resp.GetResponseStream(),
-                    Encoding.UTF8))
+                else
                 {
-                    string json = reader.ReadToEnd();
-                    var config = ApiJson.ParseConfigResponse(json);
-
-                    PostToMain(() =>
-                    {
-                        _serverConfig = config;
-                        _configFetched = true;
-                        _maintenanceMode = config.Maintenance;
-
-                        if (_maintenanceMode)
-                            Log.LogInfo("[NetworkClient] Server in maintenance mode — " +
-                                "uploads paused");
-
-                        if (!string.IsNullOrEmpty(config.Announcement))
-                            Log.LogInfo($"[NetworkClient] Server announcement: " +
-                                config.Announcement);
-                    });
+                    _health.RecordFailure();
+                    Log.LogInfo("[NetworkClient] Replay download failed: " + body);
+                    onComplete(null);
                 }
-            }
-            catch (Exception ex)
-            {
-                Log.LogInfo($"[NetworkClient] Config fetch failed (non-critical): " +
-                    ex.Message);
-            }
+            }, MakeHeaders());
         }
 
-        // ── Internal handlers ──────────────────────────────────────────────
+        // ── Upload success handler ─────────────────────────────────────────
 
         private void HandleUploadSuccess(UploadPayload payload, UploadResponse response)
         {
+            // Show rank on the timer HUD.
             if (response.HasRank)
             {
                 var rankInfo = new RankInfo(
@@ -600,7 +496,27 @@ namespace ReplayTimerMod
                 OnRankReceived?.Invoke(rankInfo);
             }
 
-            InvalidateManifest();
+            // Optimistic local cache update — instant leaderboard update,
+            // no network request needed.
+            if (_leaderboardCache != null && response.HasRank)
+            {
+                string displayName = !string.IsNullOrEmpty(response.DisplayName)
+                    ? response.DisplayName
+                    : GhostSettings.DisplayName;
+
+                bool changed = _leaderboardCache.ApplyOptimisticUpload(
+                    _gameTag,
+                    payload.SceneName,
+                    payload.EntryFrom,
+                    payload.ExitTo,
+                    payload.TotalTime,
+                    response.Rank,
+                    response.TotalRunners,
+                    displayName);
+
+                if (changed)
+                    OnLeaderboardUpdated?.Invoke();
+            }
         }
 
         private void HandleDisplayNameReceived(string name)
@@ -608,17 +524,15 @@ namespace ReplayTimerMod
             OnDisplayNameReceived?.Invoke(name);
         }
 
-        // ── Thread-safe dispatch ───────────────────────────────────────────
-
-        private void PostToMain(Action action)
-        {
-            lock (_callbackLock)
-            {
-                _mainCallbacks.Enqueue(action);
-            }
-        }
-
         // ── Helpers ────────────────────────────────────────────────────────
+
+        private Dictionary<string, string> MakeHeaders()
+        {
+            return new Dictionary<string, string>
+            {
+                { "X-Device-Id", _deviceId }
+            };
+        }
 
         private static string TrimTrailingSlash(string url)
         {
@@ -626,7 +540,7 @@ namespace ReplayTimerMod
             return url.EndsWith("/") ? url.Substring(0, url.Length - 1) : url;
         }
 
-        // ── Public state queries (for UI) ──────────────────────────────────
+        // ── Public state queries ───────────────────────────────────────────
 
         public bool IsStarted => _started;
         public bool IsMaintenanceMode => _maintenanceMode;

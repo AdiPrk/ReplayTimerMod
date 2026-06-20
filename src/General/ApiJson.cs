@@ -702,5 +702,239 @@ namespace ReplayTimerMod
             return int.TryParse(s, NumberStyles.Integer,
                 CultureInfo.InvariantCulture, out int result) ? result : fallback;
         }
+
+        // ── New parsers for redesigned networking ──────────────────────────
+
+        /// <summary>
+        /// Parses GET /init response:
+        ///   { "config": { ... }, "scenes": { "v": N, "scenes": [...] } }
+        ///
+        /// Uses recursive-descent (not IndexOf) because the config
+        /// announcement field can contain arbitrary text.
+        /// </summary>
+        public static InitResponse ParseInitResponse(string json)
+        {
+            var r = new InitResponse();
+            if (string.IsNullOrEmpty(json)) return r;
+
+            int i = 0;
+            SkipWs(json, ref i);
+            if (i >= json.Length || json[i] != '{') return r;
+            i++;
+
+            while (i < json.Length)
+            {
+                SkipWs(json, ref i);
+                if (i >= json.Length) break;
+                if (json[i] == '}') break;
+                if (json[i] == ',') { i++; continue; }
+
+                string key = ReadString(json, ref i);
+                SkipWs(json, ref i);
+                if (i >= json.Length || json[i] != ':') break;
+                i++;
+                SkipWs(json, ref i);
+
+                switch (key)
+                {
+                    case "config":
+                        if (i < json.Length && json[i] == '{')
+                        {
+                            int start = i;
+                            SkipNested(json, ref i);
+                            r.Config = ParseConfigResponse(
+                                json.Substring(start, i - start));
+                        }
+                        else SkipValue(json, ref i);
+                        break;
+
+                    case "scenes":
+                        if (i < json.Length && json[i] == '{')
+                        {
+                            int start = i;
+                            SkipNested(json, ref i);
+                            var sceneResp = ParseSceneIndexResponse(
+                                json.Substring(start, i - start));
+                            r.SceneIndexVersion = sceneResp.Version;
+                            r.Scenes = sceneResp.Scenes;
+                        }
+                        else SkipValue(json, ref i);
+                        break;
+
+                    default:
+                        SkipValue(json, ref i);
+                        break;
+                }
+            }
+
+            return r;
+        }
+
+        /// <summary>
+        /// Parses GET /scenes response.
+        /// { "v": N }                    → Changed=false (16 bytes, skip).
+        /// { "v": N, "scenes": [...] }   → Changed=true  (parse scene array).
+        /// </summary>
+        public static SceneIndexResponse ParseSceneIndexResponse(string json)
+        {
+            var r = new SceneIndexResponse();
+            if (string.IsNullOrEmpty(json)) return r;
+
+            int i = 0;
+            SkipWs(json, ref i);
+            if (i >= json.Length || json[i] != '{') return r;
+            i++;
+
+            while (i < json.Length)
+            {
+                SkipWs(json, ref i);
+                if (i >= json.Length) break;
+                if (json[i] == '}') break;
+                if (json[i] == ',') { i++; continue; }
+
+                string key = ReadString(json, ref i);
+                SkipWs(json, ref i);
+                if (i >= json.Length || json[i] != ':') break;
+                i++;
+                SkipWs(json, ref i);
+
+                switch (key)
+                {
+                    case "v":
+                        r.Version = ReadJsonInt(json, ref i);
+                        break;
+
+                    case "scenes":
+                        if (i < json.Length && json[i] == '[')
+                        {
+                            r.Changed = true;
+                            r.Scenes = ParseSceneArray(json, i);
+                            SkipNested(json, ref i);
+                        }
+                        else SkipValue(json, ref i);
+                        break;
+
+                    default:
+                        SkipValue(json, ref i);
+                        break;
+                }
+            }
+
+            return r;
+        }
+
+        private static List<SceneInfo> ParseSceneArray(string json, int arrStart)
+        {
+            var result = new List<SceneInfo>();
+            int i = arrStart + 1;
+
+            while (i < json.Length)
+            {
+                SkipWs(json, ref i);
+                if (i >= json.Length || json[i] == ']') break;
+                if (json[i] == ',') { i++; continue; }
+                if (json[i] != '{') break;
+
+                var info = ParseSceneInfo(json, ref i);
+                if (info != null)
+                    result.Add(info);
+            }
+
+            return result;
+        }
+
+        private static SceneInfo? ParseSceneInfo(string json, ref int i)
+        {
+            if (i >= json.Length || json[i] != '{') return null;
+            var info = new SceneInfo();
+            i++; // skip '{'
+
+            while (i < json.Length)
+            {
+                SkipWs(json, ref i);
+                if (i >= json.Length) break;
+                if (json[i] == '}') { i++; break; }
+                if (json[i] == ',') { i++; continue; }
+
+                string key = ReadString(json, ref i);
+                SkipWs(json, ref i);
+                if (i >= json.Length || json[i] != ':') break;
+                i++; // skip ':'
+                SkipWs(json, ref i);
+
+                switch (key)
+                {
+                    case "s":
+                        info.SceneName = ReadString(json, ref i);
+                        break;
+                    case "r":
+                        info.RouteCount = ReadJsonInt(json, ref i);
+                        break;
+                    case "n":
+                        info.RunnerCount = ReadJsonInt(json, ref i);
+                        break;
+                    default:
+                        SkipValue(json, ref i);
+                        break;
+                }
+            }
+
+            return string.IsNullOrEmpty(info.SceneName) ? null : info;
+        }
+
+        /// <summary>
+        /// Parses GET /leaderboard response with version support.
+        /// { "v": N }                   → Changed=false.
+        /// { "v": N, "routes": [...] }  → Changed=true, delegates to
+        ///                                ParseLeaderboardResponse.
+        /// </summary>
+        public static VersionedLeaderboardResponse ParseVersionedLeaderboardResponse(
+            string json)
+        {
+            var r = new VersionedLeaderboardResponse();
+            if (string.IsNullOrEmpty(json)) return r;
+
+            int i = 0;
+            SkipWs(json, ref i);
+            if (i >= json.Length || json[i] != '{') return r;
+            i++;
+
+            while (i < json.Length)
+            {
+                SkipWs(json, ref i);
+                if (i >= json.Length) break;
+                if (json[i] == '}') break;
+                if (json[i] == ',') { i++; continue; }
+
+                string key = ReadString(json, ref i);
+                SkipWs(json, ref i);
+                if (i >= json.Length || json[i] != ':') break;
+                i++;
+                SkipWs(json, ref i);
+
+                switch (key)
+                {
+                    case "v":
+                        r.Version = ReadJsonInt(json, ref i);
+                        break;
+
+                    case "routes":
+                        r.Changed = true;
+                        SkipValue(json, ref i);
+                        break;
+
+                    default:
+                        SkipValue(json, ref i);
+                        break;
+                }
+            }
+
+            // If routes were present, delegate full parsing to the existing
+            // leaderboard parser (which handles the complex nested structure).
+            if (r.Changed)
+                r.Data = ParseLeaderboardResponse(json);
+
+            return r;
+        }
     }
 }

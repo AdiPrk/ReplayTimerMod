@@ -35,9 +35,6 @@ namespace ReplayTimerMod
 
         public override void Initialize()
         {
-            System.Net.ServicePointManager.ServerCertificateValidationCallback =
-                (sender, certificate, chain, sslPolicyErrors) => true;
-
             Instance = this;
             Log("Initialize");
 
@@ -160,11 +157,13 @@ namespace ReplayTimerMod
             if (!GhostSettings.TrackingEnabled)
             {
                 ghostPlayback.StartPlayback(sceneName, entryFromScene);
+                networkClient?.PrefetchRoom(sceneName);
                 return;
             }
 
             frameRecorder.StartRecording();
             ghostPlayback.StartPlayback(sceneName, entryFromScene);
+            networkClient?.PrefetchRoom(sceneName);
         }
 
         private void OnRoomExit(string sceneName, string entryFromScene,

@@ -1,0 +1,205 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+using BepInEx.Logging;
+using UnityEngine;
+using UnityEngine.Networking;
+
+namespace ReplayTimerMod
+{
+    /// <summary>
+    /// Non-blocking HTTP service built on UnityWebRequest.
+    ///
+    /// Why UnityWebRequest instead of HttpWebRequest?
+    ///   HttpWebRequest goes through Mono's managed TLS stack, which is
+    ///   broken on .NET 3.5 / old Unity runtimes (HK 1221). The
+    ///   SecurityProtocolType.Tls12 hack doesn't work reliably because
+    ///   the underlying native backend may not implement TLS 1.2 at all.
+    ///   UnityWebRequest bypasses Mono entirely — it uses the platform's
+    ///   native HTTP stack (libcurl on desktop, NSURLSession on macOS/iOS,
+    ///   Java HTTP on Android). TLS 1.2+ works everywhere, automatically.
+    ///
+    /// API differences across Unity versions:
+    ///   V1221 (Unity ~2017.1, net35):
+    ///     Send() instead of SendWebRequest()
+    ///     isError instead of isNetworkError/isHttpError
+    ///     No timeout property — manual timeout via Abort()
+    ///   V1578 + Silksong (Unity 2020+):
+    ///     SendWebRequest(), Result enum, native timeout
+    ///
+    /// Usage:
+    ///   Call Get / Post to start requests.
+    ///   Call Tick() every frame to complete pending requests.
+    ///   Callbacks fire on the main thread — no marshaling needed.
+    ///
+    /// All public methods must be called from the Unity main thread.
+    /// </summary>
+    internal sealed class HttpService
+    {
+        private static readonly ManualLogSource Log =
+            BepInEx.Logging.Logger.CreateLogSource("HttpService");
+
+        /// <param name="success">True if the request completed with 2xx.</param>
+        /// <param name="statusCode">HTTP status code, or 0 on network error.</param>
+        /// <param name="body">Response body text, or error string on failure.</param>
+        public delegate void HttpCallback(bool success, long statusCode, string body);
+
+        private sealed class PendingRequest
+        {
+            public UnityWebRequest Request = null!;
+            public HttpCallback Callback = null!;
+            public float StartTime;
+            public int TimeoutSeconds;
+        }
+
+        private readonly List<PendingRequest> _active = new List<PendingRequest>();
+
+        // ── Request API ─────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Start a GET request. The callback fires during a future Tick().
+        /// </summary>
+        public void Get(string url, int timeoutSeconds, HttpCallback callback,
+            Dictionary<string, string>? headers = null)
+        {
+            var req = UnityWebRequest.Get(url);
+            ApplyAndSend(req, timeoutSeconds, callback, headers);
+        }
+
+        /// <summary>
+        /// Start a POST request with a JSON body. The callback fires
+        /// during a future Tick().
+        /// </summary>
+        public void Post(string url, string jsonBody, int timeoutSeconds,
+            HttpCallback callback, Dictionary<string, string>? headers = null)
+        {
+            byte[] bodyBytes = Encoding.UTF8.GetBytes(jsonBody);
+
+            var req = new UnityWebRequest(url, "POST");
+            req.uploadHandler = new UploadHandlerRaw(bodyBytes);
+            req.downloadHandler = new DownloadHandlerBuffer();
+            req.SetRequestHeader("Content-Type", "application/json; charset=utf-8");
+
+            ApplyAndSend(req, timeoutSeconds, callback, headers);
+        }
+
+        // ── Tick / lifecycle ────────────────────────────────────────────────
+
+        /// <summary>
+        /// Poll pending requests and invoke callbacks for completed ones.
+        /// Call this every frame.
+        /// </summary>
+        public void Tick()
+        {
+            // Iterate backwards so removals don't shift indices.
+            for (int i = _active.Count - 1; i >= 0; i--)
+            {
+                var p = _active[i];
+
+#if V1221
+                // Manual timeout — V1221's Unity has no timeout property.
+                // Abort() marks the request as done with isError = true.
+                if (!p.Request.isDone && p.TimeoutSeconds > 0
+                    && Time.realtimeSinceStartup - p.StartTime > p.TimeoutSeconds)
+                {
+                    p.Request.Abort();
+                }
+#endif
+
+                if (!p.Request.isDone) continue;
+
+                _active.RemoveAt(i);
+
+                bool success = IsSuccess(p.Request);
+                long status = p.Request.responseCode;
+                string body = success
+                    ? (p.Request.downloadHandler?.text ?? "")
+                    : GetErrorString(p.Request);
+
+                try
+                {
+                    p.Callback(success, status, body);
+                }
+                catch (Exception ex)
+                {
+                    Log.LogError("[HttpService] Callback threw: " + ex.Message);
+                }
+
+                // Dispose handlers and the request itself.
+                p.Request.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Abort and dispose every in-flight request. Call on shutdown.
+        /// </summary>
+        public void CancelAll()
+        {
+            for (int i = 0; i < _active.Count; i++)
+            {
+                try { _active[i].Request.Abort(); } catch { }
+                try { _active[i].Request.Dispose(); } catch { }
+            }
+            _active.Clear();
+        }
+
+        public int ActiveCount => _active.Count;
+
+        // ── Internals ───────────────────────────────────────────────────────
+
+        private void ApplyAndSend(UnityWebRequest req, int timeoutSeconds,
+            HttpCallback callback, Dictionary<string, string>? headers)
+        {
+            // Always request JSON responses.
+            req.SetRequestHeader("Accept", "application/json");
+
+            if (headers != null)
+            {
+                foreach (var kvp in headers)
+                    req.SetRequestHeader(kvp.Key, kvp.Value);
+            }
+
+#if V1221
+            // Unity ~2017.1: no timeout property, use Send() not SendWebRequest().
+            req.Send();
+#else
+            // Unity 2020+ (V1578, Silksong): native timeout + SendWebRequest().
+            req.timeout = timeoutSeconds;
+            req.SendWebRequest();
+#endif
+
+            _active.Add(new PendingRequest
+            {
+                Request = req,
+                Callback = callback,
+                StartTime = Time.realtimeSinceStartup,
+                TimeoutSeconds = timeoutSeconds
+            });
+        }
+
+        /// <summary>
+        /// Cross-version success check.
+        ///   V1221 (Unity ~2017.1): only has isError.
+        ///   V1578 + Silksong (Unity 2020+): use Result enum
+        ///     (isNetworkError/isHttpError deprecated on 1578, removed on SS).
+        /// </summary>
+        private static bool IsSuccess(UnityWebRequest req)
+        {
+#if V1221
+            return !req.isError;
+#else
+            return req.result == UnityWebRequest.Result.Success;
+#endif
+        }
+
+        private static string GetErrorString(UnityWebRequest req)
+        {
+            string err = req.error ?? "Unknown error";
+            string body = req.downloadHandler?.text ?? "";
+            // If there's a response body (e.g. server error JSON), include it.
+            if (!string.IsNullOrEmpty(body) && body.Length < 500)
+                return err + " | " + body;
+            return err;
+        }
+    }
+}
