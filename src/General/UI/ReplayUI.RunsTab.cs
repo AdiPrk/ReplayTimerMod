@@ -51,6 +51,8 @@ namespace ReplayTimerMod
             int btnH = UIStyle.H(20);
             int btnY = (h - btnH) / 2;
             int clearW = UIStyle.W(48);
+            int warpW = UIStyle.W(28);
+            int sp = UIStyle.W(4);
 
             var row = MakeGO("RouteHeader", parent);
             Img(row, UIStyle.Overlay with { a = 0.45f });
@@ -62,11 +64,25 @@ namespace ReplayTimerMod
                 RW - clearW - M, btnY, clearW, btnH,
                 () => DeleteRoute(key));
 
+            // Warp button — shown for any route whose entry transition is
+            // known. Lands the player in the previous room at a door leading
+            // into the run room. Placed left of Clear.
+            int labelRight = clearW + M;
+            if (QuickWarp.CanWarp(key))
+            {
+                RoomKey warpKey = key;
+                MakeButton(row.transform, "WarpRoute", "\u25B6",
+                    UIStyle.FontSizeSm - 2, UIStyle.Green, UIStyle.Green with { a = 0.18f },
+                    RW - clearW - M - warpW - sp, btnY, warpW, btnH,
+                    () => OnRouteWarpClicked(warpKey));
+                labelRight += warpW + sp;
+            }
+
             string from = string.IsNullOrEmpty(route.Key.EntryFromScene)
                 ? "spawn" : route.Key.EntryFromScene;
             MakeLbl(row.transform, from + " > " + route.Key.ExitToScene,
                 UIStyle.FontSizeSm - 1, UIStyle.Text, TextAnchor.MiddleLeft,
-                x: M, w: RW - clearW - M * 3, h: h);
+                x: M, w: RW - labelRight - M * 2, h: h);
         }
 
         private void AddSnapshotRow(Transform parent, RouteReplayHistory route,

@@ -73,6 +73,7 @@ namespace ReplayTimerMod
             }
 
             PBManager.DeleteAll();
+            InvalidateDownloadStates();
             selectedScene = null;
             clearAllPending = false;
             RefreshCurrentView();
@@ -120,6 +121,7 @@ namespace ReplayTimerMod
         {
             if (selectedScene == null) return;
             PBManager.DeleteScene(selectedScene);
+            InvalidateDownloadStates();
             selectedScene = null;
             ClearSelectedScene();
             RebuildSceneList();
@@ -195,6 +197,7 @@ namespace ReplayTimerMod
         private void DeleteSnapshot(RoomKey key, string snapshotId)
         {
             PBManager.DeleteSnapshot(key, snapshotId);
+            InvalidateDownloadStates();
             RebuildSceneList();
             if (selectedScene != null && activeTab == TabKind.Runs)
                 RebuildRightContent();
@@ -203,9 +206,22 @@ namespace ReplayTimerMod
         private void DeleteRoute(RoomKey key)
         {
             PBManager.DeletePB(key);
+            InvalidateDownloadStates();
             RebuildSceneList();
             if (selectedScene != null && activeTab == TabKind.Runs)
                 RebuildRightContent();
+        }
+
+        // -- Route warp --
+        // Warps to the previous room (EntryFromScene) at a door that leads
+        // into the run room, placing the player right before the transition
+        // that starts the run. The button only renders when CanWarp is true,
+        // so the null path here is just defensive.
+
+        private void OnRouteWarpClicked(RoomKey key)
+        {
+            if (!QuickWarp.WarpToRoute(key))
+                Log.LogInfo($"[ReplayUI] Warp unavailable for {key}");
         }
 
         private void SelectSnapshotForEditing(RoomKey key, string snapshotId)

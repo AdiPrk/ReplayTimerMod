@@ -68,6 +68,13 @@ namespace ReplayTimerMod
         /// <summary>Forces the button visible (downloading/done/failed).</summary>
         public bool pinned;
 
+        /// <summary>
+        /// Forces the button permanently visible regardless of hover. Used so
+        /// the download button is always reachable — hover-only reveal was
+        /// unreliable (pointer/raycast quirks could leave it stuck hidden).
+        /// </summary>
+        public bool alwaysShown;
+
         private float _progress;
         private bool _hovered;
 
@@ -91,7 +98,7 @@ namespace ReplayTimerMod
 
         private void Update()
         {
-            float target = (pinned || _hovered) ? 1f : 0f;
+            float target = (alwaysShown || pinned || _hovered) ? 1f : 0f;
             if (_progress == target) return; // settled — skip all work
 
             _progress = Mathf.MoveTowards(_progress, target,
@@ -162,6 +169,20 @@ namespace ReplayTimerMod
 
         private const float DoneRevertSeconds = 4f;
         private const float FailedRevertSeconds = 6f;
+
+        /// <summary>
+        /// Drops all transient download states (✓ Done / ✗ Failed / derived
+        /// Full). Called whenever local replays are deleted, so the next
+        /// leaderboard build re-derives every button from ground truth
+        /// (actual local capacity) instead of leaving a stale ✓ or "full"
+        /// that blocks re-downloading.
+        /// </summary>
+        private void InvalidateDownloadStates()
+        {
+            if (_downloadStates.Count == 0 && _stateExpiry.Count == 0) return;
+            _downloadStates.Clear();
+            _stateExpiry.Clear();
+        }
 
         private enum GhostDownloadState { Idle, Downloading, Done, Failed, Full }
 
@@ -358,14 +379,39 @@ namespace ReplayTimerMod
             string from = string.IsNullOrEmpty(route.EntryFrom)
                 ? "spawn" : route.EntryFrom;
 
+            // Warp button (far right) — only when the entry transition into
+            // this room is known. Its own Button consumes the click, so it
+            // doesn't trigger the row-wide expand toggle. Same warp action as
+            // the Runs tab.
+            int rightEdge = RW - M;
+            if (selectedScene != null)
+            {
+                var warpKey = new RoomKey(selectedScene, route.EntryFrom, route.ExitTo);
+                if (QuickWarp.CanWarp(warpKey))
+                {
+                    int warpW = UIStyle.W(24);
+                    int warpH = UIStyle.H(18);
+                    int warpX = RW - warpW - M / 2;
+                    int warpY = (h - warpH) / 2;
+                    RoomKey wk = warpKey;
+                    MakeButton(row.transform, "LBWarp", "\u25B6",
+                        UIStyle.FontSizeSm - 2, UIStyle.Green,
+                        UIStyle.Green with { a = 0.18f },
+                        warpX, warpY, warpW, warpH,
+                        () => OnRouteWarpClicked(wk));
+                    rightEdge = warpX - M / 4;
+                }
+            }
+
             MakeLbl(row.transform, arrow + from + " \u2192 " + route.ExitTo,
                 UIStyle.FontSizeSm - 1, UIStyle.Text, TextAnchor.MiddleLeft,
-                x: M, w: RW * 2 / 3, h: h);
+                x: M, w: RW / 2, h: h);
 
+            int runnersX = RW / 2;
             MakeLbl(row.transform,
                 route.TotalRunners + " runner" + (route.TotalRunners != 1 ? "s" : ""),
                 UIStyle.FontSizeSm - 2, UIStyle.Subtext, TextAnchor.MiddleRight,
-                x: RW * 2 / 3, w: RW / 3 - M, h: h);
+                x: runnersX, w: rightEdge - runnersX, h: h);
         }
 
         private void AddLeaderboardRow(Transform parent, RouteLeaderboard route,
@@ -390,7 +436,7 @@ namespace ReplayTimerMod
             Img(row, rowBg);
             Rect(row, 0, top, RW, h);
 
-            var rowHover = AddHoverEffect(row);
+            AddHoverEffect(row);
 
             int x = M / 2;
 
@@ -475,7 +521,9 @@ namespace ReplayTimerMod
 
                 var ghostGO = MakeGO("LBGhost", row.transform);
                 var ghostImg = ghostGO.AddComponent<Image>();
-                Rect(ghostGO, pinned ? ghostShownX : ghostHiddenX, 0, ghostW, h);
+                // Always positioned at the shown spot — the button is
+                // permanently visible (no hover dependency).
+                Rect(ghostGO, ghostShownX, 0, ghostW, h);
 
                 var ghostCg = ghostGO.AddComponent<CanvasGroup>();
 
@@ -501,20 +549,15 @@ namespace ReplayTimerMod
                     }
                 }
 
-                // Hover reveal — present on ALL states; pinned just forces
-                // it shown. Starting pre-revealed for pinned states means
-                // content rebuilds don't replay the slide-in animation on
-                // every existing ✓/✗ button.
+                // Reveal component kept for the bg-pin semantics, but forced
+                // permanently shown so the button can never get stuck hidden.
                 var reveal = row.AddComponent<RowHoverReveal>();
                 reveal.ghostCg = ghostCg;
                 reveal.ghostRt = ghostGO.GetComponent<RectTransform>();
                 reveal.shownX = ghostShownX;
                 reveal.hiddenX = ghostHiddenX;
-                reveal.Init(startShown: pinned);
-
-                var bridge = ghostGO.AddComponent<ChildHoverBridge>();
-                bridge.reveal = reveal;
-                bridge.hover = rowHover;
+                reveal.alwaysShown = true;
+                reveal.Init(startShown: true);
 
                 // Register refs + paint the state
                 var refs = new GhostBtnRefs

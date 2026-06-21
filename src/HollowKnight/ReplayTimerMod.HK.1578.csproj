@@ -42,6 +42,7 @@
 
   <ItemGroup>
       <EmbeddedResource Include="..\..\Resources\Arial.ttf" />
+      <EmbeddedResource Include="..\..\Resources\hk_transitions.json" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(HollowKnightManagedFolder)' != ''">
@@ -89,6 +90,10 @@
       <HintPath>$(HollowKnightManagedFolder)\MMHOOK_Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+    <HintPath>$(HollowKnightManagedFolder)\UnityEngine.InputLegacyModule.dll</HintPath>
+    <Private>false</Private>
+  </Reference>
   </ItemGroup>
 
   <Target Name="ValidateHKReferences" BeforeTargets="CoreCompile">

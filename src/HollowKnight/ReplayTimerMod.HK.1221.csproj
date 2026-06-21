@@ -42,6 +42,7 @@
 
   <ItemGroup>
       <EmbeddedResource Include="..\..\Resources\Arial.ttf" />
+      <EmbeddedResource Include="..\..\Resources\hk_transitions.json" />
   </ItemGroup>
 
 

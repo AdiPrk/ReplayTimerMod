@@ -164,7 +164,9 @@ namespace ReplayTimerMod
                 }
             }
 
-            if (arrivedViaGate && !toMenu)
+            bool wasWarping = QuickWarp.IsWarping;
+
+            if (arrivedViaGate && !toMenu && !wasWarping)
             {
                 PreviousScene = CurrentScene; // UPDATE PREVIOUS SCENE
                 CurrentScene = toName;
@@ -184,8 +186,18 @@ namespace ReplayTimerMod
                 CurrentRoomTime = 0f;
                 IsRecording = false;
 
-                Log.LogInfo($"[RoomTracker] IDLE in {toName}");
+                if (wasWarping)
+                    Log.LogInfo($"[RoomTracker] Warp arrival in {toName} - not recording");
+                else
+                    Log.LogInfo($"[RoomTracker] IDLE in {toName}");
             }
+
+            // End the warp-suppression window now that the arrival has been
+            // handled. Tying this to the actual scene activation (rather than
+            // a frame count in QuickWarp) is what guarantees a warp never
+            // starts a run, since BeginSceneTransition activates async.
+            if (wasWarping)
+                QuickWarp.NotifyArrival();
 
             bool isOverTime() => CurrentRoomTime > MAX_ROOM_TIME;
         }

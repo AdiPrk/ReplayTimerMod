@@ -46,6 +46,7 @@
 
   <ItemGroup>
       <EmbeddedResource Include="..\..\Resources\Arial.ttf" />
+      <EmbeddedResource Include="..\..\Resources\ss_transitions.json" />
   </ItemGroup>
 
   <Target Name="CopyAndPackageMod" AfterTargets="PostBuildEvent">
