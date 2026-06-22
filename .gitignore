@@ -442,3 +442,6 @@ FodyWeavers.xsd
 # Thunderstore build artifacts
 thunderstore/dist/
 thunderstore/temp/*.dll
+
+supabase/
+CLAUDE.md

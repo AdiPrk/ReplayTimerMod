@@ -26,6 +26,12 @@ namespace ReplayTimerMod
             maxSavedLbl = null;
             timerToggleLbl = null;
             timerToggleBg = null;
+            chainToggleLbl = null;
+            chainToggleBg = null;
+            skipRunsToggleLbl = null;
+            skipRunsToggleBg = null;
+            skipTimerToggleLbl = null;
+            skipTimerToggleBg = null;
             alphaLbl = null;
             editContextLbl = null;
             editContextBg = null;
@@ -165,6 +171,13 @@ namespace ReplayTimerMod
             savePolicyBg = br.bg;
             savePolicyLbl = br.label;
 
+            var skipRunRow = AddConfigRow(rightContent, "Skip backtrack", rowH, labelW);
+            br = MakeButton(skipRunRow.transform, "SkipBacktrackRuns", "OFF",
+                UIStyle.FontSizeSm - 1, UIStyle.Subtext, UIStyle.Overlay,
+                labelW, (rowH - btnH) / 2, toggleW, btnH, OnSkipBacktrackRunsToggle);
+            skipRunsToggleBg = br.bg;
+            skipRunsToggleLbl = br.label;
+
             var keepRow = AddConfigRow(rightContent, "Keep per route", rowH, labelW);
             int keepX = labelW;
             MakeButton(keepRow.transform, "KeepMinus", "-",
@@ -198,6 +211,20 @@ namespace ReplayTimerMod
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnTimerToggleClicked);
             timerToggleBg = br.bg;
             timerToggleLbl = br.label;
+
+            var chainRow = AddConfigRow(rightContent, "Chain rooms", rowH, labelW);
+            br = MakeButton(chainRow.transform, "ChainToggle", "OFF",
+                UIStyle.FontSizeSm - 1, UIStyle.Subtext, UIStyle.Overlay,
+                labelW, (rowH - btnH) / 2, toggleW, btnH, OnChainTimersToggleClicked);
+            chainToggleBg = br.bg;
+            chainToggleLbl = br.label;
+
+            var skipTimerRow = AddConfigRow(rightContent, "Hide backtrack", rowH, labelW);
+            br = MakeButton(skipTimerRow.transform, "SkipBacktrackTimer", "OFF",
+                UIStyle.FontSizeSm - 1, UIStyle.Subtext, UIStyle.Overlay,
+                labelW, (rowH - btnH) / 2, toggleW, btnH, OnSkipBacktrackTimerToggle);
+            skipTimerToggleBg = br.bg;
+            skipTimerToggleLbl = br.label;
 
             var ctxRow = AddConfigRow(rightContent, "Editing", rowH, labelW);
             br = MakeButton(ctxRow.transform, "EditContext", "Global",
@@ -323,6 +350,39 @@ namespace ReplayTimerMod
                 timerToggleLbl.color = on ? UIStyle.Accent : UIStyle.Subtext;
                 if (timerToggleBg != null)
                     timerToggleBg.color = on
+                        ? UIStyle.Accent with { a = 0.22f }
+                        : UIStyle.Overlay;
+            }
+
+            if (chainToggleLbl != null)
+            {
+                bool on = GhostSettings.ChainRoomTimers;
+                chainToggleLbl.text = on ? "ON" : "OFF";
+                chainToggleLbl.color = on ? UIStyle.Accent : UIStyle.Subtext;
+                if (chainToggleBg != null)
+                    chainToggleBg.color = on
+                        ? UIStyle.Accent with { a = 0.22f }
+                        : UIStyle.Overlay;
+            }
+
+            if (skipRunsToggleLbl != null)
+            {
+                bool on = GhostSettings.SkipBacktrackRuns;
+                skipRunsToggleLbl.text = on ? "ON" : "OFF";
+                skipRunsToggleLbl.color = on ? UIStyle.Accent : UIStyle.Subtext;
+                if (skipRunsToggleBg != null)
+                    skipRunsToggleBg.color = on
+                        ? UIStyle.Accent with { a = 0.22f }
+                        : UIStyle.Overlay;
+            }
+
+            if (skipTimerToggleLbl != null)
+            {
+                bool on = GhostSettings.SkipBacktrackTimer;
+                skipTimerToggleLbl.text = on ? "ON" : "OFF";
+                skipTimerToggleLbl.color = on ? UIStyle.Accent : UIStyle.Subtext;
+                if (skipTimerToggleBg != null)
+                    skipTimerToggleBg.color = on
                         ? UIStyle.Accent with { a = 0.22f }
                         : UIStyle.Overlay;
             }

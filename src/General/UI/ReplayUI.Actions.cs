@@ -407,5 +407,23 @@ namespace ReplayTimerMod
             if (!GhostSettings.TimerHudEnabled) timerHud?.Disarm();
             if (activeTab == TabKind.Config) RefreshConfigValues();
         }
+
+        private void OnChainTimersToggleClicked()
+        {
+            GhostSettings.ChainRoomTimers = !GhostSettings.ChainRoomTimers;
+            if (activeTab == TabKind.Config) RefreshConfigValues();
+        }
+
+        private void OnSkipBacktrackRunsToggle()
+        {
+            GhostSettings.SkipBacktrackRuns = !GhostSettings.SkipBacktrackRuns;
+            if (activeTab == TabKind.Config) RefreshConfigValues();
+        }
+
+        private void OnSkipBacktrackTimerToggle()
+        {
+            GhostSettings.SkipBacktrackTimer = !GhostSettings.SkipBacktrackTimer;
+            if (activeTab == TabKind.Config) RefreshConfigValues();
+        }
     }
 }

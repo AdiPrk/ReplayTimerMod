@@ -494,7 +494,7 @@ namespace ReplayTimerMod
                 }
             }
 
-            bool showGhost = !isYou && !string.IsNullOrEmpty(entry.RunId);
+            bool showGhost = !string.IsNullOrEmpty(entry.RunId);
 
             // Capacity check (derived fresh every build — raising the limit
             // in Config immediately re-enables these buttons)

@@ -213,6 +213,17 @@ namespace ReplayTimerMod
             }
 
             RoomKey key = new RoomKey(sceneName, entryFromScene, exitToScene);
+
+            // Option: don't save runs that exit back through the same
+            // transition they entered from (exitTo == entryFrom).
+            if (GhostSettings.SkipBacktrackRuns
+                && !string.IsNullOrEmpty(entryFromScene)
+                && exitToScene == entryFromScene)
+            {
+                frameRecorder.DiscardRecording();
+                return;
+            }
+
             bool saveAllRuns = GhostSettings.SaveAllRunsEnabled;
 
             if (!saveAllRuns && !PBManager.WouldBePB(key, lrTime))

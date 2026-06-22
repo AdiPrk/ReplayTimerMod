@@ -15,6 +15,9 @@ namespace ReplayTimerMod
         public bool  SaveAllRunsEnabled      = false;
         public int   MaxSavedReplaysPerRoute = 5;
         public bool  TimerHudEnabled         = true;
+        public bool  ChainRoomTimers         = false;
+        public bool  SkipBacktrackRuns       = false;
+        public bool  SkipBacktrackTimer      = false;
         public bool   OnlineEnabled  = false;
         public string DeviceId       = "";
         public string DisplayName    = "";
@@ -74,6 +77,38 @@ namespace ReplayTimerMod
         {
             get => _d.TimerHudEnabled;
             set { _d.TimerHudEnabled = value; Save(); }
+        }
+
+        /// <summary>
+        /// When true, the room timer HUD keeps the just-finished room's card
+        /// on screen and rolls in a second card for the next room, showing up
+        /// to two rooms at once before sliding the older one off.
+        /// </summary>
+        public static bool ChainRoomTimers
+        {
+            get => _d.ChainRoomTimers;
+            set { _d.ChainRoomTimers = value; Save(); }
+        }
+
+        /// <summary>
+        /// When true, runs that exit back through the same transition they
+        /// entered from (exitTo == entryFrom) are not saved or uploaded.
+        /// </summary>
+        public static bool SkipBacktrackRuns
+        {
+            get => _d.SkipBacktrackRuns;
+            set { _d.SkipBacktrackRuns = value; Save(); }
+        }
+
+        /// <summary>
+        /// When true, the room timer HUD ignores runs that exit back through
+        /// the same transition they entered from (exitTo == entryFrom): no
+        /// finished time is shown and the live card just clears.
+        /// </summary>
+        public static bool SkipBacktrackTimer
+        {
+            get => _d.SkipBacktrackTimer;
+            set { _d.SkipBacktrackTimer = value; Save(); }
         }
 
         public static bool OnlineEnabled

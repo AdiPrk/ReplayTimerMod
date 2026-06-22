@@ -75,6 +75,12 @@ namespace ReplayTimerMod
         private Text? maxSavedLbl;
         private Text? timerToggleLbl;
         private Image? timerToggleBg;
+        private Text? chainToggleLbl;
+        private Image? chainToggleBg;
+        private Text? skipRunsToggleLbl;
+        private Image? skipRunsToggleBg;
+        private Text? skipTimerToggleLbl;
+        private Image? skipTimerToggleBg;
         private Text? alphaLbl;
         private Text? editContextLbl;
         private Image? editContextBg;
