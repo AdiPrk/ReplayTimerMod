@@ -213,6 +213,10 @@ namespace ReplayTimerMod
                 tabGO.SetActive(true);
                 wasPaused = true;
 
+                // Scene list is only visible (and worth syncing) when expanded.
+                if (_networkClient != null)
+                    _networkClient.SetMenuOpen(expanded);
+
                 if (expanded)
                     RefreshCurrentView();
             }
@@ -221,7 +225,10 @@ namespace ReplayTimerMod
             {
                 canvasGO.SetActive(false);
                 if (_networkClient != null)
+                {
                     _networkClient.StopLeaderboardPolling();
+                    _networkClient.SetMenuOpen(false);
+                }
                 ResetClearAllConfirm();
                 wasPaused = false;
                 return;
@@ -311,6 +318,8 @@ namespace ReplayTimerMod
             expanded = !expanded;
             panelGO.SetActive(expanded);
             deleteConfirmId = null;
+            if (_networkClient != null)
+                _networkClient.SetMenuOpen(expanded);
             if (expanded)
                 RefreshCurrentView();
             else

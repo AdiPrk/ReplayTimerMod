@@ -44,10 +44,20 @@ namespace ReplayTimerMod
         /// <param name="body">Response body text, or error string on failure.</param>
         public delegate void HttpCallback(bool success, long statusCode, string body);
 
+        /// <summary>
+        /// Binary variant of <see cref="HttpCallback"/>. On success
+        /// <paramref name="data"/> is the raw response bytes and
+        /// <paramref name="error"/> is null; on failure data is null and error
+        /// carries the diagnostic string.
+        /// </summary>
+        public delegate void HttpBinaryCallback(bool success, long statusCode,
+            byte[]? data, string? error);
+
         private sealed class PendingRequest
         {
             public UnityWebRequest Request = null!;
-            public HttpCallback Callback = null!;
+            public HttpCallback? Callback;
+            public HttpBinaryCallback? BinaryCallback;
             public float StartTime;
             public int TimeoutSeconds;
         }
@@ -63,7 +73,21 @@ namespace ReplayTimerMod
             Dictionary<string, string>? headers = null)
         {
             var req = UnityWebRequest.Get(url);
-            ApplyAndSend(req, timeoutSeconds, callback, headers);
+            ApplyAndSend(req, timeoutSeconds, headers, "application/json",
+                callback, null);
+        }
+
+        /// <summary>
+        /// Start a GET request whose response is raw bytes (no JSON/base64
+        /// envelope) — used for replay downloads. The callback fires during a
+        /// future Tick().
+        /// </summary>
+        public void GetBinary(string url, int timeoutSeconds,
+            HttpBinaryCallback callback, Dictionary<string, string>? headers = null)
+        {
+            var req = UnityWebRequest.Get(url); // attaches a DownloadHandlerBuffer
+            ApplyAndSend(req, timeoutSeconds, headers, "application/octet-stream",
+                null, callback);
         }
 
         /// <summary>
@@ -80,7 +104,17 @@ namespace ReplayTimerMod
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json; charset=utf-8");
 
-            ApplyAndSend(req, timeoutSeconds, callback, headers);
+#if V1221
+            // Unity ~2017.1 sends POST bodies with Transfer-Encoding: chunked by
+            // default, which the runtime/CDN in front of Supabase stalls on — the
+            // request never completes and hangs until timeout. Force a plain
+            // Content-Length body. The property was removed in Unity 2019.3+, so
+            // this is V1221-only; 1578/Silksong (Unity 2020+) already do this.
+            req.chunkedTransfer = false;
+#endif
+
+            ApplyAndSend(req, timeoutSeconds, headers, "application/json",
+                callback, null);
         }
 
         // ── Tick / lifecycle ────────────────────────────────────────────────
@@ -112,13 +146,22 @@ namespace ReplayTimerMod
 
                 bool success = IsSuccess(p.Request);
                 long status = p.Request.responseCode;
-                string body = success
-                    ? (p.Request.downloadHandler?.text ?? "")
-                    : GetErrorString(p.Request);
 
                 try
                 {
-                    p.Callback(success, status, body);
+                    if (p.BinaryCallback != null)
+                    {
+                        byte[]? data = success ? p.Request.downloadHandler?.data : null;
+                        string? error = success ? null : GetErrorString(p.Request);
+                        p.BinaryCallback(success, status, data, error);
+                    }
+                    else
+                    {
+                        string body = success
+                            ? (p.Request.downloadHandler?.text ?? "")
+                            : GetErrorString(p.Request);
+                        p.Callback!(success, status, body);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -148,10 +191,10 @@ namespace ReplayTimerMod
         // ── Internals ───────────────────────────────────────────────────────
 
         private void ApplyAndSend(UnityWebRequest req, int timeoutSeconds,
-            HttpCallback callback, Dictionary<string, string>? headers)
+            Dictionary<string, string>? headers, string acceptType,
+            HttpCallback? callback, HttpBinaryCallback? binaryCallback)
         {
-            // Always request JSON responses.
-            req.SetRequestHeader("Accept", "application/json");
+            req.SetRequestHeader("Accept", acceptType);
 
             if (headers != null)
             {
@@ -172,6 +215,7 @@ namespace ReplayTimerMod
             {
                 Request = req,
                 Callback = callback,
+                BinaryCallback = binaryCallback,
                 StartTime = Time.realtimeSinceStartup,
                 TimeoutSeconds = timeoutSeconds
             });

@@ -66,6 +66,24 @@ namespace ReplayTimerMod
             }
         }
 
+        /// <summary>
+        /// Decode straight from the compressed RTM3 bytes (the raw payload the
+        /// server returns for downloads), skipping the base64 step that the
+        /// string overload performs.
+        /// </summary>
+        public static RecordedRoom? Decode(byte[] compressed)
+        {
+            try
+            {
+                return ReadBinary(Compress.DecompressData(compressed));
+            }
+            catch (Exception ex)
+            {
+                Log.LogError($"[ShareEncoder] Decode failed: {ex.Message}");
+                return null;
+            }
+        }
+
         // ── Write ─────────────────────────────────────────────────────────────
 
         private static byte[] WriteBinary(RecordedRoom room)

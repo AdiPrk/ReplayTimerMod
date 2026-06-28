@@ -226,15 +226,6 @@ namespace ReplayTimerMod
             return true;
         }
 
-        /// <summary>
-        /// Backward compat: Update without server version (for old callers).
-        /// </summary>
-        public bool Update(string game, string scene, LeaderboardData data)
-        {
-            return UpdateRoom(game, scene,
-                GetRoomServerVersion(game, scene), data);
-        }
-
         // ── Optimistic upload update ───────────────────────────────────────
 
         /// <summary>
@@ -366,18 +357,6 @@ namespace ReplayTimerMod
             _roomServerVersions.Clear();
             _roomFetchedAt.Clear();
             _sceneIndexVersion = 0;
-        }
-
-        // ── Backward compat: UpdateFromManifest is no longer needed ────────
-        // Kept as a no-op stub in case any code path still references it.
-
-        public bool UpdateFromManifest(string game,
-            Dictionary<string, LeaderboardData> manifest)
-        {
-            bool anyChanged = false;
-            foreach (var kvp in manifest)
-                anyChanged |= Update(game, kvp.Key, kvp.Value);
-            return anyChanged;
         }
 
         // ── Signature ──────────────────────────────────────────────────────

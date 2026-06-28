@@ -55,7 +55,6 @@ namespace ReplayTimerMod
     /// </summary>
     internal sealed class ConfigResponse
     {
-        public string MinModVersion = "";
         public bool Maintenance;
         public string? Announcement; // null if none
     }

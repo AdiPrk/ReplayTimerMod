@@ -36,7 +36,6 @@ namespace ReplayTimerMod
         // ── Base polling intervals (before health multiplier) ──────────────
 
         private const float SceneIndexInterval_MenuOpen = 60f;
-        private const float SceneIndexInterval_Gameplay = 120f;
         private const float RoomPollInterval_Active = 5f;
         private const float RoomPollInterval_Default = 8f;
         private const float RoomPollInterval_Idle = 12f;
@@ -48,6 +47,14 @@ namespace ReplayTimerMod
         private readonly string _gameTag;
         private readonly string _modVersion;
         private readonly string _apiBaseUrl;
+
+        // Header dictionaries are immutable per client (device id never
+        // changes), so build them once instead of allocating a new dict per
+        // request. _headers is the default; _initHeaders also carries the mod
+        // version (sent on /init alongside uploads). HttpService only reads
+        // these, so sharing one instance across concurrent requests is safe.
+        private readonly Dictionary<string, string> _headers;
+        private readonly Dictionary<string, string> _initHeaders;
 
         // ── Sub-components ─────────────────────────────────────────────────
 
@@ -68,9 +75,7 @@ namespace ReplayTimerMod
 
         private LeaderboardCache? _leaderboardCache;
         private float _sceneIndexTimer;
-        private float _sceneIndexInterval;
         private bool _sceneIndexInFlight;
-        private int _sceneIndexFailures;
         private ManifestStatus _sceneIndexStatus = ManifestStatus.NotStarted;
         private string? _sceneIndexError;
 
@@ -85,7 +90,7 @@ namespace ReplayTimerMod
         private float _pollTimer;
         private int _consecutiveNoChange;   // for adaptive interval
         private bool _lastPollWasChange;
-        private bool _menuOpen;             // set by UI, controls scene index cadence
+        private bool _menuOpen;             // panel open? gates scene-index polling
 
         // ── Request deduplication ──────────────────────────────────────────
 
@@ -115,6 +120,16 @@ namespace ReplayTimerMod
             _gameTag = gameTag;
             _modVersion = modVersion;
             _apiBaseUrl = TrimTrailingSlash(apiBaseUrl);
+
+            _headers = new Dictionary<string, string>
+            {
+                { "X-Device-Id", _deviceId }
+            };
+            _initHeaders = new Dictionary<string, string>
+            {
+                { "X-Device-Id", _deviceId },
+                { "X-Mod-Version", _modVersion }
+            };
         }
 
         // ── Lifecycle ──────────────────────────────────────────────────────
@@ -219,7 +234,6 @@ namespace ReplayTimerMod
             _pollTimer = 999f; // trigger immediately
             _consecutiveNoChange = 0;
             _lastPollWasChange = false;
-            _menuOpen = true;
 
             // If we don't have data for this room, trigger an immediate fetch.
             if (_leaderboardCache != null
@@ -232,17 +246,23 @@ namespace ReplayTimerMod
         public void StopLeaderboardPolling()
         {
             _pollScene = null;
-            _menuOpen = false;
         }
 
         public bool IsLeaderboardPolling => _pollScene != null;
 
         /// <summary>
-        /// Notify NetworkClient that the menu is open (affects scene index cadence).
+        /// Notify NetworkClient whether the replay panel is open. The scene
+        /// index is only consumed by the panel's scene list, so it is polled
+        /// ONLY while the panel is open — during gameplay the request is
+        /// skipped entirely. Opening the panel forces an immediate refresh so
+        /// the list re-syncs with whatever changed since it was last open.
         /// </summary>
         public void SetMenuOpen(bool open)
         {
+            if (_menuOpen == open) return;
             _menuOpen = open;
+            if (open)
+                _sceneIndexTimer = 999f; // refresh scene index on next tick
         }
 
         /// <summary>
@@ -269,9 +289,6 @@ namespace ReplayTimerMod
 
             string url = _apiBaseUrl + "/init?game="
                 + Uri.EscapeDataString(_gameTag);
-
-            var headers = MakeHeaders();
-            headers["X-Mod-Version"] = _modVersion;
 
             _sceneIndexStatus = ManifestStatus.Loading;
 
@@ -302,8 +319,6 @@ namespace ReplayTimerMod
 
                     _sceneIndexStatus = ManifestStatus.Loaded;
                     _sceneIndexError = null;
-                    _sceneIndexFailures = 0;
-                    _sceneIndexInterval = SceneIndexInterval_Gameplay;
 
                     Log.LogInfo("[NetworkClient] Init loaded: "
                         + init.Scenes.Count + " scenes");
@@ -316,13 +331,11 @@ namespace ReplayTimerMod
                     _health.RecordFailure();
                     _sceneIndexStatus = ManifestStatus.Failed;
                     _sceneIndexError = body;
-                    _sceneIndexFailures = 1;
-                    _sceneIndexInterval = 10f;
 
                     Log.LogWarning("[NetworkClient] Init failed: " + body);
                     OnManifestFailed?.Invoke();
                 }
-            }, headers);
+            }, _initHeaders);
         }
 
         // ── Scene index polling: GET /scenes ───────────────────────────────
@@ -330,15 +343,19 @@ namespace ReplayTimerMod
         private void TickSceneIndex()
         {
             if (_http == null || _leaderboardCache == null) return;
+            // The scene index only feeds the panel's scene list, so there is
+            // nothing to keep fresh while the panel is closed. Skipping the
+            // request entirely during gameplay saves a poll every 60s for the
+            // whole session.
+            if (!_menuOpen) return;
             if (_sceneIndexInFlight) return;
             if (!_health.ShouldAttemptPolling) return;
 
             _sceneIndexTimer += Time.unscaledDeltaTime;
 
-            float interval = (_menuOpen
-                ? SceneIndexInterval_MenuOpen
-                : SceneIndexInterval_Gameplay) * _health.PollMultiplier;
-
+            // Failure backoff is handled by the health multiplier (1x/2x/10x),
+            // and ShouldAttemptPolling stops us entirely once the server is Down.
+            float interval = SceneIndexInterval_MenuOpen * _health.PollMultiplier;
             if (_sceneIndexTimer < interval) return;
 
             _sceneIndexTimer = 0f;
@@ -365,7 +382,6 @@ namespace ReplayTimerMod
 
                         _sceneIndexStatus = ManifestStatus.Loaded;
                         _sceneIndexError = null;
-                        _sceneIndexFailures = 0;
 
                         OnManifestReady?.Invoke();
                         OnLeaderboardUpdated?.Invoke();
@@ -375,12 +391,8 @@ namespace ReplayTimerMod
                 else
                 {
                     _health.RecordFailure();
-                    _sceneIndexFailures++;
-                    float backoff = 10f * (1 << System.Math.Min(
-                        _sceneIndexFailures - 1, 3));
-                    _sceneIndexInterval = System.Math.Min(backoff, 120f);
                 }
-            }, MakeHeaders());
+            }, _headers);
         }
 
         // ── Room leaderboard: on-demand + polling ──────────────────────────
@@ -434,7 +446,7 @@ namespace ReplayTimerMod
                     Log.LogInfo("[NetworkClient] Room fetch failed for "
                         + scene + ": " + body);
                 }
-            }, MakeHeaders());
+            }, _headers);
         }
 
         private void TickRoomPoll()
@@ -460,27 +472,28 @@ namespace ReplayTimerMod
 
         // ── Replay download ─────────────────────────────────────────────────
 
-        public void DownloadReplay(string runId, Action<string?> onComplete)
+        public void DownloadReplay(string runId, Action<byte[]?> onComplete)
         {
             if (!_started || _http == null || string.IsNullOrEmpty(runId)) return;
 
             string url = _apiBaseUrl + "/replay?run_id="
                 + Uri.EscapeDataString(runId);
 
-            _http.Get(url, HttpTimeoutSec, (success, status, body) =>
+            // Raw compressed RTM3 bytes — no JSON/base64 envelope on the wire.
+            _http.GetBinary(url, HttpTimeoutSec, (success, status, data, error) =>
             {
                 if (success)
                 {
                     _health.RecordSuccess();
-                    onComplete(ApiJson.ParseReplayData(body));
+                    onComplete(data);
                 }
                 else
                 {
                     _health.RecordFailure();
-                    Log.LogInfo("[NetworkClient] Replay download failed: " + body);
+                    Log.LogInfo("[NetworkClient] Replay download failed: " + error);
                     onComplete(null);
                 }
-            }, MakeHeaders());
+            }, _headers);
         }
 
         // ── Replay sharing (share-by-pointer) ───────────────────────────────
@@ -509,7 +522,7 @@ namespace ReplayTimerMod
                         Log.LogInfo("[NetworkClient] Share (run) failed: " + body);
                         onComplete(null);
                     }
-                }, MakeHeaders());
+                }, _headers);
         }
 
         /// <summary>Mint (or fetch the existing) share code for an inline replay.</summary>
@@ -545,11 +558,11 @@ namespace ReplayTimerMod
                         Log.LogInfo("[NetworkClient] Share (data) failed: " + resp);
                         onComplete(null);
                     }
-                }, MakeHeaders());
+                }, _headers);
         }
 
-        /// <summary>Resolve a share code to its replay (base64), or null.</summary>
-        internal void ResolveShare(string code, Action<string?> onComplete)
+        /// <summary>Resolve a share code to its replay bytes, or null.</summary>
+        internal void ResolveShare(string code, Action<byte[]?> onComplete)
         {
             if (!_started || _http == null || string.IsNullOrEmpty(code))
             {
@@ -558,20 +571,20 @@ namespace ReplayTimerMod
             }
 
             string url = _apiBaseUrl + "/share?code=" + Uri.EscapeDataString(code);
-            _http.Get(url, HttpTimeoutSec, (success, status, body) =>
+            _http.GetBinary(url, HttpTimeoutSec, (success, status, data, error) =>
             {
                 if (success)
                 {
                     _health.RecordSuccess();
-                    onComplete(ApiJson.ParseReplayData(body));
+                    onComplete(data);
                 }
                 else
                 {
                     _health.RecordFailure();
-                    Log.LogInfo("[NetworkClient] Resolve share failed: " + body);
+                    Log.LogInfo("[NetworkClient] Resolve share failed: " + error);
                     onComplete(null);
                 }
-            }, MakeHeaders());
+            }, _headers);
         }
 
         // ── Upload success handler ─────────────────────────────────────────
@@ -630,14 +643,6 @@ namespace ReplayTimerMod
         }
 
         // ── Helpers ────────────────────────────────────────────────────────
-
-        private Dictionary<string, string> MakeHeaders()
-        {
-            return new Dictionary<string, string>
-            {
-                { "X-Device-Id", _deviceId }
-            };
-        }
 
         private static string TrimTrailingSlash(string url)
         {

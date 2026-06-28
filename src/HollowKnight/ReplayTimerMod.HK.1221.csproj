@@ -96,23 +96,72 @@
            Text="Assembly-CSharp.dll not found under $(HollowKnightManagedFolder). Update .config/local/HollowKnightPath1221.props to your Hollow Knight_Data/Managed folder." />
   </Target>
 
-  <!-- Merge ICSharpCode.SharpZipLib into our output DLL so it does not need to be shipped separately. -->
+  <!--
+    Merge ICSharpCode.SharpZipLib into our output DLL so it ships as one file.
+
+    Why this is written so defensively: the previous version used an
+    Inputs/Outputs stamp for incremental skipping. On an up-to-date build
+    CopyFilesToOutputDirectory copies the freshly compiled, *unmerged* assembly
+    over the merged output, and the stamp guard then considered the merge "up
+    to date" and skipped it - so the shipped DLL still referenced SharpZipLib
+    externally and threw FileNotFoundException at runtime (every replay
+    save/encode crashed - this is exactly what broke HK 1.5.78 saving).
+
+    Robust scheme that works whether or not OutputPath aliases the intermediate
+    directory (this 1221 build outputs into its own obj tree, so its
+    intermediate assembly and final output are the SAME file - merging "from
+    the intermediate" here would double-merge):
+      * Run after the output DLL is in place (AfterTargets=CopyFilesToOutputDirectory).
+      * Record the merged DLL's last-write-time in a stamp after each merge.
+      * On the next build, skip the merge ONLY if the output DLL's write time
+        still matches the stamp (i.e. nothing recompiled/recopied it since we
+        merged). Any recompile or copy changes the time and forces a fresh
+        merge. This never double-merges and never ships an unmerged DLL.
+  -->
   <Target Name="ILRepackSharpZipLib"
-          AfterTargets="Build"
+          AfterTargets="CopyFilesToOutputDirectory"
           BeforeTargets="PrepareHKReleaseLayout"
-          Condition="Exists('$(TargetDir)ICSharpCode.SharpZipLib.dll')"
-          Inputs="$(TargetPath);$(TargetDir)ICSharpCode.SharpZipLib.dll"
-          Outputs="$(TargetPath).ilrepack.stamp">
+          Condition="Exists('$(TargetDir)ICSharpCode.SharpZipLib.dll')">
     <PropertyGroup>
       <_ILRepackExe>$(NuGetPackageRoot)ilrepack\2.0.44\tools\ILRepack.exe</_ILRepackExe>
-      <_ILRepackInput>$(TargetDir)$(TargetName).merge-input.dll</_ILRepackInput>
+      <_ILRepackInput>$(TargetDir)$(TargetName).premerge.dll</_ILRepackInput>
+      <_ILRepackStamp>$(IntermediateOutputPath)$(TargetName).ilrepack.stamp</_ILRepackStamp>
     </PropertyGroup>
-    <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(_ILRepackInput)" />
-    <Exec Command="&quot;$(_ILRepackExe)&quot; /internalize /lib:&quot;$(TargetDir).&quot; /lib:&quot;$(HollowKnightManagedFolder)&quot; /out:&quot;$(TargetPath)&quot; &quot;$(_ILRepackInput)&quot; &quot;$(TargetDir)ICSharpCode.SharpZipLib.dll&quot;"
+
+    <!-- Probe the output DLL's current modified time and the time recorded
+         after the last merge. MSBuild forbids System.IO.File property
+         functions, so use well-known item metadata + ReadLinesFromFile. -->
+    <ItemGroup>
+      <_OutDllProbe Include="$(TargetPath)" Condition="Exists('$(TargetPath)')" />
+    </ItemGroup>
+    <ReadLinesFromFile File="$(_ILRepackStamp)" Condition="Exists('$(_ILRepackStamp)')">
+      <Output TaskParameter="Lines" PropertyName="_StampTime" />
+    </ReadLinesFromFile>
+    <PropertyGroup>
+      <_OutDllTime>@(_OutDllProbe->'%(ModifiedTime)')</_OutDllTime>
+      <_AlreadyMerged>false</_AlreadyMerged>
+      <_AlreadyMerged Condition="'$(_OutDllTime)' != '' and '$(_OutDllTime)' == '$(_StampTime)'">true</_AlreadyMerged>
+    </PropertyGroup>
+
+    <Message Importance="normal" Condition="'$(_AlreadyMerged)' == 'true'"
+             Text="ReplayTimerMod: SharpZipLib already merged into $(TargetFileName); skipping ILRepack." />
+
+    <!-- A merge is needed: the output DLL is the freshly produced, unmerged
+         compiler output. Merge SharpZipLib into it in place. -->
+    <Copy Condition="'$(_AlreadyMerged)' != 'true'"
+          SourceFiles="$(TargetPath)" DestinationFiles="$(_ILRepackInput)" />
+    <Exec Condition="'$(_AlreadyMerged)' != 'true'"
+          Command="&quot;$(_ILRepackExe)&quot; /internalize /lib:&quot;$(TargetDir).&quot; /lib:&quot;$(HollowKnightManagedFolder)&quot; /out:&quot;$(TargetPath)&quot; &quot;$(_ILRepackInput)&quot; &quot;$(TargetDir)ICSharpCode.SharpZipLib.dll&quot;"
           IgnoreStandardErrorWarningFormat="true" />
-    <Delete Files="$(_ILRepackInput)" />
-    <!-- Touch a stamp file so MSBuild knows this target is up-to-date next build. -->
-    <Touch Files="$(TargetPath).ilrepack.stamp" AlwaysCreate="true" />
+    <Delete Condition="'$(_AlreadyMerged)' != 'true'" Files="$(_ILRepackInput)" />
+    <!-- Re-probe the merged DLL's new modified time and record it. -->
+    <ItemGroup Condition="'$(_AlreadyMerged)' != 'true'">
+      <_MergedProbe Include="$(TargetPath)" />
+    </ItemGroup>
+    <WriteLinesToFile Condition="'$(_AlreadyMerged)' != 'true'"
+          File="$(_ILRepackStamp)"
+          Lines="@(_MergedProbe->'%(ModifiedTime)')"
+          Overwrite="true" />
   </Target>
 
   <Target Name="PrepareHKReleaseLayout" AfterTargets="Build">

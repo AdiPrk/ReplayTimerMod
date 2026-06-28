@@ -148,15 +148,15 @@ namespace ReplayTimerMod
                 }
 
                 ShowPasteStatus("Resolving\u2026", UIStyle.Subtext);
-                _networkClient.ResolveShare(code, replayData =>
+                _networkClient.ResolveShare(code, replayBytes =>
                 {
-                    if (string.IsNullOrEmpty(replayData))
+                    if (replayBytes == null || replayBytes.Length == 0)
                     {
                         ShowPasteStatus("Link not found", UIStyle.Red);
                         return;
                     }
 
-                    var room = ReplayShareEncoder.Decode(replayData!);
+                    var room = ReplayShareEncoder.Decode(replayBytes);
                     if (room == null)
                     {
                         ShowPasteStatus("Invalid data", UIStyle.Red);

@@ -873,15 +873,15 @@ namespace ReplayTimerMod
             if (!TryUpdateGhostVisual(runId) && activeTab == TabKind.Leaderboard)
                 RebuildLeaderboardContentOnly();
 
-            _networkClient.DownloadReplay(runId, replayData =>
+            _networkClient.DownloadReplay(runId, replayBytes =>
             {
-                if (string.IsNullOrEmpty(replayData))
+                if (replayBytes == null || replayBytes.Length == 0)
                 {
                     SetGhostFailed(runId, "download failed");
                     return;
                 }
 
-                RecordedRoom? room = ReplayShareEncoder.Decode(replayData!);
+                RecordedRoom? room = ReplayShareEncoder.Decode(replayBytes);
                 if (room == null)
                 {
                     SetGhostFailed(runId, "decode failed");
