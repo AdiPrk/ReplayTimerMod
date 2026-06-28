@@ -140,6 +140,7 @@ namespace ReplayTimerMod
                 _networkClient.OnLeaderboardUpdated -= HandleLeaderboardUpdated;
                 _networkClient.OnManifestReady -= HandleManifestReady;
                 _networkClient.OnManifestFailed -= HandleManifestFailed;
+                _networkClient.OnRunIdAssigned -= HandleRunIdAssigned;
             }
 
             _networkClient = client;
@@ -149,7 +150,13 @@ namespace ReplayTimerMod
                 _networkClient.OnLeaderboardUpdated += HandleLeaderboardUpdated;
                 _networkClient.OnManifestReady += HandleManifestReady;
                 _networkClient.OnManifestFailed += HandleManifestFailed;
+                _networkClient.OnRunIdAssigned += HandleRunIdAssigned;
             }
+        }
+
+        private void HandleRunIdAssigned(string snapshotId, RoomKey key, string runId)
+        {
+            PBManager.SetServerIds(key, snapshotId, runId, null);
         }
 
         public void SetGameTag(string gameTag)

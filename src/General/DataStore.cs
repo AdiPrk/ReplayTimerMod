@@ -35,6 +35,8 @@ namespace ReplayTimerMod
         public float colorG = 1f;
         public float colorB = 1f;
         public float alpha = 0.4f;
+        public string serverRunId = "";
+        public string shareCode = "";
     }
 
     public static class DataStore
@@ -225,7 +227,9 @@ namespace ReplayTimerMod
                 colorR = snapshot.ColorR,
                 colorG = snapshot.ColorG,
                 colorB = snapshot.ColorB,
-                alpha = snapshot.Alpha
+                alpha = snapshot.Alpha,
+                serverRunId = snapshot.ServerRunId ?? "",
+                shareCode = snapshot.ShareCode ?? ""
             };
 
         // ── Public API ────────────────────────────────────────────────────────
@@ -287,6 +291,32 @@ namespace ReplayTimerMod
             catch (Exception ex)
             {
                 Log.LogError($"[DataStore] UpdateSnapshotVisuals failed {key}#{snapshotId}: {ex.Message}");
+            }
+        }
+
+        public static void UpdateSnapshotServerIds(RoomKey key, string snapshotId,
+            string? serverRunId, string? shareCode)
+        {
+            string path = FilePath(key.SceneName);
+            try
+            {
+                var idx = LoadIndexAndUpgrade(path);
+                var entry = idx.entries.Find(e =>
+                    MatchesRoute(e, key) && e.snapshotId == snapshotId);
+                if (entry == null)
+                {
+                    Log.LogWarning($"[DataStore] UpdateSnapshotServerIds missing {key}#{snapshotId}");
+                    return;
+                }
+
+                if (serverRunId != null) entry.serverRunId = serverRunId;
+                if (shareCode != null) entry.shareCode = shareCode;
+                WriteIndex(path, idx);
+                Log.LogInfo($"[DataStore] Updated snapshot server ids {key}#{snapshotId}");
+            }
+            catch (Exception ex)
+            {
+                Log.LogError($"[DataStore] UpdateSnapshotServerIds failed {key}#{snapshotId}: {ex.Message}");
             }
         }
 
@@ -389,7 +419,9 @@ namespace ReplayTimerMod
                             entry.colorR,
                             entry.colorG,
                             entry.colorB,
-                            entry.alpha));
+                            entry.alpha,
+                            entry.serverRunId,
+                            entry.shareCode));
                     }
                     catch (Exception ex)
                     {

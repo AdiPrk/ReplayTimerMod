@@ -94,10 +94,17 @@ namespace ReplayTimerMod
         public float Alpha { get; }
         public Color OverrideColor => new Color(ColorR, ColorG, ColorB, Alpha);
 
+        /// <summary>Server run id once this replay has been uploaded (else null).</summary>
+        public string? ServerRunId { get; }
+
+        /// <summary>Public share code once one has been minted (else null).</summary>
+        public string? ShareCode { get; }
+
         public ReplaySnapshot(string snapshotId, long capturedAtUtcTicks,
             RecordedRoom room, string? encodedData = null,
             bool hasVisualOverride = false,
-            float colorR = 1f, float colorG = 1f, float colorB = 1f, float alpha = 0.4f)
+            float colorR = 1f, float colorG = 1f, float colorB = 1f, float alpha = 0.4f,
+            string? serverRunId = null, string? shareCode = null)
         {
             SnapshotId = string.IsNullOrEmpty(snapshotId)
                 ? System.Guid.NewGuid().ToString("N")
@@ -110,6 +117,8 @@ namespace ReplayTimerMod
             ColorG = Mathf.Clamp01(colorG);
             ColorB = Mathf.Clamp01(colorB);
             Alpha = Mathf.Clamp01(alpha);
+            ServerRunId = string.IsNullOrEmpty(serverRunId) ? null : serverRunId;
+            ShareCode = string.IsNullOrEmpty(shareCode) ? null : shareCode;
         }
 
         public Color ResolveGhostColor(Color globalColor) =>
@@ -127,7 +136,28 @@ namespace ReplayTimerMod
                 color.r,
                 color.g,
                 color.b,
-                color.a);
+                color.a,
+                ServerRunId,
+                ShareCode);
+
+        /// <summary>
+        /// Returns a copy with server ids set. Either argument may be null to
+        /// leave that id unchanged — e.g. set the run id at upload time, then
+        /// the share code later, without clobbering the other.
+        /// </summary>
+        public ReplaySnapshot WithServerIds(string? serverRunId, string? shareCode) =>
+            new ReplaySnapshot(
+                SnapshotId,
+                CapturedAtUtcTicks,
+                Room,
+                EncodedData,
+                HasVisualOverride,
+                ColorR,
+                ColorG,
+                ColorB,
+                Alpha,
+                serverRunId ?? ServerRunId,
+                shareCode ?? ShareCode);
 
         public static ReplaySnapshot CreateNew(RecordedRoom room,
             string? encodedData = null, long? capturedAtUtcTicks = null) =>

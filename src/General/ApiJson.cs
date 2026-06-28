@@ -436,6 +436,44 @@ namespace ReplayTimerMod
             return true;
         }
 
+        // ── Serialization — share ──────────────────────────────────────────
+
+        public static string SerializeShareByRunId(string runId)
+        {
+            var sb = new StringBuilder(64);
+            sb.Append('{');
+            AppendKV(sb, "run_id", runId, first: true);
+            sb.Append('}');
+            return sb.ToString();
+        }
+
+        public static string SerializeShareByData(string game, string sceneName,
+            string entryFrom, string exitTo, float totalTime, int frameCount,
+            string replayData)
+        {
+            var sb = new StringBuilder(replayData.Length + 256);
+            sb.Append('{');
+            AppendKV(sb, "game", game, first: true);
+            AppendKV(sb, "scene_name", sceneName);
+            AppendKV(sb, "entry_from", entryFrom);
+            AppendKV(sb, "exit_to", exitTo);
+            AppendKVFloat(sb, "total_time", totalTime);
+            AppendKVInt(sb, "frame_count", frameCount);
+            AppendKV(sb, "replay_data", replayData);
+            sb.Append('}');
+            return sb.ToString();
+        }
+
+        public static ShareResponse ParseShareResponse(string json)
+        {
+            var r = new ShareResponse();
+            if (string.IsNullOrEmpty(json)) return r;
+            var fields = ParseFlat(json);
+            if (fields.TryGetValue("code", out var c) && c != null) r.Code = c;
+            if (fields.TryGetValue("url", out var u) && u != null) r.Url = u;
+            return r;
+        }
+
         // ── StringBuilder helpers ──────────────────────────────────────────
 
         private static void AppendKV(StringBuilder sb, string key, string value,

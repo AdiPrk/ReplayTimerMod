@@ -41,6 +41,16 @@ namespace ReplayTimerMod
     }
 
     /// <summary>
+    /// Parsed response from POST /share.
+    /// </summary>
+    internal sealed class ShareResponse
+    {
+        public string Code = "";
+        public string? Url;   // present only when the server has SHARE_BASE_URL set
+        public bool HasCode => !string.IsNullOrEmpty(Code);
+    }
+
+    /// <summary>
     /// Parsed response from GET /config (or the config portion of /init).
     /// </summary>
     internal sealed class ConfigResponse

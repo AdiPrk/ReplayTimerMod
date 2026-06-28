@@ -77,6 +77,10 @@ namespace ReplayTimerMod
             sb.Append(e.totalTime.ToString("R", CultureInfo.InvariantCulture));
             sb.Append(",\"data\":");
             AppendString(sb, e.data);
+            sb.Append(",\"serverRunId\":");
+            AppendString(sb, e.serverRunId ?? "");
+            sb.Append(",\"shareCode\":");
+            AppendString(sb, e.shareCode ?? "");
             sb.Append('}');
         }
 
@@ -124,6 +128,8 @@ namespace ReplayTimerMod
                     case "exitToScene":    e.exitToScene    = p.ReadString(); break;
                     case "totalTime":      e.totalTime      = p.ReadFloat();  break;
                     case "data":           e.data           = p.ReadString(); break;
+                    case "serverRunId":    e.serverRunId    = p.ReadString(); break;
+                    case "shareCode":      e.shareCode      = p.ReadString(); break;
                     default:               p.SkipValue();                     break;
                 }
             }

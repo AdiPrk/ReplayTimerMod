@@ -99,6 +99,13 @@ namespace ReplayTimerMod
         public event Action? OnManifestReady;   // backward compat: scene index loaded
         public event Action? OnManifestFailed;  // backward compat: scene index failed
 
+        /// <summary>
+        /// Fired after a successful upload once the server run id is known
+        /// (snapshotId, route key, runId). Lets the snapshot cache its run id
+        /// so the replay can be shared by pointer later without re-uploading.
+        /// </summary>
+        public event Action<string, RoomKey, string>? OnRunIdAssigned;
+
         // ── Construction ───────────────────────────────────────────────────
 
         public NetworkClient(string deviceId, string gameTag,
@@ -476,6 +483,97 @@ namespace ReplayTimerMod
             }, MakeHeaders());
         }
 
+        // ── Replay sharing (share-by-pointer) ───────────────────────────────
+
+        /// <summary>Mint (or fetch the existing) share code for an uploaded run.</summary>
+        internal void CreateShareByRunId(string runId, Action<ShareResponse?> onComplete)
+        {
+            if (!_started || _http == null || string.IsNullOrEmpty(runId))
+            {
+                onComplete(null);
+                return;
+            }
+
+            _http.Post(_apiBaseUrl + "/share",
+                ApiJson.SerializeShareByRunId(runId), HttpTimeoutSec,
+                (success, status, body) =>
+                {
+                    if (success)
+                    {
+                        _health.RecordSuccess();
+                        onComplete(ApiJson.ParseShareResponse(body));
+                    }
+                    else
+                    {
+                        _health.RecordFailure();
+                        Log.LogInfo("[NetworkClient] Share (run) failed: " + body);
+                        onComplete(null);
+                    }
+                }, MakeHeaders());
+        }
+
+        /// <summary>Mint (or fetch the existing) share code for an inline replay.</summary>
+        internal void CreateShareByData(ReplaySnapshot snapshot,
+            Action<ShareResponse?> onComplete)
+        {
+            if (!_started || _http == null || snapshot == null)
+            {
+                onComplete(null);
+                return;
+            }
+
+            string body = ApiJson.SerializeShareByData(
+                _gameTag,
+                snapshot.Key.SceneName,
+                snapshot.Key.EntryFromScene,
+                snapshot.Key.ExitToScene,
+                snapshot.TotalTime,
+                snapshot.Room.FrameCount,
+                snapshot.EncodedData);
+
+            _http.Post(_apiBaseUrl + "/share", body, HttpTimeoutSec,
+                (success, status, resp) =>
+                {
+                    if (success)
+                    {
+                        _health.RecordSuccess();
+                        onComplete(ApiJson.ParseShareResponse(resp));
+                    }
+                    else
+                    {
+                        _health.RecordFailure();
+                        Log.LogInfo("[NetworkClient] Share (data) failed: " + resp);
+                        onComplete(null);
+                    }
+                }, MakeHeaders());
+        }
+
+        /// <summary>Resolve a share code to its replay (base64), or null.</summary>
+        internal void ResolveShare(string code, Action<string?> onComplete)
+        {
+            if (!_started || _http == null || string.IsNullOrEmpty(code))
+            {
+                onComplete(null);
+                return;
+            }
+
+            string url = _apiBaseUrl + "/share?code=" + Uri.EscapeDataString(code);
+            _http.Get(url, HttpTimeoutSec, (success, status, body) =>
+            {
+                if (success)
+                {
+                    _health.RecordSuccess();
+                    onComplete(ApiJson.ParseReplayData(body));
+                }
+                else
+                {
+                    _health.RecordFailure();
+                    Log.LogInfo("[NetworkClient] Resolve share failed: " + body);
+                    onComplete(null);
+                }
+            }, MakeHeaders());
+        }
+
         // ── Upload success handler ─────────────────────────────────────────
 
         private void HandleUploadSuccess(UploadPayload payload, UploadResponse response)
@@ -513,6 +611,16 @@ namespace ReplayTimerMod
 
                 if (changed)
                     OnLeaderboardUpdated?.Invoke();
+            }
+
+            // Surface the server run id so the originating snapshot can cache it
+            // (enables instant share-by-pointer for this replay).
+            if (!string.IsNullOrEmpty(response.RunId))
+            {
+                OnRunIdAssigned?.Invoke(
+                    payload.SnapshotId,
+                    new RoomKey(payload.SceneName, payload.EntryFrom, payload.ExitTo),
+                    response.RunId);
             }
         }
 
@@ -564,6 +672,7 @@ namespace ReplayTimerMod
         public bool IsMaintenanceMode => _maintenanceMode;
         public bool HasServerConfig => _configFetched;
         public string GameTag => _gameTag;
+        public string ApiBaseUrl => _apiBaseUrl;
         public string? ServerAnnouncement => _serverConfig?.Announcement;
     }
 }

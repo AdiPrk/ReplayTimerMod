@@ -138,6 +138,54 @@ namespace ReplayTimerMod
                 return;
             }
 
+            // Share code / link → resolve via the server, then import.
+            if (ReplaySharing.TryExtractCode(clip, out string code))
+            {
+                if (_networkClient == null || !_networkClient.IsStarted)
+                {
+                    ShowPasteStatus("Go online to import links", UIStyle.Red);
+                    return;
+                }
+
+                ShowPasteStatus("Resolving\u2026", UIStyle.Subtext);
+                _networkClient.ResolveShare(code, replayData =>
+                {
+                    if (string.IsNullOrEmpty(replayData))
+                    {
+                        ShowPasteStatus("Link not found", UIStyle.Red);
+                        return;
+                    }
+
+                    var room = ReplayShareEncoder.Decode(replayData!);
+                    if (room == null)
+                    {
+                        ShowPasteStatus("Invalid data", UIStyle.Red);
+                        return;
+                    }
+
+                    var outcome = PBManager.ImportPB(room);
+                    if (outcome == PBManager.ImportOutcome.RouteFull)
+                    {
+                        ShowPasteStatus("Route full \u2014 raise the per-route limit in Config",
+                            UIStyle.Red);
+                        Log.LogInfo($"[ReplayUI] Resolved share {code} but route is full");
+                        return;
+                    }
+
+                    selectedScene = room.Key.SceneName;
+                    RebuildSceneList();
+                    UpdateRightSubHeader();
+                    RebuildRightContent();
+
+                    bool ok = outcome == PBManager.ImportOutcome.Imported;
+                    ShowPasteStatus(ok ? room.Key.SceneName : "Duplicate replay",
+                        ok ? UIStyle.Gold : UIStyle.Subtext);
+                    Log.LogInfo($"[ReplayUI] Resolved share {code}: " +
+                        (ok ? "imported" : "duplicate"));
+                });
+                return;
+            }
+
             var rooms = ReplayShareEncoder.DecodeShareString(clip);
             if (rooms.Count == 0)
             {
@@ -145,11 +193,15 @@ namespace ReplayTimerMod
                 return;
             }
 
-            int imported = 0, duplicates = 0;
+            int imported = 0, duplicates = 0, full = 0;
             foreach (var room in rooms)
             {
-                if (PBManager.ImportPB(room)) imported++;
-                else duplicates++;
+                switch (PBManager.ImportPB(room))
+                {
+                    case PBManager.ImportOutcome.Imported:  imported++;   break;
+                    case PBManager.ImportOutcome.Duplicate: duplicates++; break;
+                    case PBManager.ImportOutcome.RouteFull: full++;       break;
+                }
             }
 
             selectedScene = rooms[0].Key.SceneName;
@@ -159,15 +211,27 @@ namespace ReplayTimerMod
 
             string status;
             if (rooms.Count == 1)
-                status = imported > 0 ? rooms[0].Key.SceneName : "Duplicate replay";
+                status = imported > 0 ? rooms[0].Key.SceneName
+                    : full > 0 ? "Route full \u2014 not saved"
+                    : "Duplicate replay";
             else
             {
                 status = imported > 0 ? imported + " imported" : "No new replays";
-                if (duplicates > 0) status += " (" + duplicates + " dup)";
+                if (duplicates > 0 || full > 0)
+                {
+                    status += " (";
+                    if (duplicates > 0) status += duplicates + " dup";
+                    if (duplicates > 0 && full > 0) status += ", ";
+                    if (full > 0) status += full + " full";
+                    status += ")";
+                }
             }
 
-            ShowPasteStatus(status, imported > 0 ? UIStyle.Gold : UIStyle.Subtext);
-            Log.LogInfo($"[ReplayUI] Pasted {rooms.Count} replay(s): {imported} imported, {duplicates} duplicates");
+            ShowPasteStatus(status,
+                imported > 0 ? UIStyle.Gold
+                : full > 0 ? UIStyle.Red
+                : UIStyle.Subtext);
+            Log.LogInfo($"[ReplayUI] Pasted {rooms.Count} replay(s): {imported} imported, {duplicates} duplicates, {full} full");
         }
 
         private void ShowPasteStatus(string msg, Color color)
@@ -183,15 +247,86 @@ namespace ReplayTimerMod
 
         private void CopyReplay(RoomKey key, string snapshotId)
         {
-            var snapshot = PBManager.GetHistory(key)
-                .FirstOrDefault(s => s.SnapshotId == snapshotId);
+            var snapshot = PBManager.GetSnapshot(key, snapshotId);
             if (snapshot == null)
             {
                 Log.LogWarning($"[ReplayUI] No snapshot for {key}#{snapshotId}");
                 return;
             }
+
+            // 1. Already have a code → copy instantly, no network round trip.
+            if (!string.IsNullOrEmpty(snapshot.ShareCode))
+            {
+                GUIUtility.systemCopyBuffer =
+                    ReplaySharing.BuildShareText(snapshot.ShareCode!);
+                Log.LogInfo($"[ReplayUI] Copied share code for {key}#{snapshotId}");
+                return;
+            }
+
+            // 2. Online → mint a code (by run id if uploaded, else by data),
+            //    cache it on the snapshot, then copy.
+            if (_networkClient != null && _networkClient.IsStarted
+                && GhostSettings.OnlineEnabled)
+            {
+                System.Action<ShareResponse?> onShared = resp =>
+                {
+                    if (resp != null && resp.HasCode)
+                    {
+                        PBManager.SetServerIds(key, snapshotId, null, resp.Code);
+                        GUIUtility.systemCopyBuffer =
+                            ReplaySharing.BuildShareText(resp.Code);
+                        Log.LogInfo($"[ReplayUI] Shared {key}#{snapshotId} as {resp.Code}");
+                    }
+                    else
+                    {
+                        // Fall back to the full blob so the user still gets something.
+                        GUIUtility.systemCopyBuffer = snapshot.EncodedData;
+                        Log.LogWarning($"[ReplayUI] Share failed for {key}#{snapshotId}; copied full replay");
+                    }
+                };
+
+                if (!string.IsNullOrEmpty(snapshot.ServerRunId))
+                    _networkClient.CreateShareByRunId(snapshot.ServerRunId!, onShared);
+                else
+                    _networkClient.CreateShareByData(snapshot, onShared);
+                return;
+            }
+
+            // 3. Offline → copy the full self-contained blob (legacy behavior).
             GUIUtility.systemCopyBuffer = snapshot.EncodedData;
-            Log.LogInfo($"[ReplayUI] Copied {key}#{snapshotId}");
+            Log.LogInfo($"[ReplayUI] Offline: copied full replay for {key}#{snapshotId}");
+        }
+
+        /// <summary>
+        /// Leaderboard "copy link": mints a share code for a run id and copies it.
+        /// Optionally flashes a label with the outcome.
+        /// </summary>
+        private void OnCopyLinkClicked(string runId, Text? feedback)
+        {
+            if (_networkClient == null || !_networkClient.IsStarted
+                || string.IsNullOrEmpty(runId))
+                return;
+
+            if (feedback != null) feedback.text = "\u2026"; // …
+
+            _networkClient.CreateShareByRunId(runId, resp =>
+            {
+                if (resp != null && resp.HasCode)
+                {
+                    GUIUtility.systemCopyBuffer = ReplaySharing.BuildShareText(resp.Code);
+                    if (feedback != null)
+                    {
+                        feedback.text = "\u2713"; // ✓
+                        feedback.color = UIStyle.Gold;
+                    }
+                    Log.LogInfo($"[ReplayUI] Copied link for run {runId}: {resp.Code}");
+                }
+                else if (feedback != null)
+                {
+                    feedback.text = "\u2717"; // ✗
+                    feedback.color = UIStyle.Red;
+                }
+            });
         }
 
         private void DeleteSnapshot(RoomKey key, string snapshotId)

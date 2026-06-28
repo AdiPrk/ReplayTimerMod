@@ -132,6 +132,25 @@ namespace ReplayTimerMod
             return time < existing.TotalTime;
         }
 
+        // ── Server ids (run id / share code) ───────────────────────────────
+
+        /// <summary>
+        /// Records server ids on a snapshot (in memory + on disk). Either id may
+        /// be null to leave it unchanged. No-op if the snapshot is gone.
+        /// </summary>
+        public static void SetServerIds(RoomKey key, string snapshotId,
+            string? runId, string? shareCode)
+        {
+            if (!histories.TryGetValue(key, out var history)) return;
+
+            int index = history.FindIndex(s => s.SnapshotId == snapshotId);
+            if (index < 0) return;
+
+            history[index] = history[index].WithServerIds(runId, shareCode);
+            RefreshCurrent(key, history);
+            DataStore.UpdateSnapshotServerIds(key, snapshotId, runId, shareCode);
+        }
+
         // ── Evaluate (called after a live run) ────────────────────────────────
 
         public static EvaluationResult Evaluate(RecordedRoom run, bool saveAllRuns = false)
@@ -185,21 +204,55 @@ namespace ReplayTimerMod
         // ── Import ────────────────────────────────────────────────────────────
         // Appends a decoded replay to local history (used for clipboard paste).
 
-        public static bool ImportPB(RecordedRoom room)
+        /// <summary>Outcome of an import attempt.</summary>
+        public enum ImportOutcome { Imported, Duplicate, RouteFull }
+
+        /// <summary>
+        /// Whether a replay with the given time would actually be kept if
+        /// imported into this route — i.e. there is a free slot, or it is fast
+        /// enough to displace the current slowest. Routes are pruned to the best
+        /// MaxSavedReplaysPerRoute by time, so a slower replay at a full route
+        /// would be discarded immediately. (History is ordered best → worst.)
+        /// </summary>
+        public static bool WouldKeepReplay(RoomKey key, float time)
+        {
+            int max = GhostSettings.MaxSavedReplaysPerRoute;
+            if (!histories.TryGetValue(key, out var history) || history.Count < max)
+                return true;
+            var ordered = OrderSnapshots(history);          // best → worst
+            return time < ordered[ordered.Length - 1].TotalTime;
+        }
+
+        public static ImportOutcome ImportPB(RecordedRoom room)
         {
             var snapshot = ReplaySnapshot.CreateNew(room);
-            bool added = AddSnapshot(snapshot, persist: true, allowDuplicate: false);
-            if (!added)
+
+            // Already have this exact replay → nothing to do.
+            if (histories.TryGetValue(room.Key, out var history)
+                && HasDuplicate(history, snapshot))
             {
                 Log.LogInfo($"[PBManager] Skipped duplicate import for {room.Key} ({TimeUtil.Format(room.TotalTime)})");
-                return false;
+                return ImportOutcome.Duplicate;
             }
+
+            // Route is full and this replay is too slow to survive the prune —
+            // don't claim success for something that won't be kept.
+            if (!WouldKeepReplay(room.Key, room.TotalTime))
+            {
+                Log.LogInfo($"[PBManager] Import skipped — route {room.Key} is full "
+                    + $"({GhostSettings.MaxSavedReplaysPerRoute} max) and "
+                    + $"{TimeUtil.Format(room.TotalTime)} is slower than all kept replays");
+                return ImportOutcome.RouteFull;
+            }
+
+            // Duplicate already ruled out; capacity already confirmed.
+            AddSnapshot(snapshot, persist: true, allowDuplicate: true);
 
             bool isCurrent = currentPbs.TryGetValue(room.Key, out var current)
                 && current.SnapshotId == snapshot.SnapshotId;
             Log.LogInfo($"[PBManager] Imported {room.Key} ({room.FrameCount} frames, {TimeUtil.Format(room.TotalTime)})"
                 + (isCurrent ? " [current]" : " [history]"));
-            return true;
+            return ImportOutcome.Imported;
         }
 
         public static int PruneRouteHistory(RoomKey key, List<ReplaySnapshot> history,

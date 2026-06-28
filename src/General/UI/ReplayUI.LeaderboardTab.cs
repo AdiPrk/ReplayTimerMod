@@ -512,6 +512,13 @@ namespace ReplayTimerMod
             int slideOffset = ghostW + M / 2;
             int ghostHiddenX = ghostShownX + slideOffset;
 
+            // Copy-link button sits just left of the ghost button (online only,
+            // and only when there is a run id to share).
+            bool showCopyLink = showGhost
+                && _networkClient != null && _networkClient.IsStarted;
+            int linkW = ghostW;
+            int linkX = ghostShownX - linkW - M / 2;
+
             if (showGhost)
             {
                 // Pinned states stay visible without hover
@@ -576,6 +583,26 @@ namespace ReplayTimerMod
                 SetGhostVisual(refs, dlState);
             }
 
+            if (showCopyLink)
+            {
+                var linkGO = MakeGO("LBCopyLink", row.transform);
+                Img(linkGO, Color.clear);                 // raycast target
+                Rect(linkGO, linkX, 0, linkW, h);
+
+                var linkLbl = MakeLbl(linkGO.transform, "\u2934", // ⤴
+                    UIStyle.FontSizeSm - 1, UIStyle.Accent, TextAnchor.MiddleCenter,
+                    w: linkW, h: h);
+
+                string linkRid = entry.RunId;
+                Btn(linkGO, () => OnCopyLinkClicked(linkRid, linkLbl));
+                var linkBtn = linkGO.GetComponent<Button>();
+                if (linkBtn != null)
+                {
+                    linkBtn.transition = Selectable.Transition.None;
+                    linkBtn.navigation = new Navigation { mode = Navigation.Mode.None };
+                }
+            }
+
             // ── Time ───────────────────────────────────────────────────
 
             MakeLbl(row.transform, TimeUtil.Format(entry.TotalTime),
@@ -589,7 +616,9 @@ namespace ReplayTimerMod
             // replacing the name with "You".
 
             int nameEnd = hasDelta ? deltaX : timeX;
-            if (showGhost)
+            if (showCopyLink)
+                nameEnd = linkX;
+            else if (showGhost)
                 nameEnd = ghostShownX;
             int nameW = nameEnd - x - M / 2;
 
@@ -697,12 +726,7 @@ namespace ReplayTimerMod
         /// route is at capacity.
         /// </summary>
         private static bool RouteHistoryHasCapacity(RoomKey key, float time)
-        {
-            int max = GhostSettings.MaxSavedReplaysPerRoute;
-            var history = PBManager.GetHistory(key); // ordered best → worst
-            if (history.Count < max) return true;
-            return time < history[history.Count - 1].TotalTime;
-        }
+            => PBManager.WouldKeepReplay(key, time);
 
         // ── Ghost button visuals (in-place updates) ────────────────────
 
@@ -880,7 +904,7 @@ namespace ReplayTimerMod
                     return;
                 }
 
-                bool imported = PBManager.ImportPB(room);
+                bool imported = PBManager.ImportPB(room) == PBManager.ImportOutcome.Imported;
                 _downloadStates[runId] = GhostDownloadState.Done;
                 _stateExpiry[runId] = Time.unscaledTime + DoneRevertSeconds;
 
