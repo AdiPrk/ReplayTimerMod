@@ -13,6 +13,7 @@ namespace ReplayTimerMod
         private RoomTimerHUD roomTimerHUD = null!;
         private ReplaySelectionState replaySelectionState = null!;
         private NetworkClient? networkClient;
+        private RoomLifecycle roomLifecycle = null!;
         private bool lateInitDone = false;
 
         public static ReplayTimerModHK Instance { get; private set; } = null!;
@@ -59,12 +60,13 @@ namespace ReplayTimerMod
             replayUI = new ReplayUI();
             roomTimerHUD = new RoomTimerHUD();
             replayUI.SetTimerHUD(roomTimerHUD);
+            roomLifecycle = new RoomLifecycle(frameRecorder, ghostPlayback, replayUI);
 
             RoomTracker.Init();
 
-            RoomTracker.OnRoomEnter += OnRoomEnter;
-            RoomTracker.OnRoomExit += OnRoomExit;
-            RoomTracker.OnRecordingDiscarded += OnRecordingDiscarded;
+            RoomTracker.OnRoomEnter += roomLifecycle.HandleRoomEnter;
+            RoomTracker.OnRoomExit += roomLifecycle.HandleRoomExit;
+            RoomTracker.OnRecordingDiscarded += roomLifecycle.HandleRecordingDiscarded;
 
 #if V1221
             ModHooks.Instance.HeroUpdateHook += OnHeroUpdate;
@@ -141,6 +143,7 @@ namespace ReplayTimerMod
                 replayUI.SetNetworkClient(networkClient);
             }
 
+            roomLifecycle.Network = networkClient;
             networkClient.Start();
             Log("Online features started");
         }
@@ -177,90 +180,6 @@ namespace ReplayTimerMod
                 networkClient.ForceRefreshAll();
         }
 
-        private void OnRoomEnter(string sceneName, string entryFromScene)
-        {
-            if (!GhostSettings.TrackingEnabled)
-            {
-                ghostPlayback.StartPlayback(sceneName, entryFromScene);
-                networkClient?.PrefetchRoom(sceneName);
-                return;
-            }
-
-            frameRecorder.StartRecording();
-            ghostPlayback.StartPlayback(sceneName, entryFromScene);
-            networkClient?.PrefetchRoom(sceneName);
-        }
-
-        private void OnRoomExit(string sceneName, string entryFromScene,
-            string exitToScene, float lrTime)
-        {
-            ghostPlayback.StopPlayback();
-
-            if (!GhostSettings.TrackingEnabled)
-            {
-                frameRecorder.DiscardRecording();
-                return;
-            }
-
-            // Belt-and-suspenders: RoomTracker cancels the run the instant a
-            // DebugMod cheat/debug ability is detected, so this should never
-            // actually be true here - but if it ever is, never save/upload it.
-            if (RoomTracker.RoomUsedDebugAbilities)
-            {
-                Log("[ReplayTimerModHK] Discarding room exit - debug abilities were used");
-                frameRecorder.DiscardRecording();
-                return;
-            }
-
-            RoomKey key = new RoomKey(sceneName, entryFromScene, exitToScene);
-
-            // Option: don't save runs that exit back through the same
-            // transition they entered from (exitTo == entryFrom).
-            if (GhostSettings.SkipBacktrackRuns
-                && !string.IsNullOrEmpty(entryFromScene)
-                && exitToScene == entryFromScene)
-            {
-                frameRecorder.DiscardRecording();
-                return;
-            }
-
-            bool saveAllRuns = GhostSettings.SaveAllRunsEnabled;
-
-            if (!saveAllRuns && !PBManager.WouldBePB(key, lrTime))
-            {
-                frameRecorder.DiscardRecording();
-                return;
-            }
-
-            RecordedRoom? recording = frameRecorder.FinishRecording(key, lrTime);
-            if (recording == null) return;
-
-            var result = PBManager.Evaluate(recording, saveAllRuns);
-            if (result.Kind == ResultKind.FirstRun
-                || result.Kind == ResultKind.NewPB
-                || result.Kind == ResultKind.SavedHistory)
-                replayUI.OnPBUpdated();
-
-            if (networkClient != null
-                && (result.Kind == ResultKind.FirstRun
-                    || result.Kind == ResultKind.NewPB))
-            {
-                var snapshot = PBManager.GetPBSnapshot(key);
-                if (snapshot != null)
-                    networkClient.EnqueueUpload(snapshot, result);
-            }
-        }
-
-        private void OnRecordingDiscarded()
-        {
-            // Cheat-cancelled runs invalidate the recording but the player
-            // hasn't left the room - keep the ghost replay going so it can
-            // still be watched.
-            if (!RoomTracker.KeepGhostPlaybackOnDiscard)
-                ghostPlayback.StopPlayback();
-
-            frameRecorder.DiscardRecording();
-        }
     }
 }
 #endif

@@ -90,7 +90,7 @@ namespace ReplayTimerMod
                     }
                 }
             }
-            catch { cachedAnim = null; } // guh
+            catch { cachedAnim = null; } // animator was torn down mid-read; re-resolve next tick
 
             frames.Add(new FrameData
             {

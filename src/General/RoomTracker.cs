@@ -18,7 +18,7 @@ namespace ReplayTimerMod
         // ── Public state ─────────────────────────────────────────────────────
         public static bool IsRecording { get; private set; } = false;
         public static string CurrentScene { get; private set; } = "";
-        public static string PreviousScene { get; private set; } = ""; // NEW
+        public static string PreviousScene { get; private set; } = "";
         public static string EntryFromScene { get; private set; } = "";
         public static float CurrentRoomTime { get; private set; } = 0f;
 
@@ -71,14 +71,14 @@ namespace ReplayTimerMod
         public static event Action<string>? OnRunCancelled;
 
         // ── Private state ────────────────────────────────────────────────────
-        private static string lastSceneName = "";
-        private static bool pendingGateTransition = false;
+        private static string _lastSceneName = "";
+        private static bool _pendingGateTransition = false;
         private static int _debugModHookRetryCooldown = 0;
         private static bool _wasLoadingSavestate = false;
 
         public static void Init()
         {
-            lastSceneName = "";
+            _lastSceneName = "";
             RoomUsedDebugAbilities = false;
             _wasLoadingSavestate = false;
 
@@ -90,7 +90,7 @@ namespace ReplayTimerMod
 
         private static void HandleGateTransitionBegin(string destScene, string entryGate)
         {
-            pendingGateTransition = true;
+            _pendingGateTransition = true;
             Log.LogDebug($"[Gate] pending -> {destScene} via '{entryGate}'");
         }
 
@@ -110,7 +110,7 @@ namespace ReplayTimerMod
                 OnRecordingDiscarded?.Invoke();
             }
             CurrentRoomTime = 0f;
-            pendingGateTransition = false;
+            _pendingGateTransition = false;
         }
 
         private static void OnActiveSceneChanged(string fromName, string toName)
@@ -128,8 +128,8 @@ namespace ReplayTimerMod
                 HandleInvalidation();
             }
 
-            bool arrivedViaGate = pendingGateTransition;
-            pendingGateTransition = false;
+            bool arrivedViaGate = _pendingGateTransition;
+            _pendingGateTransition = false;
 
             if (fromName == MENU_TITLE || fromName == QUIT_TO_MENU)
                 arrivedViaGate = false;
@@ -168,7 +168,7 @@ namespace ReplayTimerMod
 
             if (arrivedViaGate && !toMenu && !wasWarping)
             {
-                PreviousScene = CurrentScene; // UPDATE PREVIOUS SCENE
+                PreviousScene = CurrentScene;
                 CurrentScene = toName;
                 EntryFromScene = fromName;
                 CurrentRoomTime = 0f;
@@ -180,7 +180,7 @@ namespace ReplayTimerMod
             }
             else
             {
-                PreviousScene = CurrentScene; // UPDATE PREVIOUS SCENE
+                PreviousScene = CurrentScene;
                 CurrentScene = toName;
                 EntryFromScene = "";
                 CurrentRoomTime = 0f;
@@ -235,10 +235,10 @@ namespace ReplayTimerMod
             }
 
             string currentSceneName = GetCurrentSceneName();
-            if (!string.IsNullOrEmpty(currentSceneName) && currentSceneName != lastSceneName)
+            if (!string.IsNullOrEmpty(currentSceneName) && currentSceneName != _lastSceneName)
             {
-                string fromName = lastSceneName;
-                lastSceneName = currentSceneName;
+                string fromName = _lastSceneName;
+                _lastSceneName = currentSceneName;
                 OnActiveSceneChanged(fromName, currentSceneName);
             }
 

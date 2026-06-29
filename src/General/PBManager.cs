@@ -274,7 +274,10 @@ namespace ReplayTimerMod
 
             RefreshCurrent(key, history);
 
-            if (persist)
+            // Only rewrite the scene file when something was actually removed.
+            // A no-op prune (the common case at startup, when no route exceeds
+            // the limit) must not touch disk — the on-disk data already matches.
+            if (persist && pruned.Length > 0)
                 DataStore.ReplaceRouteSnapshots(key, OrderSnapshots(history));
 
             return pruned.Length;
@@ -326,7 +329,11 @@ namespace ReplayTimerMod
         {
             var routeHistories = histories
                 .Where(kvp => kvp.Key.SceneName == sceneName)
-                .Select(kvp => new RouteReplayHistory(kvp.Key, OrderSnapshots(kvp.Value), OrderSnapshots(kvp.Value)[0]))
+                .Select(kvp =>
+                {
+                    var ordered = OrderSnapshots(kvp.Value);
+                    return new RouteReplayHistory(kvp.Key, ordered, ordered[0]);
+                })
                 .ToList();
             int removedSnapshots = routeHistories.Sum(history => history.Count);
 
@@ -377,8 +384,16 @@ namespace ReplayTimerMod
                 return true;
             }
 
-            PruneRouteHistory(snapshot.Key, history,
+            int pruned = PruneRouteHistory(snapshot.Key, history,
                 GhostSettings.MaxSavedReplaysPerRoute, persist);
+
+            // PruneRouteHistory now persists only when it actually prunes (which
+            // rewrites the whole route, including this new snapshot). If nothing
+            // was pruned, the freshly added snapshot still needs saving — append
+            // it incrementally rather than rewriting the route.
+            if (persist && pruned == 0)
+                DataStore.SaveSnapshot(snapshot);
+
             return true;
         }
 

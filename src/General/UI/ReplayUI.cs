@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using BepInEx.Logging;
-using GlobalEnums;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -138,8 +137,8 @@ namespace ReplayTimerMod
             if (_networkClient != null)
             {
                 _networkClient.OnLeaderboardUpdated -= HandleLeaderboardUpdated;
-                _networkClient.OnManifestReady -= HandleManifestReady;
-                _networkClient.OnManifestFailed -= HandleManifestFailed;
+                _networkClient.OnSceneIndexReady -= HandleSceneIndexReady;
+                _networkClient.OnSceneIndexFailed -= HandleSceneIndexFailed;
                 _networkClient.OnRunIdAssigned -= HandleRunIdAssigned;
             }
 
@@ -148,8 +147,8 @@ namespace ReplayTimerMod
             if (_networkClient != null)
             {
                 _networkClient.OnLeaderboardUpdated += HandleLeaderboardUpdated;
-                _networkClient.OnManifestReady += HandleManifestReady;
-                _networkClient.OnManifestFailed += HandleManifestFailed;
+                _networkClient.OnSceneIndexReady += HandleSceneIndexReady;
+                _networkClient.OnSceneIndexFailed += HandleSceneIndexFailed;
                 _networkClient.OnRunIdAssigned += HandleRunIdAssigned;
             }
         }
@@ -203,9 +202,8 @@ namespace ReplayTimerMod
         public void Tick()
         {
             if (!isSetup) return;
-            Object.DontDestroyOnLoad(canvasGO);
 
-            bool paused = IsPaused();
+            bool paused = GameUiState.IsPaused();
 
             if (paused && !wasPaused)
             {
@@ -267,7 +265,7 @@ namespace ReplayTimerMod
 
         /// <summary>
         /// Called when leaderboard data has been written to the cache
-        /// (per-room poll or manifest refresh). Rebuilds the content area
+        /// (per-room poll or scene-index refresh). Rebuilds the content area
         /// ONLY if the data for the currently-viewed room actually changed.
         /// Identical polling responses are skipped entirely, so hover
         /// states, the reveal animation, and scroll position survive.
@@ -286,11 +284,11 @@ namespace ReplayTimerMod
         }
 
         /// <summary>
-        /// Called when the manifest has been fetched or refreshed.
+        /// Called when the scene index has been fetched or refreshed.
         /// Rebuilds the scene list only when the set of server rooms
         /// actually changed (not on every 60s refresh).
         /// </summary>
-        private void HandleManifestReady()
+        private void HandleSceneIndexReady()
         {
             if (!expanded) return;
 
@@ -301,11 +299,11 @@ namespace ReplayTimerMod
         }
 
         /// <summary>
-        /// Called when a manifest fetch fails. Currently a no-op on the UI
+        /// Called when a scene-index fetch fails. Currently a no-op on the UI
         /// side — retries happen automatically with backoff in NetworkClient
         /// and the error is logged there.
         /// </summary>
-        private void HandleManifestFailed()
+        private void HandleSceneIndexFailed()
         {
             // Intentionally empty — no footer label to update.
             // The scene list empty-state message already shows sync status.
@@ -418,7 +416,7 @@ namespace ReplayTimerMod
                 case TabKind.Leaderboard:
                     BuildLeaderboardContent();
                     // Polling keeps the active room live-updated; the cache
-                    // is already populated by the manifest so first paint
+                    // is already populated by the scene index so first paint
                     // is instant.
                     if (GhostSettings.OnlineEnabled
                         && selectedScene != null
@@ -492,17 +490,6 @@ namespace ReplayTimerMod
                 child.SetParent(null, false);
                 Object.Destroy(child.gameObject);
             }
-        }
-
-        private static bool IsPaused()
-        {
-            try
-            {
-                return GameManager.instance != null
-                    && GameManager.instance.ui != null
-                    && GameManager.instance.ui.uiState == UIState.PAUSED;
-            }
-            catch { return false; }
         }
 
         private ReplaySelectionState? SelectionState => PBManager.SelectionState;

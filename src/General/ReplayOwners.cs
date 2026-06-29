@@ -111,9 +111,9 @@ namespace ReplayTimerMod
                 {
                     if (!first) sb.Append(',');
                     first = false;
-                    AppendString(sb, kvp.Key);
+                    JsonText.AppendQuoted(sb, kvp.Key);
                     sb.Append(':');
-                    AppendString(sb, kvp.Value);
+                    JsonText.AppendQuoted(sb, kvp.Value);
                 }
                 sb.Append('}');
                 File.WriteAllText(FilePath(), sb.ToString());
@@ -125,29 +125,6 @@ namespace ReplayTimerMod
         }
 
         // ── Minimal flat string-map JSON ───────────────────────────────
-
-        private static void AppendString(StringBuilder sb, string s)
-        {
-            sb.Append('"');
-            foreach (char c in s)
-            {
-                switch (c)
-                {
-                    case '"':  sb.Append("\\\""); break;
-                    case '\\': sb.Append("\\\\"); break;
-                    case '\n': sb.Append("\\n");  break;
-                    case '\r': sb.Append("\\r");  break;
-                    case '\t': sb.Append("\\t");  break;
-                    default:
-                        if (c < 0x20)
-                            sb.Append("\\u").Append(((int)c).ToString("x4"));
-                        else
-                            sb.Append(c);
-                        break;
-                }
-            }
-            sb.Append('"');
-        }
 
         private static Dictionary<string, string> ParseFlatMap(string json)
         {

@@ -18,10 +18,9 @@ namespace ReplayTimerMod
     ///   - Connection health tracking (back off when server is down)
     ///   - Adaptive polling intervals
     ///
-    /// Public API is backward-compatible with ReplayUI:
-    ///   OnManifestReady/OnManifestFailed fire for scene index events.
-    ///   StartLeaderboardPolling/StopLeaderboardPolling still work.
-    ///   ManifestFetched, CurrentManifestStatus, LastManifestError preserved.
+    /// Scene-index lifecycle is surfaced to ReplayUI via OnSceneIndexReady /
+    /// OnSceneIndexFailed plus the CurrentSceneIndexStatus / LastSceneIndexError /
+    /// SceneIndexFetched queries.
     /// </summary>
     public sealed class NetworkClient
     {
@@ -40,6 +39,10 @@ namespace ReplayTimerMod
         private const float RoomPollInterval_Default = 8f;
         private const float RoomPollInterval_Idle = 12f;
         private const float RoomFreshnessThreshold = 30f;
+
+        // Sentinel assigned to a poll timer to force its next tick to fire
+        // immediately (any value past the largest poll interval works).
+        private const float PollNow = 999f;
 
         // ── Immutable config ───────────────────────────────────────────────
 
@@ -71,18 +74,18 @@ namespace ReplayTimerMod
 
         // ── Scene index (/scenes) ──────────────────────────────────────────
 
-        public enum ManifestStatus { NotStarted, Loading, Loaded, Failed }
+        public enum SceneIndexStatus { NotStarted, Loading, Loaded, Failed }
 
         private LeaderboardCache? _leaderboardCache;
         private float _sceneIndexTimer;
         private bool _sceneIndexInFlight;
-        private ManifestStatus _sceneIndexStatus = ManifestStatus.NotStarted;
+        private SceneIndexStatus _sceneIndexStatus = SceneIndexStatus.NotStarted;
         private string? _sceneIndexError;
 
-        // Backward-compat properties
-        public ManifestStatus CurrentManifestStatus => _sceneIndexStatus;
-        public string? LastManifestError => _sceneIndexError;
-        public bool ManifestFetched => _sceneIndexStatus == ManifestStatus.Loaded;
+        // Scene-index status queries (read by the panel's scene list)
+        public SceneIndexStatus CurrentSceneIndexStatus => _sceneIndexStatus;
+        public string? LastSceneIndexError => _sceneIndexError;
+        public bool SceneIndexFetched => _sceneIndexStatus == SceneIndexStatus.Loaded;
 
         // ── Room leaderboard polling ───────────────────────────────────────
 
@@ -101,8 +104,8 @@ namespace ReplayTimerMod
         public event Action<RankInfo>? OnRankReceived;
         public event Action<string>? OnDisplayNameReceived;
         public event Action? OnLeaderboardUpdated;
-        public event Action? OnManifestReady;   // backward compat: scene index loaded
-        public event Action? OnManifestFailed;  // backward compat: scene index failed
+        public event Action? OnSceneIndexReady;   // scene index loaded/changed
+        public event Action? OnSceneIndexFailed;  // scene index fetch failed
 
         /// <summary>
         /// Fired after a successful upload once the server run id is known
@@ -231,7 +234,7 @@ namespace ReplayTimerMod
         public void StartLeaderboardPolling(string scene)
         {
             _pollScene = scene;
-            _pollTimer = 999f; // trigger immediately
+            _pollTimer = PollNow;
             _consecutiveNoChange = 0;
             _lastPollWasChange = false;
 
@@ -262,7 +265,7 @@ namespace ReplayTimerMod
             if (_menuOpen == open) return;
             _menuOpen = open;
             if (open)
-                _sceneIndexTimer = 999f; // refresh scene index on next tick
+                _sceneIndexTimer = PollNow; // refresh scene index on next tick
         }
 
         /// <summary>
@@ -290,7 +293,7 @@ namespace ReplayTimerMod
             string url = _apiBaseUrl + "/init?game="
                 + Uri.EscapeDataString(_gameTag);
 
-            _sceneIndexStatus = ManifestStatus.Loading;
+            _sceneIndexStatus = SceneIndexStatus.Loading;
 
             _http.Get(url, InitTimeoutSec, (success, status, body) =>
             {
@@ -317,23 +320,23 @@ namespace ReplayTimerMod
                             init.SceneIndexVersion, init.Scenes);
                     }
 
-                    _sceneIndexStatus = ManifestStatus.Loaded;
+                    _sceneIndexStatus = SceneIndexStatus.Loaded;
                     _sceneIndexError = null;
 
                     Log.LogInfo("[NetworkClient] Init loaded: "
                         + init.Scenes.Count + " scenes");
 
-                    OnManifestReady?.Invoke();
+                    OnSceneIndexReady?.Invoke();
                     OnLeaderboardUpdated?.Invoke();
                 }
                 else
                 {
                     _health.RecordFailure();
-                    _sceneIndexStatus = ManifestStatus.Failed;
+                    _sceneIndexStatus = SceneIndexStatus.Failed;
                     _sceneIndexError = body;
 
                     Log.LogWarning("[NetworkClient] Init failed: " + body);
-                    OnManifestFailed?.Invoke();
+                    OnSceneIndexFailed?.Invoke();
                 }
             }, _initHeaders);
         }
@@ -380,10 +383,10 @@ namespace ReplayTimerMod
                         _leaderboardCache.UpdateSceneIndex(
                             resp.Version, resp.Scenes);
 
-                        _sceneIndexStatus = ManifestStatus.Loaded;
+                        _sceneIndexStatus = SceneIndexStatus.Loaded;
                         _sceneIndexError = null;
 
-                        OnManifestReady?.Invoke();
+                        OnSceneIndexReady?.Invoke();
                         OnLeaderboardUpdated?.Invoke();
                     }
                     // If !Changed, server confirmed our version is current. No-op.
@@ -662,13 +665,13 @@ namespace ReplayTimerMod
             if (_leaderboardCache != null)
                 _leaderboardCache.InvalidateAllRoomVersions();
 
-            _sceneIndexTimer = 999f; // trigger immediate scene index poll
+            _sceneIndexTimer = PollNow;
 
             // If currently viewing a room, the next poll (5-12s) will
             // fetch fresh data. Reset the adaptive interval to be fast.
             _consecutiveNoChange = 0;
             _lastPollWasChange = true;
-            _pollTimer = 999f; // trigger immediate room poll
+            _pollTimer = PollNow;
         }
 
         // ── Public state queries ───────────────────────────────────────────

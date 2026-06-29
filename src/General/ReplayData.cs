@@ -61,6 +61,26 @@ namespace ReplayTimerMod
             int min = (int)t / 60;
             return $"{min}:{s:00}.{ms:00}";
         }
+
+        /// <summary>
+        /// Formats a signed time delta as "+m:ss.cc" / "+s.cc" (the minute part
+        /// is omitted under a minute); negative deltas use "-". When
+        /// <paramref name="padSeconds"/> is true the sub-minute seconds field is
+        /// zero-padded ("+05.30" instead of "+5.30").
+        /// </summary>
+        public static string FormatDelta(float seconds, bool padSeconds = false)
+        {
+            string sign = seconds >= 0f ? "+" : "-";
+            int cs = Mathf.RoundToInt(Mathf.Abs(seconds) * 100f);
+            int min = cs / 6000;
+            int sec = (cs / 100) % 60;
+            int rem = cs % 100;
+            if (min > 0)
+                return $"{sign}{min}:{sec:00}.{rem:00}";
+            return padSeconds
+                ? $"{sign}{sec:00}.{rem:00}"
+                : $"{sign}{sec}.{rem:00}";
+        }
     }
 
     public class RecordedRoom

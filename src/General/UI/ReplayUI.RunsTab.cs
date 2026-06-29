@@ -232,19 +232,7 @@ namespace ReplayTimerMod
             }
         }
 
-        private static string FormatSnapshotDelta(float pbTime, float snapTime, bool isPb)
-        {
-            if (isPb) return "";
-
-            float delta = Mathf.Max(0f, snapTime - pbTime);
-            int cs = Mathf.RoundToInt(delta * 100f);
-            int min = cs / 6000;
-            int sec = (cs / 100) % 60;
-            int rem = cs % 100;
-
-            return min > 0
-                ? $"+{min}:{sec:00}.{rem:00}"
-                : $"+{sec:00}.{rem:00}";
-        }
+        private static string FormatSnapshotDelta(float pbTime, float snapTime, bool isPb) =>
+            isPb ? "" : TimeUtil.FormatDelta(Mathf.Max(0f, snapTime - pbTime), padSeconds: true);
     }
 }

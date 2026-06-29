@@ -318,16 +318,7 @@ namespace ReplayTimerMod
                         : UIStyle.Red with { a = 0.22f };
             }
 
-            if (ghostToggleLbl != null)
-            {
-                bool on = GhostSettings.GhostEnabled;
-                ghostToggleLbl.text = on ? "ON" : "OFF";
-                ghostToggleLbl.color = on ? UIStyle.Accent : UIStyle.Subtext;
-                if (ghostToggleBg != null)
-                    ghostToggleBg.color = on
-                        ? UIStyle.Accent with { a = 0.22f }
-                        : UIStyle.Overlay;
-            }
+            StyleToggle(ghostToggleLbl, ghostToggleBg, GhostSettings.GhostEnabled);
 
             if (savePolicyLbl != null)
             {
@@ -343,49 +334,10 @@ namespace ReplayTimerMod
             if (maxSavedLbl != null)
                 maxSavedLbl.text = GhostSettings.MaxSavedReplaysPerRoute.ToString();
 
-            if (timerToggleLbl != null)
-            {
-                bool on = GhostSettings.TimerHudEnabled;
-                timerToggleLbl.text = on ? "ON" : "OFF";
-                timerToggleLbl.color = on ? UIStyle.Accent : UIStyle.Subtext;
-                if (timerToggleBg != null)
-                    timerToggleBg.color = on
-                        ? UIStyle.Accent with { a = 0.22f }
-                        : UIStyle.Overlay;
-            }
-
-            if (chainToggleLbl != null)
-            {
-                bool on = GhostSettings.ChainRoomTimers;
-                chainToggleLbl.text = on ? "ON" : "OFF";
-                chainToggleLbl.color = on ? UIStyle.Accent : UIStyle.Subtext;
-                if (chainToggleBg != null)
-                    chainToggleBg.color = on
-                        ? UIStyle.Accent with { a = 0.22f }
-                        : UIStyle.Overlay;
-            }
-
-            if (skipRunsToggleLbl != null)
-            {
-                bool on = GhostSettings.SkipBacktrackRuns;
-                skipRunsToggleLbl.text = on ? "ON" : "OFF";
-                skipRunsToggleLbl.color = on ? UIStyle.Accent : UIStyle.Subtext;
-                if (skipRunsToggleBg != null)
-                    skipRunsToggleBg.color = on
-                        ? UIStyle.Accent with { a = 0.22f }
-                        : UIStyle.Overlay;
-            }
-
-            if (skipTimerToggleLbl != null)
-            {
-                bool on = GhostSettings.SkipBacktrackTimer;
-                skipTimerToggleLbl.text = on ? "ON" : "OFF";
-                skipTimerToggleLbl.color = on ? UIStyle.Accent : UIStyle.Subtext;
-                if (skipTimerToggleBg != null)
-                    skipTimerToggleBg.color = on
-                        ? UIStyle.Accent with { a = 0.22f }
-                        : UIStyle.Overlay;
-            }
+            StyleToggle(timerToggleLbl, timerToggleBg, GhostSettings.TimerHudEnabled);
+            StyleToggle(chainToggleLbl, chainToggleBg, GhostSettings.ChainRoomTimers);
+            StyleToggle(skipRunsToggleLbl, skipRunsToggleBg, GhostSettings.SkipBacktrackRuns);
+            StyleToggle(skipTimerToggleLbl, skipTimerToggleBg, GhostSettings.SkipBacktrackTimer);
 
             if (TryGetSelectedSnapshot(out _, out var snap) && snap != null)
             {
@@ -412,16 +364,7 @@ namespace ReplayTimerMod
                     alphaLbl.text = GhostSettings.GhostAlpha.ToString("0.00");
             }
 
-            if (onlineToggleLbl != null)
-            {
-                bool on = GhostSettings.OnlineEnabled;
-                onlineToggleLbl.text = on ? "ON" : "OFF";
-                onlineToggleLbl.color = on ? UIStyle.Accent : UIStyle.Subtext;
-                if (onlineToggleBg != null)
-                    onlineToggleBg.color = on
-                        ? UIStyle.Accent with { a = 0.22f }
-                        : UIStyle.Overlay;
-            }
+            StyleToggle(onlineToggleLbl, onlineToggleBg, GhostSettings.OnlineEnabled);
         }
 
         private string FindSnapshotEditLabel(ReplaySnapshot snapshot)
@@ -435,6 +378,22 @@ namespace ReplayTimerMod
                 }
             }
             return "Snapshot";
+        }
+
+        /// <summary>
+        /// Applies the standard ON/OFF colouring to a config toggle: accent when
+        /// on, subtext/overlay when off. Toggles with bespoke off-states (e.g.
+        /// tracking, save policy) are styled inline instead.
+        /// </summary>
+        private static void StyleToggle(Text? label, Image? bg, bool on)
+        {
+            if (label != null)
+            {
+                label.text = on ? "ON" : "OFF";
+                label.color = on ? UIStyle.Accent : UIStyle.Subtext;
+            }
+            if (bg != null)
+                bg.color = on ? UIStyle.Accent with { a = 0.22f } : UIStyle.Overlay;
         }
 
         private static void AddSectionHeader(Transform parent, string title)

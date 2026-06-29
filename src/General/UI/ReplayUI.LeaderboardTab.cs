@@ -704,17 +704,9 @@ namespace ReplayTimerMod
                 scroll.verticalNormalizedPosition = Mathf.Clamp01(keepScroll);
         }
 
-        private static string FormatDelta(float delta)
-        {
-            if (delta <= 0f) return "";
-            int cs = Mathf.RoundToInt(delta * 100f);
-            int min = cs / 6000;
-            int sec = (cs / 100) % 60;
-            int rem = cs % 100;
-            return min > 0
-                ? string.Format("+{0}:{1:00}.{2:00}", min, sec, rem)
-                : string.Format("+{0}.{1:00}", sec, rem);
-        }
+        // Empty for a non-positive delta (ties / the WR row show no delta).
+        private static string FormatDelta(float delta) =>
+            delta <= 0f ? "" : TimeUtil.FormatDelta(delta);
 
         // ── Capacity ───────────────────────────────────────────────────
 

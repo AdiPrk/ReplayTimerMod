@@ -54,8 +54,8 @@ namespace ReplayTimerMod
     /// that don't change the data don't bump the version, so the UI can
     /// skip rebuilds for identical polling responses.
     ///
-    /// Public API is backward-compatible with the old manifest-based design:
-    ///   ManifestLoaded → true when scene index has loaded
+    /// Key surface:
+    ///   SceneIndexLoaded → true when the scene index has loaded
     ///   GetServerScenes() → set of scene names from scene index
     ///   ServerScenesVersion → bumped when scene set changes
     ///   Get/GetVersion → per-room leaderboard data
@@ -84,16 +84,20 @@ namespace ReplayTimerMod
         private readonly Dictionary<string, float> _roomFetchedAt =
             new Dictionary<string, float>();
 
+        // Per-room dictionaries are keyed by game + scene so multiple games
+        // can share one cache without colliding.
+        private static string Key(string game, string scene) => game + ":" + scene;
+
         // ── Scene index API ────────────────────────────────────────────────
 
         /// <summary>The server's scene-index version stamp.</summary>
         public int SceneIndexVersion => _sceneIndexVersion;
 
         /// <summary>
-        /// Backward compat: true when the scene index has loaded.
-        /// UI checks this to know whether to show online indicators.
+        /// True once the scene index has loaded. The UI checks this to know
+        /// whether to show online indicators.
         /// </summary>
-        public bool ManifestLoaded => _sceneIndexLoaded;
+        public bool SceneIndexLoaded => _sceneIndexLoaded;
 
         /// <summary>
         /// Bumped only when the server scene SET changes (rooms added or
@@ -158,8 +162,7 @@ namespace ReplayTimerMod
 
         public LeaderboardData? Get(string game, string scene)
         {
-            string key = game + ":" + scene;
-            return _cache.TryGetValue(key, out var data) ? data : null;
+            return _cache.TryGetValue(Key(game, scene), out var data) ? data : null;
         }
 
         /// <summary>
@@ -168,8 +171,7 @@ namespace ReplayTimerMod
         /// </summary>
         public int GetVersion(string game, string scene)
         {
-            string key = game + ":" + scene;
-            return _versions.TryGetValue(key, out var v) ? v : 0;
+            return _versions.TryGetValue(Key(game, scene), out var v) ? v : 0;
         }
 
         /// <summary>
@@ -179,8 +181,7 @@ namespace ReplayTimerMod
         /// </summary>
         public int GetRoomServerVersion(string game, string scene)
         {
-            string key = game + ":" + scene;
-            return _roomServerVersions.TryGetValue(key, out var v) ? v : 0;
+            return _roomServerVersions.TryGetValue(Key(game, scene), out var v) ? v : 0;
         }
 
         /// <summary>
@@ -189,8 +190,7 @@ namespace ReplayTimerMod
         /// </summary>
         public bool IsRoomFresh(string game, string scene, float maxAgeSec)
         {
-            string key = game + ":" + scene;
-            if (!_roomFetchedAt.TryGetValue(key, out var fetchedAt))
+            if (!_roomFetchedAt.TryGetValue(Key(game, scene), out var fetchedAt))
                 return false;
             return (Time.realtimeSinceStartup - fetchedAt) < maxAgeSec;
         }
@@ -200,8 +200,7 @@ namespace ReplayTimerMod
         /// </summary>
         public bool HasRoomData(string game, string scene)
         {
-            string key = game + ":" + scene;
-            return _cache.ContainsKey(key);
+            return _cache.ContainsKey(Key(game, scene));
         }
 
         /// <summary>
@@ -211,7 +210,7 @@ namespace ReplayTimerMod
         public bool UpdateRoom(string game, string scene,
             int serverVersion, LeaderboardData data)
         {
-            string key = game + ":" + scene;
+            string key = Key(game, scene);
             int sig = ComputeSignature(data);
 
             _cache[key] = data;
@@ -239,7 +238,7 @@ namespace ReplayTimerMod
             string entryFrom, string exitTo, float totalTime,
             int rank, int totalRunners, string displayName)
         {
-            string key = game + ":" + scene;
+            string key = Key(game, scene);
 
             if (!_cache.TryGetValue(key, out var data))
             {

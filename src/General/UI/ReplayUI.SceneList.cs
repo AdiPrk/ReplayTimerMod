@@ -10,7 +10,7 @@ namespace ReplayTimerMod
         {
             if (sceneListContent == null) return;
 
-            // Preserve scroll position across rebuilds (manifest refreshes,
+            // Preserve scroll position across rebuilds (scene-index refreshes,
             // PB updates, selection changes shouldn't yank the list around)
             float keepScroll = sceneListScroll != null
                 ? sceneListScroll.verticalNormalizedPosition : 1f;
@@ -22,7 +22,7 @@ namespace ReplayTimerMod
             // ── Merge local + server rooms ──────────────────────────────────
             //
             // Local: rooms where the player has recorded at least one run.
-            // Server: all rooms known to the leaderboard manifest.
+            // Server: all rooms known to the leaderboard scene index.
             // The union ensures rooms you haven't visited but others have
             // still appear in the scene list.
 
@@ -36,7 +36,7 @@ namespace ReplayTimerMod
             var serverScenes = _leaderboardCache.GetServerScenes();
 
             // Record what server-scene version this build reflects, so
-            // HandleManifestReady can skip rebuilds when nothing changed.
+            // HandleSceneIndexReady can skip rebuilds when nothing changed.
             _renderedServerScenesVersion = _leaderboardCache.ServerScenesVersion;
 
             // Union, sorted alphabetically
@@ -66,12 +66,12 @@ namespace ReplayTimerMod
                 string msg;
                 if (!string.IsNullOrEmpty(filter))
                     msg = "No rooms match filter.";
-                else if (GhostSettings.OnlineEnabled && !_leaderboardCache.ManifestLoaded
+                else if (GhostSettings.OnlineEnabled && !_leaderboardCache.SceneIndexLoaded
                     && _networkClient != null
-                    && _networkClient.CurrentManifestStatus
-                        == NetworkClient.ManifestStatus.Failed)
+                    && _networkClient.CurrentSceneIndexStatus
+                        == NetworkClient.SceneIndexStatus.Failed)
                     msg = "No replays yet.\nRoom sync failed \u2014 retrying...";
-                else if (GhostSettings.OnlineEnabled && !_leaderboardCache.ManifestLoaded)
+                else if (GhostSettings.OnlineEnabled && !_leaderboardCache.SceneIndexLoaded)
                     msg = "No replays yet.\nSyncing rooms...";
                 else
                     msg = "No replays recorded yet.";

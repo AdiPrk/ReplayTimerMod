@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using BepInEx.Logging;
-using GlobalEnums;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -161,10 +160,9 @@ namespace ReplayTimerMod
         public void Tick(bool shouldTick)
         {
             if (!_setup || _canvasGO == null) return;
-            Object.DontDestroyOnLoad(_canvasGO);
 
             bool enabled      = GhostSettings.TimerHudEnabled;
-            bool shouldShow   = enabled && !IsPaused();
+            bool shouldShow   = enabled && !GameUiState.IsPaused();
             bool bannerActive = _bannerState != BannerState.Hidden;
 
             // Disabled entirely: drop everything (banner may still finish).
@@ -534,7 +532,7 @@ namespace ReplayTimerMod
                 float d = card.deltaVal.Value;
                 if (card.isNewPb)
                 {
-                    card.delta.text  = FormatDelta(d);
+                    card.delta.text  = TimeUtil.FormatDelta(d);
                     card.delta.color = UIStyle.Gold;
                 }
                 else if (Mathf.Abs(d) < 0.005f)
@@ -544,7 +542,7 @@ namespace ReplayTimerMod
                 }
                 else
                 {
-                    card.delta.text  = FormatDelta(d);
+                    card.delta.text  = TimeUtil.FormatDelta(d);
                     card.delta.color = UIStyle.Red;
                 }
             }
@@ -860,28 +858,5 @@ namespace ReplayTimerMod
             return best;
         }
 
-        private static string FormatDelta(float d)
-        {
-            string sign = d >= 0f ? "+" : "-";
-            float  abs  = Mathf.Abs(d);
-            int    cs   = Mathf.RoundToInt(abs * 100f);
-            int    min  = cs / 6000;
-            int    sec  = (cs / 100) % 60;
-            int    rem  = cs % 100;
-            return min > 0
-                ? $"{sign}{min}:{sec:00}.{rem:00}"
-                : $"{sign}{sec}.{rem:00}";
-        }
-
-        private static bool IsPaused()
-        {
-            try
-            {
-                return GameManager.instance != null
-                    && GameManager.instance.ui != null
-                    && GameManager.instance.ui.uiState == UIState.PAUSED;
-            }
-            catch { return false; }
-        }
     }
 }

@@ -75,6 +75,16 @@ namespace ReplayTimerMod
             AppendString(sb, e.exitToScene);
             sb.Append(",\"totalTime\":");
             sb.Append(e.totalTime.ToString("R", CultureInfo.InvariantCulture));
+            sb.Append(",\"hasVisualOverride\":");
+            sb.Append(e.hasVisualOverride ? "true" : "false");
+            sb.Append(",\"colorR\":");
+            sb.Append(e.colorR.ToString("R", CultureInfo.InvariantCulture));
+            sb.Append(",\"colorG\":");
+            sb.Append(e.colorG.ToString("R", CultureInfo.InvariantCulture));
+            sb.Append(",\"colorB\":");
+            sb.Append(e.colorB.ToString("R", CultureInfo.InvariantCulture));
+            sb.Append(",\"alpha\":");
+            sb.Append(e.alpha.ToString("R", CultureInfo.InvariantCulture));
             sb.Append(",\"data\":");
             AppendString(sb, e.data);
             sb.Append(",\"serverRunId\":");
@@ -84,26 +94,8 @@ namespace ReplayTimerMod
             sb.Append('}');
         }
 
-        private static void AppendString(StringBuilder sb, string s)
-        {
-            sb.Append('"');
-            foreach (char c in s)
-            {
-                switch (c)
-                {
-                    case '"':  sb.Append("\\\""); break;
-                    case '\\': sb.Append("\\\\"); break;
-                    case '\n': sb.Append("\\n");  break;
-                    case '\r': sb.Append("\\r");  break;
-                    case '\t': sb.Append("\\t");  break;
-                    default:
-                        if (c < 0x20) sb.Append($"\\u{(int)c:x4}");
-                        else sb.Append(c);
-                        break;
-                }
-            }
-            sb.Append('"');
-        }
+        private static void AppendString(StringBuilder sb, string s) =>
+            JsonText.AppendQuoted(sb, s);
 
         private static EntryIndex DeserializeEntry(Parser p)
         {
@@ -127,6 +119,11 @@ namespace ReplayTimerMod
                     case "entryFromScene": e.entryFromScene = p.ReadString(); break;
                     case "exitToScene":    e.exitToScene    = p.ReadString(); break;
                     case "totalTime":      e.totalTime      = p.ReadFloat();  break;
+                    case "hasVisualOverride": e.hasVisualOverride = p.ReadBool(); break;
+                    case "colorR":         e.colorR         = p.ReadFloat();  break;
+                    case "colorG":         e.colorG         = p.ReadFloat();  break;
+                    case "colorB":         e.colorB         = p.ReadFloat();  break;
+                    case "alpha":          e.alpha          = p.ReadFloat();  break;
                     case "data":           e.data           = p.ReadString(); break;
                     case "serverRunId":    e.serverRunId    = p.ReadString(); break;
                     case "shareCode":      e.shareCode      = p.ReadString(); break;
@@ -220,6 +217,14 @@ namespace ReplayTimerMod
                 return long.Parse(
                     _s.Substring(start, _pos - start),
                     CultureInfo.InvariantCulture);
+            }
+
+            public bool ReadBool()
+            {
+                SkipWs();
+                bool value = Peek() == 't';
+                SkipValue(); // consume the true/false literal
+                return value;
             }
 
             /// Skips any JSON value without interpreting it (forward-compat).
