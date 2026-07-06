@@ -7,6 +7,9 @@ namespace ReplayTimerMod
 {
     internal static class Compress
     {
+        // Inflate ceiling — guards against a decompression bomb in shared replays.
+        private const long MaxDecompressedBytes = 64L * 1024 * 1024;
+
         internal static byte[] CompressData(byte[] data)
         {
             using var ms = new MemoryStream();
@@ -26,7 +29,11 @@ namespace ReplayTimerMod
             var buf = new byte[4096];
             int n;
             while ((n = inf.Read(buf, 0, buf.Length)) > 0)
+            {
+                if (output.Length + n > MaxDecompressedBytes)
+                    throw new InvalidDataException("Decompressed replay exceeds maximum allowed size");
                 output.Write(buf, 0, n);
+            }
             return output.ToArray();
         }
     }

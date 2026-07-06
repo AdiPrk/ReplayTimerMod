@@ -22,18 +22,34 @@ namespace ReplayTimerMod
                 return;
             }
 
+            AddModifierFilterBar(rightContent);
+
             bool stripe = false;
+            bool anyShown = false;
             foreach (var route in routes)
             {
-                AddRouteGroup(rightContent, route, stripe);
+                // Filtered view of the route's snapshots. The route header,
+                // PB deltas, and prune behavior stay based on the FULL
+                // history — the filter only hides rows.
+                var visible = ModifierFilterActive
+                    ? route.Snapshots.Where(s => PassesModifierFilter(s.Modifiers)).ToList()
+                    : (System.Collections.Generic.IList<ReplaySnapshot>)route.Snapshots;
+                if (visible.Count == 0) continue;
+
+                AddRouteGroup(rightContent, route, visible, stripe);
                 stripe = !stripe;
+                anyShown = true;
             }
+
+            if (!anyShown)
+                AddCenteredMessage(rightContent, "No runs match the modifier filter.");
         }
 
-        private void AddRouteGroup(Transform parent, RouteReplayHistory route, bool stripe)
+        private void AddRouteGroup(Transform parent, RouteReplayHistory route,
+            System.Collections.Generic.IList<ReplaySnapshot> visible, bool stripe)
         {
             int headerH = RH + 2;
-            int totalH = headerH + route.Count * RH;
+            int totalH = headerH + visible.Count * RH;
 
             var group = MakeGO("RouteGroup", parent);
             Img(group, stripe ? UIStyle.Surface with { a = 0.3f } : Color.clear);
@@ -42,8 +58,8 @@ namespace ReplayTimerMod
 
             AddRouteHeader(group.transform, route, headerH);
 
-            for (int i = 0; i < route.Snapshots.Count; i++)
-                AddSnapshotRow(group.transform, route, route.Snapshots[i], i, headerH);
+            for (int i = 0; i < visible.Count; i++)
+                AddSnapshotRow(group.transform, route, visible[i], i, headerH);
         }
 
         private void AddRouteHeader(Transform parent, RouteReplayHistory route, int h)
@@ -200,10 +216,17 @@ namespace ReplayTimerMod
             // the owner's runner name in accent so it's clear whose run
             // this is. Rich text keeps it in one layout slot.
             int labelEnd = string.IsNullOrEmpty(delta) ? timeX : deltaX;
-            int labelW = labelEnd - x - sp;
+
+            // "?" marker at the right end of the label slot — hovering it
+            // shows the run's full loadout.
+            int markerW = AddModifierMarker(row.transform, labelEnd - sp, h,
+                snapshot.Modifiers);
+
+            int labelW = labelEnd - markerW - sp - x - sp;
             Color labelColor = editing ? UIStyle.Text : UIStyle.Subtext;
 
             string labelText = "#" + (index + 1);
+
             string? owner = ReplayOwners.Get(snapshot.SnapshotId);
             if (!string.IsNullOrEmpty(owner))
             {

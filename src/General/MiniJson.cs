@@ -91,6 +91,8 @@ namespace ReplayTimerMod
             AppendString(sb, e.serverRunId ?? "");
             sb.Append(",\"shareCode\":");
             AppendString(sb, e.shareCode ?? "");
+            sb.Append(",\"modifiers\":");
+            sb.Append(e.modifiers.ToString(CultureInfo.InvariantCulture));
             sb.Append('}');
         }
 
@@ -127,6 +129,7 @@ namespace ReplayTimerMod
                     case "data":           e.data           = p.ReadString(); break;
                     case "serverRunId":    e.serverRunId    = p.ReadString(); break;
                     case "shareCode":      e.shareCode      = p.ReadString(); break;
+                    case "modifiers":      e.modifiers      = (int)p.ReadLong(); break;
                     default:               p.SkipValue();                     break;
                 }
             }

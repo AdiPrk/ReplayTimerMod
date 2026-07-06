@@ -198,7 +198,16 @@ namespace ReplayTimerMod
             if (!_started) return;
             if (_maintenanceMode) return;
             if (result.Kind != ResultKind.FirstRun
-                && result.Kind != ResultKind.NewPB) return;
+                && result.Kind != ResultKind.NewPB
+                && result.Kind != ResultKind.NewMaskPB) return;
+
+            // Live runs always carry a real mask; the Unknown sentinel is
+            // local-only (pre-feature data) and must never reach the server.
+            if (!ModifierMask.IsKnown(snapshot.Modifiers))
+            {
+                Log.LogWarning($"[NetworkClient] Skipping upload with unknown modifier mask for {snapshot.Key}");
+                return;
+            }
 
             var payload = new UploadPayload
             {
@@ -212,6 +221,7 @@ namespace ReplayTimerMod
                 CapturedAtUtcTicks = snapshot.CapturedAtUtcTicks,
                 ReplayData = snapshot.EncodedData,
                 ModVersion = _modVersion,
+                ModifierMask = snapshot.Modifiers,
                 RetryCount = 0,
                 RetryAfterTicks = 0
             };
@@ -623,7 +633,8 @@ namespace ReplayTimerMod
                     payload.TotalTime,
                     response.Rank,
                     response.TotalRunners,
-                    displayName);
+                    displayName,
+                    payload.ModifierMask);
 
                 if (changed)
                     OnLeaderboardUpdated?.Invoke();

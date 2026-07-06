@@ -124,12 +124,26 @@ namespace ReplayTimerMod
             return true;
         }
 
-        // Returns true if the given time would be stored by Evaluate() - i.e.
-        // it's either the first run for this key or faster than the existing PB.
-        public static bool WouldBePB(RoomKey key, float time)
+        // Returns true if a run with this time+mask would be stored by
+        // Evaluate() - i.e. it's the first run for this key, faster than the
+        // existing overall PB, or the first/fastest run for its modifier mask.
+        public static bool WouldStoreRun(RoomKey key, float time, int mask)
         {
             if (!currentPbs.TryGetValue(key, out var existing)) return true;
-            return time < existing.TotalTime;
+            if (time < existing.TotalTime) return true;
+            return IsMaskBest(key, time, mask);
+        }
+
+        /// <summary>True when the mask is known and no stored snapshot for this
+        /// route shares it with an equal-or-better time.</summary>
+        private static bool IsMaskBest(RoomKey key, float time, int mask)
+        {
+            if (!ModifierMask.IsKnown(mask)) return false;
+            if (!histories.TryGetValue(key, out var history)) return true;
+            foreach (var snapshot in history)
+                if (snapshot.Modifiers == mask && snapshot.TotalTime <= time)
+                    return false;
+            return true;
         }
 
         // ── Server ids (run id / share code) ───────────────────────────────
@@ -171,10 +185,28 @@ namespace ReplayTimerMod
 
                     Log.LogInfo($"[PBManager] New PB! {run.Key} {TimeUtil.Format(newTime)} " +
                                 $"(was {TimeUtil.Format(existing.TotalTime)}, -{TimeUtil.Format(improvement)})");
-                    return new EvaluationResult(ResultKind.NewPB, newTime, existing.TotalTime, improvement);
+                    return new EvaluationResult(ResultKind.NewPB, newTime, existing.TotalTime, improvement, snapshot);
                 }
 
                 float delta = newTime - existing.TotalTime;
+
+                // Not an overall PB, but the first-or-fastest run for its
+                // modifier loadout still gets stored (and uploaded) so every
+                // mask category keeps a best. Delta stays vs the overall PB
+                // so HUD/UI comparisons remain consistent.
+                if (IsMaskBest(run.Key, newTime, run.Modifiers))
+                {
+                    if (!AddSnapshot(snapshot, persist: true, allowDuplicate: false))
+                    {
+                        Log.LogInfo($"[PBManager] Skipped duplicate mask-best for {run.Key}: {TimeUtil.Format(newTime)}");
+                        return new EvaluationResult(ResultKind.DuplicateRun, newTime, existing.TotalTime, delta);
+                    }
+
+                    Log.LogInfo($"[PBManager] New mask PB for {run.Key} [mods=0x{run.Modifiers:X}]: "
+                        + $"{TimeUtil.Format(newTime)} (+{TimeUtil.Format(delta)} vs overall)");
+                    return new EvaluationResult(ResultKind.NewMaskPB, newTime, existing.TotalTime, delta, snapshot);
+                }
+
                 if (!saveAllRuns)
                 {
                     Log.LogInfo($"[PBManager] Missed PB for {run.Key}: {TimeUtil.Format(newTime)} (+{TimeUtil.Format(delta)})");
@@ -188,7 +220,7 @@ namespace ReplayTimerMod
                 }
 
                 Log.LogInfo($"[PBManager] Saved history for {run.Key}: {TimeUtil.Format(newTime)} (+{TimeUtil.Format(delta)})");
-                return new EvaluationResult(ResultKind.SavedHistory, newTime, existing.TotalTime, delta);
+                return new EvaluationResult(ResultKind.SavedHistory, newTime, existing.TotalTime, delta, snapshot);
             }
 
             if (!AddSnapshot(snapshot, persist: true, allowDuplicate: false))
@@ -198,7 +230,7 @@ namespace ReplayTimerMod
             }
 
             Log.LogInfo($"[PBManager] First run for {run.Key}: {TimeUtil.Format(newTime)}");
-            return new EvaluationResult(ResultKind.FirstRun, newTime, null, null);
+            return new EvaluationResult(ResultKind.FirstRun, newTime, null, null, snapshot);
         }
 
         // ── Import ────────────────────────────────────────────────────────────
@@ -209,18 +241,22 @@ namespace ReplayTimerMod
 
         /// <summary>
         /// Whether a replay with the given time would actually be kept if
-        /// imported into this route — i.e. there is a free slot, or it is fast
-        /// enough to displace the current slowest. Routes are pruned to the best
-        /// MaxSavedReplaysPerRoute by time, so a slower replay at a full route
-        /// would be discarded immediately. (History is ordered best → worst.)
+        /// imported into this route — i.e. there is a free slot, it is fast
+        /// enough to rank inside the retained window, or (when a known mask is
+        /// given) it would be the best run for its modifier loadout, which is
+        /// prune-exempt. Routes are pruned to the best MaxSavedReplaysPerRoute
+        /// by time plus per-mask bests. (History is ordered best → worst.)
         /// </summary>
-        public static bool WouldKeepReplay(RoomKey key, float time)
+        public static bool WouldKeepReplay(RoomKey key, float time,
+            int mask = ModifierMask.Unknown)
         {
-            int max = GhostSettings.MaxSavedReplaysPerRoute;
+            int max = Mathf.Max(1, GhostSettings.MaxSavedReplaysPerRoute);
             if (!histories.TryGetValue(key, out var history) || history.Count < max)
                 return true;
+            if (IsMaskBest(key, time, mask)) return true;
             var ordered = OrderSnapshots(history);          // best → worst
-            return time < ordered[ordered.Length - 1].TotalTime;
+            // Survives the prune iff it ranks inside the retained window.
+            return time < ordered[max - 1].TotalTime;
         }
 
         public static ImportOutcome ImportPB(RecordedRoom room)
@@ -237,7 +273,7 @@ namespace ReplayTimerMod
 
             // Route is full and this replay is too slow to survive the prune —
             // don't claim success for something that won't be kept.
-            if (!WouldKeepReplay(room.Key, room.TotalTime))
+            if (!WouldKeepReplay(room.Key, room.TotalTime, room.Modifiers))
             {
                 Log.LogInfo($"[PBManager] Import skipped — route {room.Key} is full "
                     + $"({GhostSettings.MaxSavedReplaysPerRoute} max) and "
@@ -255,12 +291,34 @@ namespace ReplayTimerMod
             return ImportOutcome.Imported;
         }
 
+        // At most this many per-mask best snapshots survive beyond the route
+        // limit - a hard cap on how far a route can exceed
+        // MaxSavedReplaysPerRoute via prune exemptions.
+        private const int MaxMaskBestExemptions = 8;
+
         public static int PruneRouteHistory(RoomKey key, List<ReplaySnapshot> history,
             int limit, bool persist)
         {
             int retainedCount = Mathf.Max(1, limit);
             var ordered = OrderSnapshots(history);
-            var pruned = ordered.Skip(retainedCount).ToArray();
+
+            // The fastest snapshot of each known modifier mask is prune-exempt
+            // so every loadout keeps its best (that's what upload gating and
+            // the modifier filters rely on). Unknown-mask (pre-feature)
+            // snapshots are never exempt.
+            var exemptIds = new HashSet<string>();
+            var seenMasks = new HashSet<int>();
+            foreach (var snapshot in ordered) // best → worst
+            {
+                if (!ModifierMask.IsKnown(snapshot.Modifiers)) continue;
+                if (seenMasks.Count >= MaxMaskBestExemptions) break;
+                if (seenMasks.Add(snapshot.Modifiers))
+                    exemptIds.Add(snapshot.SnapshotId);
+            }
+
+            var pruned = ordered.Skip(retainedCount)
+                .Where(snapshot => !exemptIds.Contains(snapshot.SnapshotId))
+                .ToArray();
 
             if (pruned.Length > 0)
             {
@@ -422,7 +480,18 @@ namespace ReplayTimerMod
         }
     }
 
-    public enum ResultKind { FirstRun, NewPB, SavedHistory, MissedPB, DuplicateRun }
+    public enum ResultKind
+    {
+        FirstRun,
+        NewPB,
+        SavedHistory,
+        MissedPB,
+        DuplicateRun,
+        /// <summary>Not an overall PB, but the first-or-fastest run for its
+        /// modifier loadout - stored and uploaded like a PB. Delta is still
+        /// computed vs the overall PB.</summary>
+        NewMaskPB,
+    }
 
     public class EvaluationResult
     {
@@ -431,12 +500,19 @@ namespace ReplayTimerMod
         public float? OldPBTime { get; }
         public float? Delta { get; }
 
-        public EvaluationResult(ResultKind kind, float newTime, float? oldPBTime, float? delta)
+        /// <summary>The snapshot that was stored for this run, or null when
+        /// nothing was stored (MissedPB / DuplicateRun). This is what gets
+        /// uploaded - for NewMaskPB it is NOT the overall-PB snapshot.</summary>
+        public ReplaySnapshot? Snapshot { get; }
+
+        public EvaluationResult(ResultKind kind, float newTime, float? oldPBTime,
+            float? delta, ReplaySnapshot? snapshot = null)
         {
             Kind = kind;
             NewTime = newTime;
             OldPBTime = oldPBTime;
             Delta = delta;
+            Snapshot = snapshot;
         }
     }
 }

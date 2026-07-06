@@ -20,6 +20,7 @@ namespace ReplayTimerMod
         public long CapturedAtUtcTicks;
         public string ReplayData = "";   // base64 RTM3 string (already encoded)
         public string ModVersion = "";
+        public int ModifierMask;         // see ModifierMask (never Unknown here)
 
         // Retry state (managed by UploadWorker)
         public int RetryCount;

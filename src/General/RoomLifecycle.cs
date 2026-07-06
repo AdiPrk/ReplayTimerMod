@@ -79,28 +79,35 @@ namespace ReplayTimerMod
 
             bool saveAllRuns = GhostSettings.SaveAllRunsEnabled;
 
-            if (!saveAllRuns && !PBManager.WouldBePB(key, lrTime))
+            // The run's modifier mask - valid until the next room's recording
+            // starts (ModifierTracker resets on room enter, after this handler).
+            int modifierMask = RoomTracker.CurrentRunModifierMask;
+
+            if (!saveAllRuns && !PBManager.WouldStoreRun(key, lrTime, modifierMask))
             {
                 _recorder.DiscardRecording();
                 return;
             }
 
-            RecordedRoom? recording = _recorder.FinishRecording(key, lrTime);
+            RecordedRoom? recording = _recorder.FinishRecording(key, lrTime, modifierMask);
             if (recording == null) return;
 
             var result = PBManager.Evaluate(recording, saveAllRuns);
             if (result.Kind == ResultKind.FirstRun
                 || result.Kind == ResultKind.NewPB
+                || result.Kind == ResultKind.NewMaskPB
                 || result.Kind == ResultKind.SavedHistory)
                 _ui.OnPBUpdated();
 
+            // Upload the snapshot that was actually stored for THIS run - for
+            // NewMaskPB that is not the overall-PB snapshot.
             if (Network != null
+                && result.Snapshot != null
                 && (result.Kind == ResultKind.FirstRun
-                    || result.Kind == ResultKind.NewPB))
+                    || result.Kind == ResultKind.NewPB
+                    || result.Kind == ResultKind.NewMaskPB))
             {
-                var snapshot = PBManager.GetPBSnapshot(key);
-                if (snapshot != null)
-                    Network.EnqueueUpload(snapshot, result);
+                Network.EnqueueUpload(result.Snapshot, result);
             }
         }
 

@@ -35,7 +35,8 @@ namespace ReplayTimerMod
             cachedAnim = null;
         }
 
-        public RecordedRoom? FinishRecording(RoomKey key, float totalLRTime)
+        public RecordedRoom? FinishRecording(RoomKey key, float totalLRTime,
+            int modifierMask)
         {
             if (!recording || frames.Count == 0)
             {
@@ -47,7 +48,8 @@ namespace ReplayTimerMod
 
             recording = false;
             cachedAnim = null;
-            var result = new RecordedRoom(key, totalLRTime, frames.ToArray());
+            var result = new RecordedRoom(key, totalLRTime, frames.ToArray(),
+                modifierMask);
             frames.Clear();
             return result;
         }

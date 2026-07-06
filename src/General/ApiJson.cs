@@ -27,6 +27,7 @@ namespace ReplayTimerMod
             AppendKV(sb, "exit_to", p.ExitTo);
             AppendKVFloat(sb, "total_time", p.TotalTime);
             AppendKVInt(sb, "frame_count", p.FrameCount);
+            AppendKVInt(sb, "modifiers", p.ModifierMask);
             AppendKV(sb, "captured_at",
                 new DateTime(p.CapturedAtUtcTicks, DateTimeKind.Utc)
                     .ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture));
@@ -207,6 +208,12 @@ namespace ReplayTimerMod
                         break;
                     case "is_you":
                         entry.IsYou = ReadJsonBool(json, ref i);
+                        break;
+                    case "modifiers":
+                        entry.Modifiers = ReadJsonInt(json, ref i);
+                        break;
+                    case "rid":
+                        entry.Rid = ReadJsonInt(json, ref i);
                         break;
                     default:
                         SkipValue(json, ref i);

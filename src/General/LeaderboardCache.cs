@@ -28,15 +28,25 @@ namespace ReplayTimerMod
     }
 
     /// <summary>
-    /// A single entry (one runner's best time) in a route leaderboard.
+    /// A single entry in a route leaderboard: one runner's best time for one
+    /// modifier mask (the server returns best-per-(runner, mask) rows; the UI
+    /// collapses them per runner for display).
     /// </summary>
     public sealed class LeaderboardEntry
     {
+        /// <summary>Raw per-mask row rank from the server. Display ranks are
+        /// recomputed client-side after collapsing/filtering.</summary>
         public int Rank;
         public string RunnerName = "";
         public float TotalTime;
         public string RunId = "";
         public bool IsYou;
+        /// <summary>Modifier bitmask of the run (see <see cref="ModifierMask"/>).</summary>
+        public int Modifiers;
+        /// <summary>Per-route runner discriminator from the server (display
+        /// names aren't unique). -1 for locally created optimistic entries -
+        /// the UI collapses those under the "you" key instead.</summary>
+        public int Rid = -1;
     }
 
     // ── Leaderboard cache ──────────────────────────────────────────────
@@ -236,7 +246,7 @@ namespace ReplayTimerMod
         /// </summary>
         public bool ApplyOptimisticUpload(string game, string scene,
             string entryFrom, string exitTo, float totalTime,
-            int rank, int totalRunners, string displayName)
+            int rank, int totalRunners, string displayName, int modifierMask)
         {
             string key = Key(game, scene);
 
@@ -269,19 +279,24 @@ namespace ReplayTimerMod
                 data.Routes.Add(route);
             }
 
-            // Remove old "you" entry if present.
-            route.Entries.RemoveAll(e => e.IsYou);
-            if (route.YourEntry != null && route.YourEntry.IsYou)
+            // Remove only your old entry for the SAME modifier mask - you
+            // legitimately hold one row per mask now, and this upload only
+            // supersedes its own mask's row.
+            route.Entries.RemoveAll(e => e.IsYou && e.Modifiers == modifierMask);
+            if (route.YourEntry != null && route.YourEntry.IsYou
+                && route.YourEntry.Modifiers == modifierMask)
                 route.YourEntry = null;
 
-            // Create new entry.
+            // Create new entry. Rid stays -1 (client sentinel) - the UI
+            // collapses IsYou rows under a "you" key, not by rid.
             var newEntry = new LeaderboardEntry
             {
                 Rank = rank,
                 RunnerName = string.IsNullOrEmpty(displayName) ? "You" : displayName,
                 TotalTime = totalTime,
                 RunId = "",  // not known until next server fetch
-                IsYou = true
+                IsYou = true,
+                Modifiers = modifierMask
             };
 
             // Insert at correct position in sorted list.
@@ -298,25 +313,13 @@ namespace ReplayTimerMod
             if (!inserted)
                 route.Entries.Add(newEntry);
 
-            // Re-rank all visible entries.
+            // Refresh raw row ranks (display ranks are recomputed by the UI's
+            // collapse/filter view; these just keep the cached rows coherent).
             for (int i = 0; i < route.Entries.Count; i++)
                 route.Entries[i].Rank = i + 1;
 
             route.TotalRunners = totalRunners;
             route.YourRank = rank;
-
-            // If the new entry is outside the visible top (shouldn't happen
-            // often with optimistic update), move it to YourEntry.
-            const int TopN = 10;
-            if (route.Entries.Count > TopN)
-            {
-                int youIdx = route.Entries.FindIndex(e => e.IsYou);
-                if (youIdx >= TopN)
-                {
-                    route.YourEntry = route.Entries[youIdx];
-                    route.Entries.RemoveAt(youIdx);
-                }
-            }
 
             // Bump local version to trigger UI rebuild.
             _signatures.Remove(key);  // force next signature check to differ
@@ -379,6 +382,8 @@ namespace ReplayTimerMod
                         h = h * 31 + e.TotalTime.GetHashCode();
                         h = h * 31 + (e.RunId != null ? e.RunId.GetHashCode() : 0);
                         h = h * 31 + (e.IsYou ? 1 : 0);
+                        h = h * 31 + e.Modifiers;
+                        h = h * 31 + e.Rid;
                     }
 
                     if (r.YourEntry != null)
@@ -387,6 +392,7 @@ namespace ReplayTimerMod
                         h = h * 31 + r.YourEntry.TotalTime.GetHashCode();
                         h = h * 31 + (r.YourEntry.RunId != null
                             ? r.YourEntry.RunId.GetHashCode() : 0);
+                        h = h * 31 + r.YourEntry.Modifiers;
                     }
                 }
                 return h;

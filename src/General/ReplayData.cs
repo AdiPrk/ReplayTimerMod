@@ -90,11 +90,18 @@ namespace ReplayTimerMod
         public FrameData[] Frames { get; }
         public int FrameCount => Frames.Length;
 
-        public RecordedRoom(RoomKey key, float totalTime, FrameData[] frames)
+        /// <summary>Modifier bitmask for this run (see <see cref="ModifierMask"/>),
+        /// or <see cref="ModifierMask.Unknown"/> for runs recorded before the
+        /// feature existed (old local files / old share blobs).</summary>
+        public int Modifiers { get; }
+
+        public RecordedRoom(RoomKey key, float totalTime, FrameData[] frames,
+            int modifiers = ModifierMask.Unknown)
         {
             Key = key;
             TotalTime = totalTime;
             Frames = frames;
+            Modifiers = modifiers;
         }
     }
 
@@ -105,6 +112,10 @@ namespace ReplayTimerMod
         public RecordedRoom Room { get; }
         public RoomKey Key => Room.Key;
         public float TotalTime => Room.TotalTime;
+        /// <summary>Modifier bitmask of the underlying run (see
+        /// <see cref="ModifierMask"/>); <see cref="ModifierMask.Unknown"/> for
+        /// pre-feature data.</summary>
+        public int Modifiers => Room.Modifiers;
         public string EncodedData { get; }
         public bool HasCapturedAt => CapturedAtUtcTicks > 0;
         public bool HasVisualOverride { get; }

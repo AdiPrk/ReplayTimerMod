@@ -247,6 +247,9 @@ namespace ReplayTimerMod
 
             // Poll in-flight name-save request
             TickNameSave();
+
+            // Show/position/hide the shared hover tooltip
+            TickTooltip();
         }
 
         /// <summary>

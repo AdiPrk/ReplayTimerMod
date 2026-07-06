@@ -22,6 +22,9 @@ namespace ReplayTimerMod
         public string DeviceId       = "";
         public string DisplayName    = "";
         public string ApiBaseUrl     = "https://oqsfhqbakarleqahxiyo.supabase.co/functions/v1";
+        // Modifier filter (shared by Runs + Leaderboard tabs; see ModifierMask).
+        public int ModifierRequireMask = 0;
+        public int ModifierExcludeMask = 0;
     }
 
     public static class GhostSettings
@@ -133,6 +136,20 @@ namespace ReplayTimerMod
         {
             get => _d.ApiBaseUrl;
             set { _d.ApiBaseUrl = value; Save(); }
+        }
+
+        /// <summary>Modifier bits a run must HAVE to pass the UI filter.</summary>
+        public static int ModifierRequireMask
+        {
+            get => _d.ModifierRequireMask;
+            set { _d.ModifierRequireMask = value; Save(); }
+        }
+
+        /// <summary>Modifier bits a run must NOT have to pass the UI filter.</summary>
+        public static int ModifierExcludeMask
+        {
+            get => _d.ModifierExcludeMask;
+            set { _d.ModifierExcludeMask = value; Save(); }
         }
 
         /// <summary>

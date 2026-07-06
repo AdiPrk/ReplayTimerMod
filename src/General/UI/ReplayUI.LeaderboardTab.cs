@@ -200,6 +200,7 @@ namespace ReplayTimerMod
             public RowHoverReveal? reveal;
             public RoomKey roomKey;     // for capacity re-checks on revert
             public float entryTime;
+            public int entryMask;       // modifier mask, for mask-best capacity
         }
 
         private readonly Dictionary<string, GhostBtnRefs> _ghostBtnRefs =
@@ -266,62 +267,51 @@ namespace ReplayTimerMod
                 return;
             }
 
+            AddModifierFilterBar(rightContent);
+
+            // Each route renders a VIEW of its cached rows: filtered by the
+            // modifier filter, collapsed to best-per-runner, re-ranked
+            // client-side (see BuildRouteView). The server's raw per-mask
+            // ranks are never displayed.
             bool stripe = false;
+            bool anyShown = false;
             foreach (var route in cached.Routes)
             {
-                AddLeaderboardRouteGroup(rightContent, route, stripe);
+                var view = BuildRouteView(route,
+                    out int yourViewRank, out var yourRow);
+                if (view.Count == 0) continue;
+
+                AddLeaderboardRouteGroup(rightContent, route, view,
+                    yourViewRank, yourRow, stripe);
                 stripe = !stripe;
+                anyShown = true;
             }
+
+            if (!anyShown)
+                AddCenteredMessage(rightContent,
+                    "No leaderboard runs match the modifier filter.");
         }
 
         private void AddLeaderboardRouteGroup(Transform parent,
-            RouteLeaderboard route, bool stripe)
+            RouteLeaderboard route,
+            System.Collections.Generic.List<LeaderboardEntry> view,
+            int yourViewRank, LeaderboardEntry? yourRow, bool stripe)
         {
             string routeKey = route.EntryFrom + ">" + route.ExitTo;
             bool isExpanded = _expandedRoutes.Contains(routeKey);
             int showCount = isExpanded
-                ? route.Entries.Count
-                : System.Math.Min(LeaderboardCollapsedCount, route.Entries.Count);
+                ? view.Count
+                : System.Math.Min(LeaderboardCollapsedCount, view.Count);
 
-            bool showYourEntryBelow = false;
-            LeaderboardEntry? yourEntryToShow = null;
-
-            if (route.YourEntry != null)
-            {
-                int maxDisplayedRank = showCount > 0
-                    ? route.Entries[showCount - 1].Rank : 0;
-                if (route.YourEntry.Rank > maxDisplayedRank)
-                {
-                    showYourEntryBelow = true;
-                    yourEntryToShow = route.YourEntry;
-                }
-            }
-
-            if (!showYourEntryBelow && !isExpanded)
-            {
-                for (int i = showCount; i < route.Entries.Count; i++)
-                {
-                    if (route.Entries[i].IsYou)
-                    {
-                        showYourEntryBelow = true;
-                        yourEntryToShow = route.Entries[i];
-                        break;
-                    }
-                }
-            }
-
-            bool youAlreadyVisible = false;
-            for (int i = 0; i < showCount; i++)
-            {
-                if (route.Entries[i].IsYou) { youAlreadyVisible = true; break; }
-            }
-            if (youAlreadyVisible) showYourEntryBelow = false;
+            // View ranks are contiguous (1..N), so "you" sits below the
+            // visible window exactly when your view rank exceeds it.
+            bool showYourEntryBelow = yourRow != null && yourViewRank > showCount;
 
             int headerH = RH + 2;
             int rowCount = showCount;
             if (showYourEntryBelow) rowCount += 2;
 
-            bool showExpandBtn = route.Entries.Count > LeaderboardCollapsedCount;
+            bool showExpandBtn = view.Count > LeaderboardCollapsedCount;
             int expandBtnH = showExpandBtn ? RH : 0;
             int totalH = headerH + rowCount * RH + expandBtnH;
 
@@ -331,37 +321,34 @@ namespace ReplayTimerMod
             le.minHeight = le.preferredHeight = totalH;
 
             AddLeaderboardRouteHeader(group.transform, route, routeKey,
-                isExpanded, showExpandBtn, headerH);
+                isExpanded, showExpandBtn, headerH, view.Count);
 
-            float wrTime = route.Entries.Count > 0
-                ? route.Entries[0].TotalTime : 0f;
+            float wrTime = view[0].TotalTime;
 
             for (int i = 0; i < showCount; i++)
-                AddLeaderboardRow(group.transform, route, route.Entries[i],
+                AddLeaderboardRow(group.transform, route, view[i],
                     wrTime, i, headerH);
 
             int nextY = headerH + showCount * RH;
 
-            if (showYourEntryBelow && yourEntryToShow != null)
+            if (showYourEntryBelow && yourRow != null)
             {
-                int lastShownRank = showCount > 0
-                    ? route.Entries[showCount - 1].Rank : 0;
-                int gapCount = yourEntryToShow.Rank - lastShownRank - 1;
+                int gapCount = yourViewRank - showCount - 1;
                 AddLeaderboardGapRow(group.transform, gapCount, nextY);
                 nextY += RH;
-                AddLeaderboardRow(group.transform, route, yourEntryToShow,
+                AddLeaderboardRow(group.transform, route, yourRow,
                     wrTime, -1, nextY, forceYou: true);
                 nextY += RH;
             }
 
             if (showExpandBtn)
                 AddLeaderboardExpandButton(group.transform, routeKey,
-                    isExpanded, route.Entries.Count, nextY);
+                    isExpanded, view.Count, nextY);
         }
 
         private void AddLeaderboardRouteHeader(Transform parent,
             RouteLeaderboard route, string routeKey, bool isExpanded,
-            bool hasExpandBtn, int h)
+            bool hasExpandBtn, int h, int viewCount)
         {
             var row = MakeGO("LBRouteHeader", parent);
             Img(row, UIStyle.Overlay with { a = 0.45f });
@@ -407,16 +394,20 @@ namespace ReplayTimerMod
                 UIStyle.FontSizeSm - 1, UIStyle.Text, TextAnchor.MiddleLeft,
                 x: M, w: RW / 2, h: h);
 
+            // Runner count: server truth when unfiltered, matching-view count
+            // when a modifier filter narrows the board.
+            string runnersText = ModifierFilterActive
+                ? viewCount + " matching"
+                : route.TotalRunners + " runner" + (route.TotalRunners != 1 ? "s" : "");
             int runnersX = RW / 2;
-            MakeLbl(row.transform,
-                route.TotalRunners + " runner" + (route.TotalRunners != 1 ? "s" : ""),
+            MakeLbl(row.transform, runnersText,
                 UIStyle.FontSizeSm - 2, UIStyle.Subtext, TextAnchor.MiddleRight,
                 x: runnersX, w: rightEdge - runnersX, h: h);
         }
 
         private void AddLeaderboardRow(Transform parent, RouteLeaderboard route,
-            LeaderboardEntry entry, float wrTime, int visualIndex, int yOffset,
-            bool forceYou = false)
+            LeaderboardEntry entry, float wrTime,
+            int visualIndex, int yOffset, bool forceYou = false)
         {
             int h = RH;
             int top = visualIndex >= 0 ? yOffset + visualIndex * RH : yOffset;
@@ -503,7 +494,8 @@ namespace ReplayTimerMod
             {
                 var routeRoomKey = new RoomKey(selectedScene,
                     route.EntryFrom, route.ExitTo);
-                if (!RouteHistoryHasCapacity(routeRoomKey, entry.TotalTime))
+                if (!RouteHistoryHasCapacity(routeRoomKey, entry.TotalTime,
+                        entry.Modifiers))
                     dlState = GhostDownloadState.Full;
             }
 
@@ -577,7 +569,8 @@ namespace ReplayTimerMod
                     roomKey = selectedScene != null
                         ? new RoomKey(selectedScene, route.EntryFrom, route.ExitTo)
                         : default,
-                    entryTime = entry.TotalTime
+                    entryTime = entry.TotalTime,
+                    entryMask = entry.Modifiers
                 };
                 _ghostBtnRefs[entry.RunId] = refs;
                 SetGhostVisual(refs, dlState);
@@ -620,7 +613,13 @@ namespace ReplayTimerMod
                 nameEnd = linkX;
             else if (showGhost)
                 nameEnd = ghostShownX;
-            int nameW = nameEnd - x - M / 2;
+
+            // "?" marker right-aligned against the buttons — hovering it
+            // shows the run's full loadout; the name label shrinks to fit.
+            int markerW = AddModifierMarker(row.transform, nameEnd - M / 4, h,
+                entry.Modifiers);
+
+            int nameW = nameEnd - markerW - M / 4 - x - M / 2;
 
             string displayName = string.IsNullOrEmpty(entry.RunnerName)
                 ? "???" : entry.RunnerName!;
@@ -717,8 +716,9 @@ namespace ReplayTimerMod
         /// than the worst kept snapshot would be silently pruned when the
         /// route is at capacity.
         /// </summary>
-        private static bool RouteHistoryHasCapacity(RoomKey key, float time)
-            => PBManager.WouldKeepReplay(key, time);
+        private static bool RouteHistoryHasCapacity(RoomKey key, float time,
+            int mask = ModifierMask.Unknown)
+            => PBManager.WouldKeepReplay(key, time, mask);
 
         // ── Ghost button visuals (in-place updates) ────────────────────
 
@@ -799,7 +799,8 @@ namespace ReplayTimerMod
             _downloadStates.TryGetValue(runId, out state);
 
             if (state == GhostDownloadState.Idle
-                && !RouteHistoryHasCapacity(refs.roomKey, refs.entryTime))
+                && !RouteHistoryHasCapacity(refs.roomKey, refs.entryTime,
+                        refs.entryMask))
                 state = GhostDownloadState.Full;
 
             SetGhostVisual(refs, state);
@@ -880,10 +881,12 @@ namespace ReplayTimerMod
                     return;
                 }
 
-                // Capacity re-check with the actual decoded time. PBManager
-                // prunes routes to the best N by time, so importing a replay
-                // slower than the worst kept snapshot would silently vanish.
-                if (!RouteHistoryHasCapacity(room.Key, room.TotalTime))
+                // Capacity re-check with the actual decoded time + mask.
+                // PBManager prunes routes to the best N by time (plus
+                // per-mask bests), so importing a replay slower than the
+                // worst kept snapshot would silently vanish.
+                if (!RouteHistoryHasCapacity(room.Key, room.TotalTime,
+                        room.Modifiers))
                 {
                     _downloadStates.Remove(runId); // Full is derived, not stored
                     Log.LogInfo("[Leaderboard] Ghost not imported — route history " +

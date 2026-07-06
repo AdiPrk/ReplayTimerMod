@@ -29,6 +29,20 @@ namespace ReplayTimerMod
     //     [N]  animFrame[]     uint8  (saturated at 255)
     //
     // SVLQ = ZigZag(n) -> ULEB128. See FrameCodec.cs.
+    //
+    // Optional trailing extension section (appended after the anim block; the
+    // reader above never checks EOF, so decoders that predate it - including
+    // the server's verifyReplayConsistency, which parses the header only -
+    // simply ignore it):
+    //   [4]     section magic "RTMX"
+    //   then TLV records until end of blob:
+    //     [1]   type            uint8
+    //     [2]   payload length  uint16 LE
+    //     [len] payload
+    //   type 0x01: modifier mask, payload = int32 LE (see ModifierMask)
+    // The section is written only when the run has a known modifier mask;
+    // absence (or any malformed/truncated trailer) decodes as
+    // ModifierMask.Unknown. Unknown TLV types are skipped by length.
     // ─────────────────────────────────────────────────────────────────────────
 
     public static class ReplayShareEncoder
@@ -40,6 +54,18 @@ namespace ReplayTimerMod
             { (byte)'R', (byte)'T', (byte)'M', (byte)'3' };
 
         private const byte Version = 0x02;
+
+        // Trailing extension section - see the format comment above.
+        private static readonly byte[] ExtMagic =
+            { (byte)'R', (byte)'T', (byte)'M', (byte)'X' };
+
+        private const byte ExtTypeModifiers = 0x01;
+
+        // Frame-count ceiling — bounds allocation sizing for untrusted replays.
+        private const int MaxFrames = 20000;
+
+        // Pasted share-string ceiling, checked before any base64-decode/inflate.
+        private const int MaxShareStringLength = 16 * 1024 * 1024;
 
         // ── Public API ────────────────────────────────────────────────────────
 
@@ -150,6 +176,16 @@ namespace ReplayTimerMod
                     w.Write(clipIndex);
                     w.Write(animFrames);
                 }
+
+                // Optional RTMX trailer - only for runs with a known mask, so
+                // legacy data round-trips byte-identically.
+                if (ModifierMask.IsKnown(room.Modifiers))
+                {
+                    w.Write(ExtMagic);
+                    w.Write(ExtTypeModifiers);
+                    w.Write((ushort)4);
+                    w.Write(room.Modifiers);
+                }
             }
             return ms.ToArray();
         }
@@ -174,6 +210,8 @@ namespace ReplayTimerMod
             string exitToScene = FrameCodec.ReadString(r);
             float totalTime = r.ReadSingle();
             int n = r.ReadInt32();
+            if (n < 0 || n > MaxFrames)
+                throw new Exception($"Implausible frame count: {n}");
 
             short[] xs = FrameCodec.Decode2ndOrder(r.ReadBytes(r.ReadUInt16()), n);
             short[] ys = FrameCodec.Decode2ndOrder(r.ReadBytes(r.ReadUInt16()), n);
@@ -214,9 +252,52 @@ namespace ReplayTimerMod
                 };
             }
 
+            int modifiers = TryReadExtensions(r, raw.Length);
+
             return new RecordedRoom(
                 new RoomKey(sceneName, entryFromScene, exitToScene),
-                totalTime, frames);
+                totalTime, frames, modifiers);
+        }
+
+        /// <summary>
+        /// Reads the optional RTMX trailer positioned right after the anim
+        /// block. Absence, truncation, or any malformed content decodes as
+        /// <see cref="ModifierMask.Unknown"/> - a bad trailer must never fail
+        /// a decode that would previously have succeeded.
+        /// </summary>
+        private static int TryReadExtensions(BinaryReader r, int totalLength)
+        {
+            int modifiers = ModifierMask.Unknown;
+            try
+            {
+                long pos = r.BaseStream.Position;
+                if (totalLength - pos < 4) return modifiers;
+                for (int i = 0; i < 4; i++)
+                    if (r.ReadByte() != ExtMagic[i]) return modifiers;
+
+                while (totalLength - r.BaseStream.Position >= 3)
+                {
+                    byte type = r.ReadByte();
+                    ushort len = r.ReadUInt16();
+                    if (totalLength - r.BaseStream.Position < len)
+                        return modifiers; // truncated record
+
+                    if (type == ExtTypeModifiers && len == 4)
+                    {
+                        int value = r.ReadInt32();
+                        if (ModifierMask.IsKnown(value)) modifiers = value;
+                    }
+                    else
+                    {
+                        r.BaseStream.Position += len; // unknown type - skip
+                    }
+                }
+            }
+            catch
+            {
+                // Malformed trailer - treat as absent.
+            }
+            return modifiers;
         }
 
         // ── Collection API ────────────────────────────────────────────────────
@@ -305,6 +386,12 @@ namespace ReplayTimerMod
         public static List<RecordedRoom> DecodeShareString(string str)
         {
             var result = new List<RecordedRoom>();
+
+            if (str.Length > MaxShareStringLength)
+            {
+                Log.LogWarning("[ShareEncoder] Share string too large -- ignoring");
+                return result;
+            }
 
             string raw = Regex.Replace(str, @"\s+", "");
             if (raw.Length == 0) return result;
