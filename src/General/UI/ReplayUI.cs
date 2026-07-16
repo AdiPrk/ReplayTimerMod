@@ -46,6 +46,7 @@ namespace ReplayTimerMod
             new Dictionary<TabKind, ButtonRef>();
 
         // Right panel - sub-header
+        private GameObject? rightSubHeader;
         private Text? rightHeaderLbl;
         private Text? pasteStatusLbl;
         private GameObject? runsActionButtons;
@@ -459,6 +460,10 @@ namespace ReplayTimerMod
 
             // Clear config tab references since they'll be stale
             ClearConfigRefs();
+
+            // Hidden by default; the Runs/Leaderboard builders re-show it
+            // on their filterable paths.
+            HideFilterToggle();
 
             // Always stop polling — the leaderboard branch restarts if needed
             if (_networkClient != null)

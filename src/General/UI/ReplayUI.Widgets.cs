@@ -331,6 +331,32 @@ namespace ReplayTimerMod
             buttonGO.AddComponent<ButtonHover>().overlay = img;
         }
 
+        /// <summary>
+        /// Small drawn triangle caret (PlayMarkerTexture, tinted), centered
+        /// at (cx, cy) in the parent's top-left space. Points right at
+        /// rotation 0; pass -90 for down, 90 for up. Returns the
+        /// RectTransform so callers can re-rotate it later. Use this instead
+        /// of text glyphs - labels stay plain ASCII.
+        /// </summary>
+        private static RectTransform AddCaret(Transform parent, float cx,
+            float cy, int size, Color color, float rotation = 0f)
+        {
+            var go = MakeGO("Caret", parent);
+            var img = go.AddComponent<RawImage>();
+            img.texture = PlayMarkerTexture();
+            img.color = color;
+            img.raycastTarget = false;
+
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = new Vector2(0, 1);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(size, size);
+            rt.anchoredPosition = new Vector2(cx, -cy);
+            if (rotation != 0f)
+                rt.localEulerAngles = new Vector3(0, 0, rotation);
+            return rt;
+        }
+
         private static ButtonRef MakeButton(
             Transform parent, string name, string text,
             int fontSize, Color textColor, Color bgColor,

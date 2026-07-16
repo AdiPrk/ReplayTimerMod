@@ -10,6 +10,11 @@ namespace ReplayTimerMod
         {
             if (rightContent == null) return;
 
+            // Hidden unless this build reaches the filterable path below
+            // (covers the lightweight ContentOnly rebuilds, e.g. deleting
+            // the room's last run).
+            HideFilterToggle();
+
             var routes = PBManager.AllHistories()
                 .Where(h => h.Key.SceneName == scene)
                 .OrderBy(h => h.Key.EntryFromScene)
@@ -22,7 +27,7 @@ namespace ReplayTimerMod
                 return;
             }
 
-            AddModifierFilterBar(rightContent);
+            ShowFilterToggle();
 
             // Filtered view of each route's snapshots. The route header,
             // PB deltas, and prune behavior stay based on the FULL

@@ -80,7 +80,7 @@ namespace ReplayTimerMod
             foreach (var def in ModifierRegistry.All)
             {
                 if ((mask & (1 << def.Bit)) == 0) continue;
-                sb.Append("\n• ").Append(def.DisplayName);
+                sb.Append("\n- ").Append(def.DisplayName);
             }
             return sb.ToString();
         }

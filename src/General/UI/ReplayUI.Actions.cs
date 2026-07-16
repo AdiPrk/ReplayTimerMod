@@ -164,7 +164,7 @@ namespace ReplayTimerMod
                     return;
                 }
 
-                ShowPasteStatus("Resolving\u2026", UIStyle.Subtext);
+                ShowPasteStatus("Resolving...", UIStyle.Subtext);
                 _networkClient.ResolveShare(code, replayBytes =>
                 {
                     if (replayBytes == null || replayBytes.Length == 0)
@@ -183,7 +183,7 @@ namespace ReplayTimerMod
                     var outcome = PBManager.ImportPB(room);
                     if (outcome == PBManager.ImportOutcome.RouteFull)
                     {
-                        ShowPasteStatus("Route full \u2014 raise the per-route limit in Config",
+                        ShowPasteStatus("Route full - raise the per-route limit in Config",
                             UIStyle.Red);
                         Log.LogInfo($"[ReplayUI] Resolved share {code} but route is full");
                         return;
@@ -229,7 +229,7 @@ namespace ReplayTimerMod
             string status;
             if (rooms.Count == 1)
                 status = imported > 0 ? rooms[0].Key.SceneName
-                    : full > 0 ? "Route full \u2014 not saved"
+                    : full > 0 ? "Route full - not saved"
                     : "Duplicate replay";
             else
             {

@@ -66,6 +66,10 @@ namespace ReplayTimerMod
         {
             if (rightContent == null) return;
 
+            // Hidden unless this build reaches the filterable path below
+            // (covers the lightweight ContentOnly rebuilds).
+            HideFilterToggle();
+
             // Stale refs from the previous build are invalid now
             _ghostBtnRefs.Clear();
 
@@ -109,7 +113,7 @@ namespace ReplayTimerMod
                 return;
             }
 
-            AddModifierFilterBar(rightContent);
+            ShowFilterToggle();
 
             // Each route renders a VIEW of its cached rows: filtered by the
             // modifier filter, collapsed to best-per-runner, re-ranked
@@ -236,8 +240,15 @@ namespace ReplayTimerMod
                 Btn(row, () => ToggleRouteExpanded(rk));
             }
 
-            string arrow = hasExpandBtn
-                ? (isExpanded ? "\u25BE " : "\u25B8 ") : "  ";
+            // Drawn caret (right = collapsed, down = expanded) on expandable
+            // routes; the label indent is reserved either way so all route
+            // headers align.
+            int caretS = UIStyle.H(8);
+            int labelX = M + caretS + UIStyle.W(5);
+            if (hasExpandBtn)
+                AddCaret(row.transform, M + caretS / 2f, h / 2f, caretS,
+                    UIStyle.Subtext, isExpanded ? -90f : 0f);
+
             string from = string.IsNullOrEmpty(route.EntryFrom)
                 ? "spawn" : route.EntryFrom;
 
@@ -265,9 +276,9 @@ namespace ReplayTimerMod
                 }
             }
 
-            MakeLbl(row.transform, arrow + from + " to " + route.ExitTo,
+            MakeLbl(row.transform, from + " to " + route.ExitTo,
                 UIStyle.FontSizeRow, UIStyle.Text, TextAnchor.MiddleLeft,
-                x: M, w: RW / 2, h: h);
+                x: labelX, w: RW / 2 - labelX + M, h: h);
 
             // Runner count: server truth when unfiltered, matching-view count
             // when a modifier filter narrows the board.
@@ -499,13 +510,22 @@ namespace ReplayTimerMod
             string rk = routeKey;
             Btn(row, () => ToggleRouteExpanded(rk));
 
+            // Centered caret + text block (drawn caret, up = collapse,
+            // down = expand - no text glyphs).
             string text = isExpanded
-                ? "\u25B4 Show less"
-                : "\u25BE Show " + (entryCount - LeaderboardCollapsedCount) + " more";
+                ? "Show less"
+                : "Show " + (entryCount - LeaderboardCollapsedCount) + " more";
+            int caretS = UIStyle.H(8);
+            int gap = UIStyle.W(5);
+            int textW = Mathf.CeilToInt(
+                MeasureTextWidth(text, UIStyle.FontSizeBtn));
+            int blockX = (RW - (caretS + gap + textW)) / 2;
 
+            AddCaret(row.transform, blockX + caretS / 2f, RH / 2f, caretS,
+                UIStyle.Accent, isExpanded ? 90f : -90f);
             MakeLbl(row.transform, text,
-                UIStyle.FontSizeBtn, UIStyle.Accent, TextAnchor.MiddleCenter,
-                x: 0, w: RW, h: RH);
+                UIStyle.FontSizeBtn, UIStyle.Accent, TextAnchor.MiddleLeft,
+                x: blockX + caretS + gap, w: textW + UIStyle.W(2), h: RH);
         }
 
         /// <summary>

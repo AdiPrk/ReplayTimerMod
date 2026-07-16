@@ -182,6 +182,7 @@ namespace ReplayTimerMod
             var hdr = MakeGO("RightSubHeader", panelGO!.transform);
             Img(hdr, UIStyle.Surface);
             Rect(hdr, LW + 1, y, RW, h);
+            rightSubHeader = hdr;
 
             int btnH = UIStyle.H(20);
             int btnY = (h - btnH) / 2;
@@ -189,30 +190,44 @@ namespace ReplayTimerMod
             runsActionButtons = MakeGO("RunsActions", hdr.transform);
             Fill(runsActionButtons);
 
-            int clearW = UIStyle.W(72);
+            // Right-packed action cluster, each button sized to its text
+            // (same fit-the-content idiom as the filter chips). Clear is
+            // sized to also fit its "Sure?" confirm state so the button
+            // doesn't jump when armed.
+            int padX = UIStyle.W(9);
+            int clearW = Mathf.CeilToInt(Mathf.Max(
+                MeasureTextWidth("Clear", UIStyle.FontSizeBtn),
+                MeasureTextWidth("Sure?", UIStyle.FontSizeBtn))) + padX * 2;
+            int pasteW = Mathf.CeilToInt(
+                MeasureTextWidth("Paste", UIStyle.FontSizeBtn)) + padX * 2;
+            int expW = Mathf.CeilToInt(
+                MeasureTextWidth("Export", UIStyle.FontSizeBtn)) + padX * 2;
+
+            int clearX = RW - clearW - M;
             var clearRef = MakeButton(runsActionButtons.transform, "ClearScene", "Clear",
                 UIStyle.FontSizeBtn, UIStyle.Red, UIStyle.BtnBgStrong(UIStyle.Red),
-                RW - clearW - M, btnY, clearW, btnH, OnClearSceneClicked);
+                clearX, btnY, clearW, btnH, OnClearSceneClicked);
             sceneClearLbl = clearRef.label;
             sceneClearBg = clearRef.bg;
 
-            int pasteW = UIStyle.W(52);
-            int pasteX = RW - clearW - M - pasteW - M;
+            int pasteX = clearX - M - pasteW;
             MakeButton(runsActionButtons.transform, "Paste", "Paste",
                 UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
                 pasteX, btnY, pasteW, btnH, OnPasteClicked);
 
-            int expW = UIStyle.W(72);
             int expX = pasteX - M - expW;
             MakeButton(runsActionButtons.transform, "ExportScene", "Export",
                 UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
                 expX, btnY, expW, btnH, OnExportSceneClicked);
 
+            // The Filters toggle (built on demand by ShowFilterToggle) packs
+            // against the left of the cluster on the Runs tab.
+            filterRunsRightEdge = expX - M;
+
             int statusW = UIStyle.W(100);
-            int statusX = expX - M - statusW;
             pasteStatusLbl = MakeLbl(runsActionButtons.transform, "",
                 UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleRight,
-                x: statusX, w: statusW, h: h);
+                x: filterRunsRightEdge - statusW, w: statusW, h: h);
 
             rightHeaderLbl = MakeLbl(hdr.transform, "Select a room",
                 UIStyle.FontSizeSm, UIStyle.Subtext, TextAnchor.MiddleLeft,

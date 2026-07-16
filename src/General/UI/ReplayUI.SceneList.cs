@@ -70,7 +70,7 @@ namespace ReplayTimerMod
                     && _networkClient != null
                     && _networkClient.CurrentSceneIndexStatus
                         == NetworkClient.SceneIndexStatus.Failed)
-                    msg = "No replays yet.\nRoom sync failed \u2014 retrying...";
+                    msg = "No replays yet.\nRoom sync failed - retrying...";
                 else if (GhostSettings.OnlineEnabled && !_leaderboardCache.SceneIndexLoaded)
                     msg = "No replays yet.\nSyncing rooms...";
                 else

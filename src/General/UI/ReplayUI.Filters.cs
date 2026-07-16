@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -12,10 +12,12 @@ namespace ReplayTimerMod
         // like the color picker, but NON-modal: no scrim, so the list, the
         // mod panel, and the game's own pause menu stay fully interactive
         // while it's open - outside clicks are detected in TickFilterPopup
-        // and close it). It opens from a slim header row at the top of the
-        // tab content. Because the popup is NOT part of the scrolling
-        // content, opening it never reflows the list, and filter changes
-        // only rebuild the rows underneath while the popup persists.
+        // and close it). It opens from a Filters toggle in the right
+        // sub-header (left of the Export/Paste/Clear cluster on the Runs
+        // tab, flush right on the Leaderboard tab). Because the popup is
+        // NOT part of the scrolling content, opening it never reflows the
+        // list, and filter changes only rebuild the rows underneath while
+        // the popup persists.
         //
         // Inside the popup every ability is one tri-state chip that cycles
         // Any -> With -> Without on click, indicated by color alone (accent
@@ -40,8 +42,10 @@ namespace ReplayTimerMod
         // ── Popup state ────────────────────────────────────────────────────
 
         private GameObject? filterPopupGO;
+        private GameObject? filterToggleGO;   // sub-header toggle, rebuilt on demand
+        private int filterRunsRightEdge;      // toggle's right edge on the Runs tab
         private RectTransform? filterToggleRT;
-        private RectTransform? filterHeaderCaretRT;
+        private RectTransform? filterCaretRT;
         private Text? filterCountLbl;
         private Image? filterResetBg;
         private Text? filterResetLbl;
@@ -65,35 +69,29 @@ namespace ReplayTimerMod
         private int filterTotalCount;
         private string filterCountUnit = "runs";
 
-        // ── Header bar (in the tab content) ────────────────────────────────
+        // ── Sub-header toggle ──────────────────────────────────────────────
 
         /// <summary>
-        /// Adds the slim filter header as the first child of a tab's content
-        /// area: a Filters button that shows how many modifiers are
-        /// constrained ("Filters (2)"), lights up (accent) when any filter is
-        /// set, shows the full selection as a hover tooltip, and opens the
-        /// filter popup.
+        /// (Re)builds the Filters toggle in the right sub-header: a button
+        /// that shows how many modifiers are constrained ("Filters (2)"),
+        /// lights up (accent) when any filter is set, shows the full
+        /// selection as a hover tooltip, and opens the filter popup. The
+        /// Runs/Leaderboard content builders call this on their filterable
+        /// paths; every other view leaves it hidden (RebuildRightContent
+        /// hides it before each build).
         /// </summary>
-        private void AddModifierFilterBar(Transform parent)
+        private void ShowFilterToggle()
         {
+            if (rightSubHeader == null) return;
+            HideFilterToggle();
             SanitizeCrestFilterBits();
-
-            int headerH = RH + 2;
-            var bar = MakeGO("ModifierFilterBar", parent);
-            Img(bar, Color.clear);
-            var le = bar.AddComponent<LayoutElement>();
-            le.minHeight = le.preferredHeight = headerH;
-
-            var header = MakeGO("FilterHeader", bar.transform);
-            Img(header, UIStyle.Overlay with { a = 0.3f });
-            Rect(header, 0, 0, RW, headerH);
 
             bool active = ModifierFilterActive;
             bool open = filterPopupGO != null && filterPopupGO.activeSelf;
             int count = ActiveFilterCount();
 
             int btnH = UIStyle.H(20);
-            int btnY = (headerH - btnH) / 2;
+            int btnY = (UIStyle.SubHeaderHeight - btnH) / 2;
 
             // The button hugs its content: caret + gap + measured text + pad.
             string toggleText = count > 0 ? "Filters (" + count + ")" : "Filters";
@@ -102,29 +100,27 @@ namespace ReplayTimerMod
             int textW = Mathf.CeilToInt(
                 MeasureTextWidth(toggleText, UIStyle.FontSizeBtn));
             int textX = caretX + caretS + UIStyle.W(5);
-            int toggleW = textX + textW + UIStyle.W(8);
+            int toggleW = textX + textW + UIStyle.W(9);
 
-            var toggle = MakeGO("FilterToggle", header.transform);
+            // Flush right on the Leaderboard tab; left of the
+            // Export/Paste/Clear cluster on the Runs tab.
+            int rightEdge = activeTab == TabKind.Runs
+                ? filterRunsRightEdge
+                : RW - M;
+
+            var toggle = MakeGO("FilterToggle", rightSubHeader.transform);
+            filterToggleGO = toggle;
             Img(toggle, active ? UIStyle.BtnBgStrong(UIStyle.Accent) : Color.clear);
-            Rect(toggle, M / 2, btnY, toggleW, btnH);
+            Rect(toggle, rightEdge - toggleW, btnY, toggleW, btnH);
             // TickFilterPopup exempts the toggle from outside-click closing
             // (its own click handler toggles the popup).
             filterToggleRT = toggle.GetComponent<RectTransform>();
 
             // Drawn caret: right = closed, down = popup open.
-            var caret = MakeGO("Caret", toggle.transform);
-            var caretImg = caret.AddComponent<RawImage>();
-            caretImg.texture = PlayMarkerTexture();
-            caretImg.color = active ? UIStyle.Accent : UIStyle.Subtext;
-            caretImg.raycastTarget = false;
-            var caretRT = caret.GetComponent<RectTransform>();
-            caretRT.anchorMin = caretRT.anchorMax = new Vector2(0, 1);
-            caretRT.pivot = new Vector2(0.5f, 0.5f);
-            caretRT.sizeDelta = new Vector2(caretS, caretS);
-            caretRT.anchoredPosition = new Vector2(caretX + caretS / 2f, -btnH / 2f);
-            if (open)
-                caretRT.localEulerAngles = new Vector3(0, 0, -90);
-            filterHeaderCaretRT = caretRT;
+            filterCaretRT = AddCaret(toggle.transform,
+                caretX + caretS / 2f, btnH / 2f, caretS,
+                active ? UIStyle.Accent : UIStyle.Subtext,
+                open ? -90f : 0f);
 
             MakeLbl(toggle.transform, toggleText, UIStyle.FontSizeBtn,
                 active ? UIStyle.Accent : UIStyle.Subtext, TextAnchor.MiddleLeft,
@@ -136,6 +132,38 @@ namespace ReplayTimerMod
 
             if (active)
                 AttachTooltip(toggle, BuildFilterSummary());
+
+            // The transient paste status text right-aligns against whatever
+            // is leftmost in the Runs cluster - now this toggle.
+            if (activeTab == TabKind.Runs)
+                PositionPasteStatus(rightEdge - toggleW - M);
+        }
+
+        /// <summary>Removes the sub-header Filters toggle (idempotent). The
+        /// popup is left alone: content rebuilds triggered by chip clicks
+        /// hide-then-show the toggle, and the popup must survive those.
+        /// Views that genuinely lose the toggle close the popup via the
+        /// existing SwitchTab/SelectScene/TogglePanel hooks.</summary>
+        private void HideFilterToggle()
+        {
+            if (filterToggleGO != null)
+            {
+                Object.Destroy(filterToggleGO);
+                filterToggleGO = null;
+                filterToggleRT = null;
+                filterCaretRT = null;
+            }
+            PositionPasteStatus(filterRunsRightEdge);
+        }
+
+        /// <summary>Right-aligns the paste status label so it ends at
+        /// <paramref name="rightEdge"/> (sub-header x).</summary>
+        private void PositionPasteStatus(int rightEdge)
+        {
+            if (pasteStatusLbl == null) return;
+            var rt = pasteStatusLbl.GetComponent<RectTransform>();
+            rt.anchoredPosition = new Vector2(
+                rightEdge - UIStyle.W(100), rt.anchoredPosition.y);
         }
 
         /// <summary>Number of constrained attributes: each required or
@@ -214,18 +242,20 @@ namespace ReplayTimerMod
             filterPopupGO.transform.SetAsLastSibling();
             filterPopupGO.SetActive(true);
 
-            // Drop down from the toggle button, clamped on-screen (same
-            // screen-position convention as the color picker).
+            // Drop down from the toggle button with right edges aligned
+            // (the toggle sits at the right side of the sub-header), clamped
+            // on-screen. Same screen-position convention as the color picker.
             var art = anchor.GetComponent<RectTransform>();
             Vector3 p = art.position; // pivot (top-left) in screen px
-            float x = Mathf.Clamp(p.x, 4, Screen.width - filterPopupW - 4);
+            float x = p.x + art.rect.width - filterPopupW;
+            x = Mathf.Clamp(x, 4, Screen.width - filterPopupW - 4);
             float yTop = p.y - art.rect.height - UIStyle.H(4);
             yTop = Mathf.Clamp(yTop, filterPopupH + 4, Screen.height - 4);
             filterPopupGO.GetComponent<RectTransform>().anchoredPosition =
                 new Vector2(x, yTop);
 
-            if (filterHeaderCaretRT != null)
-                filterHeaderCaretRT.localEulerAngles = new Vector3(0, 0, -90);
+            if (filterCaretRT != null)
+                filterCaretRT.localEulerAngles = new Vector3(0, 0, -90);
         }
 
         /// <summary>Closes the filter popup if open. Safe to call any time;
@@ -234,8 +264,8 @@ namespace ReplayTimerMod
         private void CloseFilterPopup()
         {
             if (filterPopupGO != null) filterPopupGO.SetActive(false);
-            if (filterHeaderCaretRT != null)
-                filterHeaderCaretRT.localEulerAngles = Vector3.zero;
+            if (filterCaretRT != null)
+                filterCaretRT.localEulerAngles = Vector3.zero;
         }
 
         private void RefreshFilterPopupIfOpen()
