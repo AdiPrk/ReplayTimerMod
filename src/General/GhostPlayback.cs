@@ -41,6 +41,8 @@ namespace ReplayTimerMod
             public GameObject? DiamondGo { get; set; }
             public LineRenderer? DiamondLine { get; set; }
             public Material? DiamondMat { get; set; }
+            public GameObject? AnchorGo { get; set; }
+            public bool FacingRight { get; set; } = true;
 
             public RecordedRoom Room => Snapshot.Room;
 
@@ -94,6 +96,8 @@ namespace ReplayTimerMod
         {
             playing = false;
 
+            CameraFollow.SetTarget(null);
+
             foreach (var instance in activeInstances)
                 DestroyVisuals(instance);
 
@@ -137,6 +141,39 @@ namespace ReplayTimerMod
 
             if (activeInstances.Count == 0)
                 playing = false;
+
+            UpdateCameraFollow();
+        }
+
+        /// <summary>
+        /// Reconciles the camera-follow slot against the active instances
+        /// every tick: engaged while the followed run's ghost is playing
+        /// (and the experimental feature is on), released the moment it
+        /// finishes or the selection/setting changes.
+        /// </summary>
+        private void UpdateCameraFollow()
+        {
+            Transform? target = null;
+            bool facingRight = true;
+
+            string? followId = GhostSettings.CameraFollowEnabled
+                ? selectionState?.CameraFollowSnapshotId
+                : null;
+            if (!string.IsNullOrEmpty(followId))
+            {
+                foreach (var instance in activeInstances)
+                {
+                    if (instance.Snapshot.SnapshotId != followId)
+                        continue;
+                    target = instance.AnchorGo != null
+                        ? instance.AnchorGo.transform
+                        : null;
+                    facingRight = instance.FacingRight;
+                    break;
+                }
+            }
+
+            CameraFollow.SetTarget(target, facingRight);
         }
 
         private List<ReplaySnapshot> SelectSnapshots(string sceneName, string entryFromScene)
@@ -195,6 +232,13 @@ namespace ReplayTimerMod
             FrameData animFrame = t < 0.5f ? a : b;
             Vector3 pos = new Vector3(x, y, z);
             Color color = instance.Snapshot.ResolveGhostColor(globalColor);
+
+            // Camera anchor tracks the ghost regardless of whether it
+            // renders as a sprite or a diamond; facing feeds the camera
+            // look-ahead when this instance is followed.
+            if (instance.AnchorGo != null)
+                instance.AnchorGo.transform.position = pos;
+            instance.FacingRight = animFrame.facingRight;
 
             if (!string.IsNullOrEmpty(animFrame.animClip) && instance.Sprite != null)
                 RenderSprite(instance, pos, animFrame, color);
@@ -259,8 +303,12 @@ namespace ReplayTimerMod
 
         private void CreateVisuals(PlaybackInstance instance)
         {
+            // Invisible anchor the camera can follow (see CameraFollow).
+            instance.AnchorGo = new GameObject($"ReplayGhost_Anchor_{instance.Snapshot.SnapshotId}");
+            ScenePersistence.Apply(instance.AnchorGo);
+
             instance.DiamondGo = new GameObject($"ReplayGhost_Diamond_{instance.Snapshot.SnapshotId}");
-            Object.DontDestroyOnLoad(instance.DiamondGo);
+            ScenePersistence.Apply(instance.DiamondGo);
             instance.DiamondGo.SetActive(false);
 
             var diamondLine = instance.DiamondGo.AddComponent<LineRenderer>();
@@ -289,7 +337,7 @@ namespace ReplayTimerMod
             {
                 instance.SpriteGo = new GameObject($"ReplayGhost_Sprite_{instance.Snapshot.SnapshotId}");
                 instance.SpriteGo.SetActive(false);
-                Object.DontDestroyOnLoad(instance.SpriteGo);
+                ScenePersistence.Apply(instance.SpriteGo);
 
                 var sprite = instance.SpriteGo.AddComponent<tk2dSprite>();
                 sprite.Collection = spriteCollection;
@@ -318,12 +366,15 @@ namespace ReplayTimerMod
                 Object.Destroy(instance.DiamondGo);
             if (instance.DiamondMat != null)
                 Object.Destroy(instance.DiamondMat);
+            if (instance.AnchorGo != null)
+                Object.Destroy(instance.AnchorGo);
 
             instance.SpriteGo = null;
             instance.Sprite = null;
             instance.DiamondGo = null;
             instance.DiamondLine = null;
             instance.DiamondMat = null;
+            instance.AnchorGo = null;
         }
 
         private void RenderSprite(PlaybackInstance instance, Vector3 pos,

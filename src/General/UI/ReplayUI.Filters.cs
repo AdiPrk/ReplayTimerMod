@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,241 +8,552 @@ namespace ReplayTimerMod
     {
         // ── Modifier filter (shared by the Runs and Leaderboard tabs) ─────
         //
-        // The filter panel uses the same label + button-row idiom as the
-        // Config tab: every ability gets an [Any | With | Without] segmented
-        // row, and the mutually-exclusive crest bits collapse into a single
-        // "Crest" selector row. State persists in GhostSettings
-        // (ModifierRequireMask / ModifierExcludeMask); the panel's
-        // expanded/collapsed state is session-only.
-
-        private bool _filterPanelExpanded;
+        // The filter lives in a floating dropdown popup (a canvas-root panel
+        // like the color picker, but NON-modal: no scrim, so the list, the
+        // mod panel, and the game's own pause menu stay fully interactive
+        // while it's open - outside clicks are detected in TickFilterPopup
+        // and close it). It opens from a slim header row at the top of the
+        // tab content. Because the popup is NOT part of the scrolling
+        // content, opening it never reflows the list, and filter changes
+        // only rebuild the rows underneath while the popup persists.
+        //
+        // Inside the popup every ability is one tri-state chip that cycles
+        // Any -> With -> Without on click, indicated by color alone (accent
+        // = with, red = without, dim = any); the mutually-exclusive crest
+        // bits are a single-select chip row. Chips are sized to their text
+        // and flow left-to-right, wrapping within the popup width. A footer
+        // shows the live result count and Reset. Filter state persists in
+        // GhostSettings (ModifierRequireMask / ModifierExcludeMask); the
+        // cycle logic is RouteView.CycleFilterBit (pure, unit-tested).
 
         private static int FilterRequire => GhostSettings.ModifierRequireMask;
         private static int FilterExclude => GhostSettings.ModifierExcludeMask;
 
         private static bool ModifierFilterActive =>
-            FilterRequire != 0 || FilterExclude != 0;
+            RouteView.FilterActive(FilterRequire, FilterExclude);
 
         /// <summary>Whether a run with this mask passes the current filter.
         /// Unknown (pre-feature) masks pass only when no filter is active.</summary>
-        private static bool PassesModifierFilter(int mask)
+        private static bool PassesModifierFilter(int mask) =>
+            RouteView.PassesFilter(mask, FilterRequire, FilterExclude);
+
+        // ── Popup state ────────────────────────────────────────────────────
+
+        private GameObject? filterPopupGO;
+        private RectTransform? filterToggleRT;
+        private RectTransform? filterHeaderCaretRT;
+        private Text? filterCountLbl;
+        private Image? filterResetBg;
+        private Text? filterResetLbl;
+        private int filterPopupW, filterPopupH;
+
+        // Live references so a state change restyles chips IN PLACE instead
+        // of rebuilding the popup under the pointer.
+        private sealed class FilterChipRef
         {
-            if (!ModifierFilterActive) return true;
-            return ModifierMask.Passes(mask, FilterRequire, FilterExclude);
+            public int bitMask;          // ability: 1<<Bit; crest "Any": 0
+            public Image bg = null!;
+            public Text label = null!;
         }
 
-        // ── Filter bar widget ──────────────────────────────────────────────
+        private readonly List<FilterChipRef> abilityChips = new List<FilterChipRef>();
+        private readonly List<FilterChipRef> crestChips = new List<FilterChipRef>();
+
+        // Result counts for the popup footer, published by the tab builders
+        // on every content (re)build so they are always current.
+        private int filterShownCount;
+        private int filterTotalCount;
+        private string filterCountUnit = "runs";
+
+        // ── Header bar (in the tab content) ────────────────────────────────
 
         /// <summary>
-        /// Adds the modifier filter bar as the first child of a tab's content
-        /// area. Collapsed: one summary row. Expanded: an [Any|With|Without]
-        /// row per ability plus a crest selector row.
+        /// Adds the slim filter header as the first child of a tab's content
+        /// area: a Filters button that shows how many modifiers are
+        /// constrained ("Filters (2)"), lights up (accent) when any filter is
+        /// set, shows the full selection as a hover tooltip, and opens the
+        /// filter popup.
         /// </summary>
         private void AddModifierFilterBar(Transform parent)
         {
             SanitizeCrestFilterBits();
 
-            var abilities = NonCrestDefs();
-            bool hasCrests = ModifierRegistry.CrestBitsMask != 0;
-
             int headerH = RH + 2;
-            int rowCount = _filterPanelExpanded
-                ? abilities.Count + (hasCrests ? 1 : 0)
-                : 0;
-            int totalH = headerH + rowCount * RH;
-
             var bar = MakeGO("ModifierFilterBar", parent);
             Img(bar, Color.clear);
             var le = bar.AddComponent<LayoutElement>();
-            le.minHeight = le.preferredHeight = totalH;
+            le.minHeight = le.preferredHeight = headerH;
 
-            AddFilterHeader(bar.transform, headerH);
-
-            if (!_filterPanelExpanded) return;
-
-            int y = headerH;
-            bool stripe = false;
-            foreach (var def in abilities)
-            {
-                AddAbilityFilterRow(bar.transform, def, y, stripe);
-                y += RH;
-                stripe = !stripe;
-            }
-
-            if (hasCrests)
-                AddCrestFilterRow(bar.transform, y, stripe);
-        }
-
-        private void AddFilterHeader(Transform parent, int headerH)
-        {
-            var header = MakeGO("FilterHeader", parent);
+            var header = MakeGO("FilterHeader", bar.transform);
             Img(header, UIStyle.Overlay with { a = 0.3f });
             Rect(header, 0, 0, RW, headerH);
 
+            bool active = ModifierFilterActive;
+            bool open = filterPopupGO != null && filterPopupGO.activeSelf;
+            int count = ActiveFilterCount();
+
             int btnH = UIStyle.H(20);
             int btnY = (headerH - btnH) / 2;
-            int toggleW = UIStyle.W(74);
-            bool active = ModifierFilterActive;
 
-            MakeButton(header.transform, "FilterToggle",
-                (_filterPanelExpanded ? "▾" : "▸") + " Filters",
-                UIStyle.FontSizeSm - 2,
-                active ? UIStyle.Accent : UIStyle.Subtext,
-                active ? UIStyle.Accent with { a = 0.15f } : Color.clear,
-                M / 2, btnY, toggleW, btnH,
-                () =>
-                {
-                    _filterPanelExpanded = !_filterPanelExpanded;
-                    RebuildActiveTabContentOnly();
-                });
+            // The button hugs its content: caret + gap + measured text + pad.
+            string toggleText = count > 0 ? "Filters (" + count + ")" : "Filters";
+            int caretS = UIStyle.H(8);
+            int caretX = UIStyle.W(8);
+            int textW = Mathf.CeilToInt(
+                MeasureTextWidth(toggleText, UIStyle.FontSizeBtn));
+            int textX = caretX + caretS + UIStyle.W(5);
+            int toggleW = textX + textW + UIStyle.W(8);
 
-            int resetW = UIStyle.W(46);
+            var toggle = MakeGO("FilterToggle", header.transform);
+            Img(toggle, active ? UIStyle.BtnBgStrong(UIStyle.Accent) : Color.clear);
+            Rect(toggle, M / 2, btnY, toggleW, btnH);
+            // TickFilterPopup exempts the toggle from outside-click closing
+            // (its own click handler toggles the popup).
+            filterToggleRT = toggle.GetComponent<RectTransform>();
+
+            // Drawn caret: right = closed, down = popup open.
+            var caret = MakeGO("Caret", toggle.transform);
+            var caretImg = caret.AddComponent<RawImage>();
+            caretImg.texture = PlayMarkerTexture();
+            caretImg.color = active ? UIStyle.Accent : UIStyle.Subtext;
+            caretImg.raycastTarget = false;
+            var caretRT = caret.GetComponent<RectTransform>();
+            caretRT.anchorMin = caretRT.anchorMax = new Vector2(0, 1);
+            caretRT.pivot = new Vector2(0.5f, 0.5f);
+            caretRT.sizeDelta = new Vector2(caretS, caretS);
+            caretRT.anchoredPosition = new Vector2(caretX + caretS / 2f, -btnH / 2f);
+            if (open)
+                caretRT.localEulerAngles = new Vector3(0, 0, -90);
+            filterHeaderCaretRT = caretRT;
+
+            MakeLbl(toggle.transform, toggleText, UIStyle.FontSizeBtn,
+                active ? UIStyle.Accent : UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: textX, w: textW + UIStyle.W(2), h: btnH);
+
+            var toggleGO = toggle;
+            Btn(toggle, () => ToggleFilterPopup(toggleGO));
+            AddButtonHover(toggle);
+
             if (active)
+                AttachTooltip(toggle, BuildFilterSummary());
+        }
+
+        /// <summary>Number of constrained attributes: each required or
+        /// excluded ability counts once, the crest choice counts once.</summary>
+        private static int ActiveFilterCount()
+        {
+            int n = CountBits(FilterRequire & ~ModifierRegistry.CrestBitsMask)
+                  + CountBits(FilterExclude);
+            if ((FilterRequire & ModifierRegistry.CrestBitsMask) != 0) n++;
+            return n;
+        }
+
+        private static int CountBits(int v)
+        {
+            int c = 0;
+            while (v != 0) { c++; v &= v - 1; }
+            return c;
+        }
+
+        /// <summary>Plain-text description of the active filter, e.g.
+        /// "with Swift Step | without Cling Grip | Hunter Crest" - shown as
+        /// the Filters button's hover tooltip.</summary>
+        private static string BuildFilterSummary()
+        {
+            var sb = new System.Text.StringBuilder();
+            AppendFilterNames(sb, "with ",
+                FilterRequire & ~ModifierRegistry.CrestBitsMask);
+            AppendFilterNames(sb, "without ", FilterExclude);
+
+            foreach (var def in ModifierRegistry.All)
             {
-                MakeButton(header.transform, "FilterReset", "Reset",
-                    UIStyle.FontSizeSm - 2, UIStyle.Red, UIStyle.Red with { a = 0.15f },
-                    RW - resetW - M, btnY, resetW, btnH,
-                    () =>
-                    {
-                        GhostSettings.ModifierRequireMask = 0;
-                        GhostSettings.ModifierExcludeMask = 0;
-                        RebuildActiveTabContentOnly();
-                    });
+                if (!def.IsCrest) continue;
+                if ((FilterRequire & (1 << def.Bit)) == 0) continue;
+                if (sb.Length > 0) sb.Append(" | ");
+                sb.Append(def.DisplayName);
+                break;
             }
 
-            int summaryX = M / 2 + toggleW + M;
-            int summaryEnd = active ? RW - resetW - M * 2 : RW - M;
-            MakeLbl(header.transform, BuildFilterSummary(),
-                UIStyle.FontSizeSm - 2,
-                active ? UIStyle.Text : UIStyle.Subtext,
-                TextAnchor.MiddleLeft,
-                x: summaryX, w: summaryEnd - summaryX, h: headerH);
+            return sb.ToString();
         }
 
-        /// <summary>One ability row: name on the left, [Any|With|Without]
-        /// segmented buttons on the right (Config-tab idiom).</summary>
-        private void AddAbilityFilterRow(Transform parent, ModifierDef def,
-            int y, bool stripe)
+        private static void AppendFilterNames(System.Text.StringBuilder sb,
+            string label, int mask)
         {
-            var row = MakeGO("Filter_" + def.Id, parent);
-            Img(row, stripe ? UIStyle.Surface with { a = 0.3f } : Color.clear);
-            Rect(row, 0, y, RW, RH);
-
-            int bit = 1 << def.Bit;
-            bool with = (FilterRequire & bit) != 0;
-            bool without = (FilterExclude & bit) != 0;
-
-            int segW = UIStyle.W(52);
-            int segH = UIStyle.H(18);
-            int segY = y + (RH - segH) / 2;
-            int sp = UIStyle.W(2);
-            int segX = RW - M - segW * 3 - sp * 2;
-
-            MakeLbl(row.transform, def.DisplayName,
-                UIStyle.FontSizeSm - 1, UIStyle.Text, TextAnchor.MiddleLeft,
-                x: M, w: segX - M * 2, h: RH);
-
-            AddFilterSegment(parent, "Any", !with && !without,
-                segX, segY, segW, segH,
-                () => SetAbilityFilter(bit, requireIt: false, excludeIt: false));
-            AddFilterSegment(parent, "With", with,
-                segX + segW + sp, segY, segW, segH,
-                () => SetAbilityFilter(bit, requireIt: true, excludeIt: false));
-            AddFilterSegment(parent, "Without", without,
-                segX + (segW + sp) * 2, segY, segW, segH,
-                () => SetAbilityFilter(bit, requireIt: false, excludeIt: true));
+            if (mask == 0) return;
+            if (sb.Length > 0) sb.Append(" | ");
+            sb.Append(label);
+            bool first = true;
+            foreach (var def in ModifierRegistry.All)
+            {
+                if ((mask & (1 << def.Bit)) == 0) continue;
+                if (!first) sb.Append(", ");
+                sb.Append(def.DisplayName);
+                first = false;
+            }
         }
 
-        private void AddFilterSegment(Transform parent, string label,
-            bool selected, int x, int y, int w, int h,
-            UnityEngine.Events.UnityAction onClick)
+        // ── Popup open / close ─────────────────────────────────────────────
+
+        private void ToggleFilterPopup(GameObject anchor)
         {
-            MakeButton(parent, "Seg" + label, label,
-                UIStyle.FontSizeSm - 2,
-                selected ? UIStyle.Accent : UIStyle.Subtext,
-                selected ? UIStyle.Accent with { a = 0.2f }
-                         : UIStyle.Surface with { a = 0.5f },
-                x, y, w, h, onClick);
+            if (filterPopupGO != null && filterPopupGO.activeSelf)
+                CloseFilterPopup();
+            else
+                OpenFilterPopup(anchor);
         }
 
-        private void SetAbilityFilter(int bit, bool requireIt, bool excludeIt)
+        private void OpenFilterPopup(GameObject anchor)
         {
-            GhostSettings.ModifierRequireMask =
-                requireIt ? FilterRequire | bit : FilterRequire & ~bit;
-            GhostSettings.ModifierExcludeMask =
-                excludeIt ? FilterExclude | bit : FilterExclude & ~bit;
-            RebuildActiveTabContentOnly();
+            EnsureFilterPopup();
+            if (filterPopupGO == null) return;
+
+            RefreshFilterPopup();
+
+            // Keep it on top of everything else on the canvas
+            filterPopupGO.transform.SetAsLastSibling();
+            filterPopupGO.SetActive(true);
+
+            // Drop down from the toggle button, clamped on-screen (same
+            // screen-position convention as the color picker).
+            var art = anchor.GetComponent<RectTransform>();
+            Vector3 p = art.position; // pivot (top-left) in screen px
+            float x = Mathf.Clamp(p.x, 4, Screen.width - filterPopupW - 4);
+            float yTop = p.y - art.rect.height - UIStyle.H(4);
+            yTop = Mathf.Clamp(yTop, filterPopupH + 4, Screen.height - 4);
+            filterPopupGO.GetComponent<RectTransform>().anchoredPosition =
+                new Vector2(x, yTop);
+
+            if (filterHeaderCaretRT != null)
+                filterHeaderCaretRT.localEulerAngles = new Vector3(0, 0, -90);
         }
 
-        /// <summary>The crest selector row: crests are mutually exclusive, so
-        /// the filter is a single choice - Any, or one specific crest - cycled
-        /// with prev/next arrows around the current value.</summary>
-        private void AddCrestFilterRow(Transform parent, int y, bool stripe)
+        /// <summary>Closes the filter popup if open. Safe to call any time;
+        /// hooked into panel close, tab switches, scene selection, and
+        /// unpause (alongside ClosePicker).</summary>
+        private void CloseFilterPopup()
         {
-            var row = MakeGO("Filter_Crest", parent);
-            Img(row, stripe ? UIStyle.Surface with { a = 0.3f } : Color.clear);
-            Rect(row, 0, y, RW, RH);
-
-            var crests = CrestDefs();
-            int selectedIdx = -1; // -1 = Any
-            for (int i = 0; i < crests.Count; i++)
-                if ((FilterRequire & (1 << crests[i].Bit)) != 0) { selectedIdx = i; break; }
-
-            int arrowW = UIStyle.W(22);
-            int valueW = UIStyle.W(124); // fits the longest crest name
-            int segH = UIStyle.H(18);
-            int segY = y + (RH - segH) / 2;
-            int sp = UIStyle.W(2);
-            int groupX = RW - M - arrowW * 2 - valueW - sp * 2;
-
-            MakeLbl(row.transform, "Crest",
-                UIStyle.FontSizeSm - 1, UIStyle.Text, TextAnchor.MiddleLeft,
-                x: M, w: groupX - M * 2, h: RH);
-
-            bool anyCrest = selectedIdx < 0;
-            string valueText = anyCrest ? "Any" : crests[selectedIdx].DisplayName;
-
-            MakeButton(parent, "CrestPrev", "◂",
-                UIStyle.FontSizeSm - 2, UIStyle.Subtext, UIStyle.Surface with { a = 0.5f },
-                groupX, segY, arrowW, segH,
-                () => StepCrestFilter(-1));
-
-            MakeButton(parent, "CrestValue", valueText,
-                UIStyle.FontSizeSm - 2,
-                anyCrest ? UIStyle.Subtext : UIStyle.Accent,
-                anyCrest ? UIStyle.Surface with { a = 0.5f }
-                         : UIStyle.Accent with { a = 0.2f },
-                groupX + arrowW + sp, segY, valueW, segH,
-                () => StepCrestFilter(1));
-
-            MakeButton(parent, "CrestNext", "▸",
-                UIStyle.FontSizeSm - 2, UIStyle.Subtext, UIStyle.Surface with { a = 0.5f },
-                groupX + arrowW + valueW + sp * 2, segY, arrowW, segH,
-                () => StepCrestFilter(1));
+            if (filterPopupGO != null) filterPopupGO.SetActive(false);
+            if (filterHeaderCaretRT != null)
+                filterHeaderCaretRT.localEulerAngles = Vector3.zero;
         }
 
-        /// <summary>Advances the crest selection: Any → crest1 → ... → Any.</summary>
-        private void StepCrestFilter(int direction)
+        private void RefreshFilterPopupIfOpen()
         {
-            var crests = CrestDefs();
-            if (crests.Count == 0) return;
+            if (filterPopupGO != null && filterPopupGO.activeSelf)
+                RefreshFilterPopup();
+        }
 
-            int selectedIdx = -1;
-            for (int i = 0; i < crests.Count; i++)
-                if ((FilterRequire & (1 << crests[i].Bit)) != 0) { selectedIdx = i; break; }
+        /// <summary>Called every frame from Tick. The popup is non-modal
+        /// (everything behind it stays interactive, including the game's
+        /// own pause menu), so outside clicks are detected here: a
+        /// left-click that lands neither on the popup nor on the Filters
+        /// toggle closes it. The click itself still goes through to
+        /// whatever was clicked.</summary>
+        private void TickFilterPopup()
+        {
+            if (filterPopupGO == null || !filterPopupGO.activeSelf) return;
+            if (!Input.GetMouseButtonDown(0)) return;
 
-            // -1 (Any) .. crests.Count-1, wrapping through Any.
-            int next = selectedIdx + direction;
-            if (next < -1) next = crests.Count - 1;
-            if (next >= crests.Count) next = -1;
+            Vector2 mouse = Input.mousePosition;
+            if (RectTransformUtility.RectangleContainsScreenPoint(
+                    (RectTransform)filterPopupGO.transform, mouse))
+                return;
+            if (filterToggleRT != null
+                && RectTransformUtility.RectangleContainsScreenPoint(
+                    filterToggleRT, mouse))
+                return; // the toggle's own click handler closes it
 
+            CloseFilterPopup();
+        }
+
+        // ── Popup interaction ──────────────────────────────────────────────
+
+        private void OnAbilityChipClicked(int bitMask)
+        {
+            int require = FilterRequire;
+            int exclude = FilterExclude;
+            RouteView.CycleFilterBit(bitMask, ref require, ref exclude);
+            GhostSettings.ModifierRequireMask = require;
+            GhostSettings.ModifierExcludeMask = exclude;
+            RebuildActiveTabContentOnly(); // also refreshes the open popup
+        }
+
+        /// <summary>Crest chips are single-select: clicking selects that
+        /// crest (replacing any other), clicking the selected crest - or the
+        /// "Any crest" chip (bitMask 0) - clears the choice.</summary>
+        private void OnCrestChipClicked(int bitMask)
+        {
             int require = FilterRequire & ~ModifierRegistry.CrestBitsMask;
-            if (next >= 0) require |= 1 << crests[next].Bit;
+            if (bitMask != 0 && (FilterRequire & bitMask) == 0)
+                require |= bitMask;
             GhostSettings.ModifierRequireMask = require;
             RebuildActiveTabContentOnly();
         }
 
-        /// <summary>Crest bits are single-choice via the selector; drop any
+        private void OnFilterResetClicked()
+        {
+            if (!ModifierFilterActive) return;
+            GhostSettings.ModifierRequireMask = 0;
+            GhostSettings.ModifierExcludeMask = 0;
+            RebuildActiveTabContentOnly();
+        }
+
+        // ── Popup construction ─────────────────────────────────────────────
+
+        private void EnsureFilterPopup()
+        {
+            if (filterPopupGO != null) return;
+            if (canvasGO == null) return;
+
+            abilityChips.Clear();
+            crestChips.Clear();
+
+            filterPopupGO = MakeGO("FilterPopup", canvasGO.transform);
+
+            // 1px frame, same construction as the tooltip / color picker
+            var borderImg = filterPopupGO.AddComponent<Image>();
+            borderImg.color = UIStyle.Overlay with { a = 0.9f };
+
+            var rt = filterPopupGO.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = Vector2.zero; // bottom-left anchored
+            rt.pivot = new Vector2(0f, 1f);             // position = top-left
+
+            var inner = MakeGO("Inner", filterPopupGO.transform);
+            var innerImg = inner.AddComponent<Image>();
+            innerImg.color = UIStyle.Base with { a = 0.98f };
+            var innerRt = inner.GetComponent<RectTransform>();
+            innerRt.anchorMin = Vector2.zero;
+            innerRt.anchorMax = Vector2.one;
+            innerRt.offsetMin = new Vector2(1, 1);
+            innerRt.offsetMax = new Vector2(-1, -1);
+
+            int pad = UIStyle.W(12);
+            int lblH = UIStyle.H(14);
+            int pw = UIStyle.W(320);
+            int y = UIStyle.H(10);
+
+            // Legend doubles as the title: the tri-state cycle isn't
+            // discoverable without it.
+            MakeLbl(filterPopupGO.transform,
+                "Abilities",
+                UIStyle.FontSizeTiny, UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: pad, y: y, w: pw - pad * 2, h: lblH);
+            y += lblH + UIStyle.H(6);
+
+            var flow = new ChipFlow(pad, pw - pad, y);
+            foreach (var def in NonCrestDefs())
+            {
+                int bitMask = 1 << def.Bit;
+                abilityChips.Add(AddFilterChip(filterPopupGO.transform,
+                    "Chip_" + def.Id, def.DisplayName, bitMask, flow,
+                    () => OnAbilityChipClicked(bitMask)));
+            }
+            y = flow.End + UIStyle.H(10);
+
+            var crests = CrestDefs();
+            if (crests.Count > 0)
+            {
+                MakeLbl(filterPopupGO.transform, "Crest",
+                    UIStyle.FontSizeTiny, UIStyle.Subtext, TextAnchor.MiddleLeft,
+                    x: pad, y: y, w: pw - pad * 2, h: lblH);
+                y += lblH + UIStyle.H(6);
+
+                // "Any crest" first, then one chip per crest.
+                flow = new ChipFlow(pad, pw - pad, y);
+                crestChips.Add(AddFilterChip(filterPopupGO.transform,
+                    "Crest_any", "Any crest", 0, flow,
+                    () => OnCrestChipClicked(0)));
+                foreach (var def in crests)
+                {
+                    int bitMask = 1 << def.Bit;
+                    crestChips.Add(AddFilterChip(filterPopupGO.transform,
+                        "Crest_" + def.Id, def.DisplayName, bitMask, flow,
+                        () => OnCrestChipClicked(bitMask)));
+                }
+                y = flow.End + UIStyle.H(10);
+            }
+
+            HLine(filterPopupGO.transform, pad, y, pw - pad * 2);
+            y += UIStyle.H(8);
+
+            // Footer: live result count + Reset.
+            int footH = UIStyle.H(20);
+            int resetW = UIStyle.W(52);
+            filterCountLbl = MakeLbl(filterPopupGO.transform, "",
+                UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: pad, y: y, w: pw - pad * 2 - resetW - UIStyle.Gap, h: footH);
+            var resetRef = MakeButton(filterPopupGO.transform, "FilterReset",
+                "Reset", UIStyle.FontSizeBtn, UIStyle.Red,
+                UIStyle.BtnBg(UIStyle.Red),
+                pw - pad - resetW, y, resetW, footH, OnFilterResetClicked);
+            filterResetBg = resetRef.bg;
+            filterResetLbl = resetRef.label;
+            y += footH + UIStyle.H(10);
+
+            filterPopupW = pw;
+            filterPopupH = y;
+            rt.sizeDelta = new Vector2(pw, y);
+
+            filterPopupGO.SetActive(false);
+        }
+
+        /// <summary>Left-to-right chip placement that wraps within
+        /// [left, right]. Chips are sized to their text by AddFilterChip;
+        /// this only hands out positions.</summary>
+        private sealed class ChipFlow
+        {
+            public static int ChipH => UIStyle.H(22);
+
+            private readonly int left;
+            private readonly int right;
+            private int x;
+            private int y;
+
+            public ChipFlow(int left, int right, int top)
+            {
+                this.left = left;
+                this.right = right;
+                x = left;
+                y = top;
+            }
+
+            /// <summary>Reserves a slot of the given width, wrapping to the
+            /// next row first when it wouldn't fit. Row spacing equals the
+            /// horizontal chip spacing (UIStyle.Gap both ways).</summary>
+            public void Place(int w, out int px, out int py)
+            {
+                if (x > left && x + w > right)
+                {
+                    x = left;
+                    y += ChipH + UIStyle.Gap;
+                }
+                px = x;
+                py = y;
+                x += w + UIStyle.Gap;
+            }
+
+            /// <summary>Bottom edge of the flowed content.</summary>
+            public int End => y + ChipH;
+        }
+
+        /// <summary>One chip, sized to its centered text and placed by the
+        /// flow. State is shown by color alone; styling is applied by
+        /// RefreshFilterPopup.</summary>
+        private FilterChipRef AddFilterChip(Transform parent, string name,
+            string text, int bitMask, ChipFlow flow,
+            UnityEngine.Events.UnityAction onClick)
+        {
+            int padX = UIStyle.W(9);
+            int w = Mathf.CeilToInt(MeasureTextWidth(text, UIStyle.FontSizeRow))
+                + padX * 2;
+            flow.Place(w, out int x, out int y);
+
+            var go = MakeGO(name, parent);
+            var bg = go.AddComponent<Image>();
+            bg.color = UIStyle.Surface with { a = 0.5f };
+            Btn(go, onClick);
+            Rect(go, x, y, w, ChipFlow.ChipH);
+
+            var lbl = MakeLbl(go.transform, text,
+                UIStyle.FontSizeRow, UIStyle.Subtext, TextAnchor.MiddleCenter,
+                fill: true);
+
+            AddButtonHover(go);
+
+            return new FilterChipRef { bitMask = bitMask, bg = bg, label = lbl };
+        }
+
+        // ── Text measurement ───────────────────────────────────────────────
+
+        private Text? measureLbl;
+
+        /// <summary>
+        /// Width of rendered text in canvas px (the canvas uses
+        /// ConstantPixelSize, so preferredWidth is directly usable), via a
+        /// hidden reusable Text. Used to size chips and the Filters toggle
+        /// to their content.
+        /// </summary>
+        private float MeasureTextWidth(string text, int fontSize)
+        {
+            if (measureLbl == null)
+            {
+                // Kept active with clear color: preferred-size queries are
+                // safest on an active Text across Unity versions, and a
+                // fully transparent zero-size label renders nothing.
+                var go = MakeGO("MeasureLbl", canvasGO.transform);
+                measureLbl = go.AddComponent<Text>();
+                measureLbl.font = UIStyle.Arial;
+                measureLbl.color = Color.clear;
+                measureLbl.raycastTarget = false;
+                measureLbl.supportRichText = false;
+                measureLbl.horizontalOverflow = HorizontalWrapMode.Overflow;
+                measureLbl.verticalOverflow = VerticalWrapMode.Overflow;
+                Rect(go, 0, 0, 0, 0);
+            }
+
+            measureLbl.fontSize = fontSize;
+            measureLbl.text = text;
+            return measureLbl.preferredWidth;
+        }
+
+        /// <summary>Restyles every chip and the footer from the current
+        /// filter state and result counts - in place, no rebuild.</summary>
+        private void RefreshFilterPopup()
+        {
+            if (filterPopupGO == null) return;
+
+            foreach (var chip in abilityChips)
+                StyleFilterChip(chip,
+                    (FilterRequire & chip.bitMask) != 0,
+                    (FilterExclude & chip.bitMask) != 0);
+
+            int crestSel = FilterRequire & ModifierRegistry.CrestBitsMask;
+            foreach (var chip in crestChips)
+                StyleFilterChip(chip,
+                    chip.bitMask == 0 ? crestSel == 0
+                                      : (crestSel & chip.bitMask) != 0,
+                    without: false);
+
+            bool active = ModifierFilterActive;
+            if (filterCountLbl != null)
+                filterCountLbl.text = active
+                    ? filterShownCount + " of " + filterTotalCount + " "
+                        + filterCountUnit + " shown"
+                    : filterTotalCount + " " + filterCountUnit;
+            if (filterResetLbl != null)
+                filterResetLbl.color = active ? UIStyle.Red : UIStyle.Subtext;
+            if (filterResetBg != null)
+                filterResetBg.color = active
+                    ? UIStyle.BtnBg(UIStyle.Red)
+                    : UIStyle.Surface with { a = 0.5f };
+        }
+
+        /// <summary>Chip state is color alone: accent = with, red = without,
+        /// dim surface = any.</summary>
+        private static void StyleFilterChip(FilterChipRef chip,
+            bool with, bool without)
+        {
+            if (with)
+            {
+                chip.bg.color = UIStyle.BtnBgStrong(UIStyle.Accent);
+                chip.label.color = UIStyle.Accent;
+            }
+            else if (without)
+            {
+                chip.bg.color = UIStyle.BtnBgStrong(UIStyle.Red);
+                chip.label.color = UIStyle.Red;
+            }
+            else
+            {
+                chip.bg.color = UIStyle.Surface with { a = 0.5f };
+                chip.label.color = UIStyle.Subtext;
+            }
+        }
+
+        // ── Registry helpers ───────────────────────────────────────────────
+
+        /// <summary>Crest bits are single-choice via the chip row; drop any
         /// stale multi-crest/exclude state (e.g. from older versions).</summary>
         private static void SanitizeCrestFilterBits()
         {
@@ -256,41 +566,6 @@ namespace ReplayTimerMod
             int crestRequire = FilterRequire & crestBits;
             if (crestRequire != 0 && (crestRequire & (crestRequire - 1)) != 0)
                 GhostSettings.ModifierRequireMask = FilterRequire & ~crestBits;
-        }
-
-        private static string BuildFilterSummary()
-        {
-            if (!ModifierFilterActive) return "off";
-
-            var sb = new StringBuilder();
-            AppendFilterNames(sb, "with ", FilterRequire & ~ModifierRegistry.CrestBitsMask);
-            AppendFilterNames(sb, "without ", FilterExclude);
-
-            foreach (var def in ModifierRegistry.All)
-            {
-                if (!def.IsCrest) continue;
-                if ((FilterRequire & (1 << def.Bit)) == 0) continue;
-                if (sb.Length > 0) sb.Append("  ·  ");
-                sb.Append(def.DisplayName);
-                break;
-            }
-
-            return sb.Length > 0 ? sb.ToString() : "off";
-        }
-
-        private static void AppendFilterNames(StringBuilder sb, string label, int mask)
-        {
-            if (mask == 0) return;
-            if (sb.Length > 0) sb.Append("  ·  ");
-            sb.Append(label);
-            bool first = true;
-            foreach (var def in ModifierRegistry.All)
-            {
-                if ((mask & (1 << def.Bit)) == 0) continue;
-                if (!first) sb.Append(", ");
-                sb.Append(def.DisplayName);
-                first = false;
-            }
         }
 
         private static List<ModifierDef> NonCrestDefs()
@@ -334,7 +609,7 @@ namespace ReplayTimerMod
                 markerW, markerH);
 
             MakeLbl(marker.transform, "?",
-                UIStyle.FontSizeSm - 3, UIStyle.Subtext,
+                UIStyle.FontSizeTiny, UIStyle.Subtext,
                 TextAnchor.MiddleCenter, fill: true);
 
             AttachModifierTooltip(marker, mask);
@@ -342,7 +617,8 @@ namespace ReplayTimerMod
         }
 
         /// <summary>Rebuilds just the active tab's content area (lightweight,
-        /// scroll preserved) after a filter change.</summary>
+        /// scroll preserved) after a filter change, then syncs the open
+        /// filter popup with the fresh state and result counts.</summary>
         private void RebuildActiveTabContentOnly()
         {
             if (activeTab == TabKind.Leaderboard)
@@ -361,78 +637,30 @@ namespace ReplayTimerMod
             if (rightContent == null || selectedScene == null) return;
 
             var scroll = RightScroll;
-            float keepScroll = scroll != null
-                ? scroll.verticalNormalizedPosition : 1f;
+            float keepScroll = scroll != null ? ScrollOffsetFromTop(scroll) : 0f;
 
             ClearContentDetached(rightContent);
             BuildRunsContent(selectedScene);
             ForceLayout(rightContent);
 
             if (scroll != null)
-                scroll.verticalNormalizedPosition = Mathf.Clamp01(keepScroll);
+                RestoreScrollOffsetFromTop(scroll, keepScroll);
+
+            RefreshFilterPopupIfOpen();
         }
 
         // ── Leaderboard view ranking ───────────────────────────────────────
 
         /// <summary>
         /// Builds the display view of a route's leaderboard from the cached
-        /// best-per-(runner, mask) rows: filter by the current modifier
-        /// filter, collapse to each runner's best surviving row, sort by
-        /// time, and assign contiguous view ranks on CLONED entries (the
-        /// cached rows are never mutated). With no filter active this
-        /// reproduces the classic best-per-runner board.
+        /// best-per-(runner, mask) rows. The logic lives in
+        /// <see cref="RouteView.Build"/> (pure, unit-tested); this wrapper
+        /// supplies the persisted filter masks.
         /// </summary>
         private static List<LeaderboardEntry> BuildRouteView(
             RouteLeaderboard route,
-            out int yourViewRank, out LeaderboardEntry? yourRow)
-        {
-            // Collapse best row per runner. IsYou rows collapse under a
-            // dedicated key (optimistic local entries have Rid = -1 and would
-            // otherwise collide with server rows).
-            var bestPerRunner = new Dictionary<string, LeaderboardEntry>();
-            foreach (var e in route.Entries)
-            {
-                if (!PassesModifierFilter(e.Modifiers)) continue;
-
-                string key = e.IsYou ? "you" : "r" + e.Rid;
-                if (!bestPerRunner.TryGetValue(key, out var cur)
-                    || e.TotalTime < cur.TotalTime)
-                    bestPerRunner[key] = e;
-            }
-
-            var view = new List<LeaderboardEntry>(bestPerRunner.Count);
-            foreach (var e in bestPerRunner.Values)
-            {
-                view.Add(new LeaderboardEntry
-                {
-                    RunnerName = e.RunnerName,
-                    TotalTime = e.TotalTime,
-                    RunId = e.RunId,
-                    IsYou = e.IsYou,
-                    Modifiers = e.Modifiers,
-                    Rid = e.Rid
-                });
-            }
-
-            view.Sort((a, b) =>
-            {
-                int c = a.TotalTime.CompareTo(b.TotalTime);
-                return c != 0 ? c : a.Rid.CompareTo(b.Rid);
-            });
-
-            yourViewRank = -1;
-            yourRow = null;
-            for (int i = 0; i < view.Count; i++)
-            {
-                view[i].Rank = i + 1;
-                if (view[i].IsYou && yourRow == null)
-                {
-                    yourViewRank = i + 1;
-                    yourRow = view[i];
-                }
-            }
-
-            return view;
-        }
+            out int yourViewRank, out LeaderboardEntry? yourRow) =>
+            RouteView.Build(route, FilterRequire, FilterExclude,
+                out yourViewRank, out yourRow);
     }
 }

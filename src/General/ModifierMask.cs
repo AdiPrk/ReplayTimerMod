@@ -7,9 +7,7 @@ namespace ReplayTimerMod
     /// <summary>
     /// Helpers for the per-run modifier bitmask: which movement abilities were
     /// unlocked / items equipped at any point during a recorded room run
-    /// (possession/loadout semantics - NOT usage; the one exception is
-    /// Silksong Sprint, which has no possession flag and is tagged when the
-    /// hero actually sprinted).
+    /// (possession/loadout semantics - NOT usage).
     ///
     /// ── Bit assignments are STABLE FOREVER ─────────────────────────────────
     /// Masks are persisted in local scene JSON, inside RTM3 replay blobs (and
@@ -19,7 +17,10 @@ namespace ReplayTimerMod
     ///
     ///   bits 0-2   shared    dash, walljump, doublejump
     ///   bits 3-7   shared    reserved for future cross-game concepts
-    ///   bits 8-11  Silksong  brolly, harpoon dash, silk soar, sprint (usage)
+    ///   bits 8-10  Silksong  brolly, harpoon dash, silk soar
+    ///   bit  11    Silksong  RETIRED (was sprint-usage; sprinting is part of
+    ///                        Swift Step = bit 0 - never reuse this bit, old
+    ///                        masks may still carry it and display ignores it)
     ///   bits 12-19 Silksong  crest block (one bit per crest)
     ///   bits 20-27 Silksong  movement-tool block
     ///   bits 8-13  HK        shadow dash, super dash, acid, charms 16/31/37
@@ -93,8 +94,6 @@ namespace ReplayTimerMod
         PossessionFlag,
         /// <summary>Item equipped (charm / crest / tool).</summary>
         EquippedCheck,
-        /// <summary>Observed in use (Silksong sprint only).</summary>
-        UsageFlag,
     }
 
     public sealed class ModifierDef
@@ -227,11 +226,10 @@ namespace ReplayTimerMod
                 new ModifierDef(10, "ss_silksoar", "Silk Soar",
                     ModifierDetection.PossessionFlag,
                     () => PlayerData.instance != null && PlayerData.instance.hasSuperJump),
-                new ModifierDef(11, "ss_sprint", "Sprint",
-                    ModifierDetection.UsageFlag,
-                    () => HeroController.instance != null
-                          && HeroController.instance.cState != null
-                          && HeroController.instance.cState.isSprinting),
+                // Bit 11 is RETIRED: it was "ss_sprint" (usage-tagged
+                // isSprinting), but sprinting is just Swift Step (bit 0) in
+                // use, not a separate ability. Old masks may still have it
+                // set; unregistered bits are ignored everywhere.
                 // Crest bits (12-19): one def per bit for display purposes;
                 // detection runs through the CrestIdToBit table above. Badges
                 // show the crest's plain name.

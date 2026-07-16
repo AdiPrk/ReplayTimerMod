@@ -17,8 +17,9 @@ namespace ReplayTimerMod
             rt.anchoredPosition = new Vector2(M, M);
             rt.sizeDelta = new Vector2(UIStyle.TabBtnWidth, UIStyle.TabBtnHeight);
 
-            MakeLbl(tabGO.transform, "\u2261", UIStyle.FontSizeLg,
+            MakeLbl(tabGO.transform, "Replays", UIStyle.FontSizeSm,
                 UIStyle.Text, TextAnchor.MiddleCenter, fill: true);
+            AddButtonHover(tabGO);
         }
 
         private void BuildPanel()
@@ -83,16 +84,19 @@ namespace ReplayTimerMod
             Img(hdr, UIStyle.Surface);
             Rect(hdr, 0, 0, PW, height);
 
+            int btnW = UIStyle.W(48);
+            int btnH = UIStyle.H(20);
             var collapse = MakeGO("Collapse", hdr.transform);
-            Img(collapse, UIStyle.Overlay);
+            Img(collapse, UIStyle.Overlay with { a = 0.6f });
             Btn(collapse, TogglePanel);
-            Rect(collapse, PW - height, 0, height, height);
-            MakeLbl(collapse.transform, "-", UIStyle.FontSizeLg,
+            Rect(collapse, PW - btnW - M, (height - btnH) / 2, btnW, btnH);
+            MakeLbl(collapse.transform, "Hide", UIStyle.FontSizeBtn,
                 UIStyle.Text, TextAnchor.MiddleCenter, fill: true);
+            AddButtonHover(collapse);
 
             MakeLbl(hdr.transform, "Replay Timer", UIStyle.FontSizeLg,
                 UIStyle.Text, TextAnchor.MiddleLeft,
-                x: M, w: PW - height - M * 2, h: height);
+                x: M, w: PW - btnW - M * 3, h: height);
         }
 
         private void BuildSearchBar(int y, int h)
@@ -115,17 +119,17 @@ namespace ReplayTimerMod
 
             int btnH = UIStyle.H(18);
             int btnY = (h - btnH) / 2;
-            int gap = UIStyle.W(4);
+            int gap = UIStyle.Gap;
             int btnW = (LW - M * 2 - gap) / 2;
 
             var curRef = MakeButton(footer.transform, "JumpCurrent", "Current",
-                UIStyle.FontSizeSm - 2, UIStyle.Gold, UIStyle.Gold with { a = 0.18f },
+                UIStyle.FontSizeBtn, UIStyle.Gold, UIStyle.BtnBg(UIStyle.Gold),
                 M, btnY, btnW, btnH, OnJumpToCurrentClicked);
             jumpCurrentBg = curRef.bg;
             jumpCurrentLbl = curRef.label;
 
             var prevRef = MakeButton(footer.transform, "JumpPrevious", "Previous",
-                UIStyle.FontSizeSm - 2, UIStyle.Accent, UIStyle.Accent with { a = 0.18f },
+                UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
                 M + btnW + gap, btnY, btnW, btnH, OnJumpToLastClicked);
             jumpPreviousBg = prevRef.bg;
             jumpPreviousLbl = prevRef.label;
@@ -163,8 +167,9 @@ namespace ReplayTimerMod
             go.AddComponent<Button>().onClick.AddListener(onClick);
             Rect(go, x, 0, w, h);
 
-            var lbl = MakeLbl(go.transform, text, UIStyle.FontSizeSm - 1,
+            var lbl = MakeLbl(go.transform, text, UIStyle.FontSizeRow,
                 UIStyle.Subtext, TextAnchor.MiddleCenter, fill: true);
+            AddButtonHover(go);
 
             ButtonRef r;
             r.bg = bg;
@@ -185,26 +190,28 @@ namespace ReplayTimerMod
             Fill(runsActionButtons);
 
             int clearW = UIStyle.W(72);
-            MakeButton(runsActionButtons.transform, "ClearScene", "Clear",
-                UIStyle.FontSizeSm - 2, UIStyle.Red, UIStyle.Red with { a = 0.25f },
+            var clearRef = MakeButton(runsActionButtons.transform, "ClearScene", "Clear",
+                UIStyle.FontSizeBtn, UIStyle.Red, UIStyle.BtnBgStrong(UIStyle.Red),
                 RW - clearW - M, btnY, clearW, btnH, OnClearSceneClicked);
+            sceneClearLbl = clearRef.label;
+            sceneClearBg = clearRef.bg;
 
             int pasteW = UIStyle.W(52);
             int pasteX = RW - clearW - M - pasteW - M;
             MakeButton(runsActionButtons.transform, "Paste", "Paste",
-                UIStyle.FontSizeSm - 2, UIStyle.Accent, UIStyle.Accent with { a = 0.25f },
+                UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
                 pasteX, btnY, pasteW, btnH, OnPasteClicked);
 
             int expW = UIStyle.W(72);
             int expX = pasteX - M - expW;
             MakeButton(runsActionButtons.transform, "ExportScene", "Export",
-                UIStyle.FontSizeSm - 2, UIStyle.Accent, UIStyle.Accent with { a = 0.20f },
+                UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
                 expX, btnY, expW, btnH, OnExportSceneClicked);
 
             int statusW = UIStyle.W(100);
             int statusX = expX - M - statusW;
             pasteStatusLbl = MakeLbl(runsActionButtons.transform, "",
-                UIStyle.FontSizeSm - 2, UIStyle.Subtext, TextAnchor.MiddleRight,
+                UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleRight,
                 x: statusX, w: statusW, h: h);
 
             rightHeaderLbl = MakeLbl(hdr.transform, "Select a room",

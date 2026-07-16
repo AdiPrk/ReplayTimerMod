@@ -49,7 +49,10 @@
       <EmbeddedResource Include="..\..\Resources\ss_transitions.json" />
   </ItemGroup>
 
-  <Target Name="CopyAndPackageMod" AfterTargets="PostBuildEvent">
+  <!-- Local-install copy + Thunderstore packaging. CI passes
+       /p:SkipModPackaging=true to compile without tcli/network. -->
+  <Target Name="CopyAndPackageMod" AfterTargets="PostBuildEvent"
+          Condition="'$(SkipModPackaging)' != 'true'">
     <ItemGroup>
       <Binaries Include="$(TargetPath)" LocalDir="/" PackDir="/" />
       <Binaries Include="$(TargetDir)/$(TargetName).pdb" LocalDir="/" PackDir="/" />

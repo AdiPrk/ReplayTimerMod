@@ -102,8 +102,15 @@ namespace ReplayTimerMod
 
         // ── World-space float -> int16 ─────────────────────────────────────────
 
-        public static short ToShort(float world) =>
-            (short)Math.Max(short.MinValue,
-                   Math.Min(short.MaxValue, (int)Math.Round(world * PosScale)));
+        public static short ToShort(float world)
+        {
+            // Clamp in float space BEFORE the integer cast: a cast of an
+            // out-of-int-range float is unspecified (in practice int.MinValue),
+            // which used to clamp huge positive positions to the WRONG end.
+            float scaled = world * PosScale;
+            if (scaled >= short.MaxValue) return short.MaxValue;
+            if (scaled <= short.MinValue) return short.MinValue;
+            return (short)Math.Round(scaled);
+        }
     }
 }

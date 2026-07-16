@@ -25,6 +25,9 @@ namespace ReplayTimerMod
         // Modifier filter (shared by Runs + Leaderboard tabs; see ModifierMask).
         public int ModifierRequireMask = 0;
         public int ModifierExcludeMask = 0;
+        // Experimental features (Config > Experimental).
+        public bool RoomWarpEnabled = false;
+        public bool CameraFollowEnabled = false;
     }
 
     public static class GhostSettings
@@ -150,6 +153,27 @@ namespace ReplayTimerMod
         {
             get => _d.ModifierExcludeMask;
             set { _d.ModifierExcludeMask = value; Save(); }
+        }
+
+        /// <summary>
+        /// Experimental: room warping. When false (the default) the warp
+        /// buttons are hidden everywhere and warping is unavailable.
+        /// </summary>
+        public static bool RoomWarpEnabled
+        {
+            get => _d.RoomWarpEnabled;
+            set { _d.RoomWarpEnabled = value; Save(); }
+        }
+
+        /// <summary>
+        /// Experimental: camera follow. When false (the default) the camera
+        /// buttons in the Runs tab are hidden and the camera never leaves
+        /// the player.
+        /// </summary>
+        public static bool CameraFollowEnabled
+        {
+            get => _d.CameraFollowEnabled;
+            set { _d.CameraFollowEnabled = value; Save(); }
         }
 
         /// <summary>

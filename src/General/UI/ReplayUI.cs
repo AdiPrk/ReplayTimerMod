@@ -23,6 +23,8 @@ namespace ReplayTimerMod
         private string searchFilter = "";
         private TabKind activeTab = TabKind.Runs;
         private string? deleteConfirmId;
+        private string? routeClearConfirmKey; // pending route-Clear confirm
+        private bool sceneClearPending;       // pending sub-header Clear confirm
 
         private RoomTimerHUD? timerHud;
 
@@ -47,6 +49,8 @@ namespace ReplayTimerMod
         private Text? rightHeaderLbl;
         private Text? pasteStatusLbl;
         private GameObject? runsActionButtons;
+        private Text? sceneClearLbl;
+        private Image? sceneClearBg;
 
         // Right panel - content area (cleared and rebuilt per tab/selection)
         private Transform? rightContent;
@@ -80,15 +84,18 @@ namespace ReplayTimerMod
         private Image? skipRunsToggleBg;
         private Text? skipTimerToggleLbl;
         private Image? skipTimerToggleBg;
-        private Text? alphaLbl;
-        private Text? editContextLbl;
-        private Image? editContextBg;
+        private Image? cfgGhostColorFill;
+        private Text? cfgGhostAlphaLbl;
         private Text? clearAllCfgLbl;
         private Image? clearAllCfgBg;
         private Text? exportAllCfgLbl;
         private Image? exportAllCfgBg;
         private Text? onlineToggleLbl;
         private Image? onlineToggleBg;
+        private Text? warpToggleLbl;
+        private Image? warpToggleBg;
+        private Text? camFollowToggleLbl;
+        private Image? camFollowToggleBg;
         private InputField? nameInput;
         private Text? nameStatusLbl;
         private Image? nameSaveBg;
@@ -181,7 +188,7 @@ namespace ReplayTimerMod
             RW = PW - LW - 1;
 
             canvasGO = new GameObject("ReplayModCanvas");
-            Object.DontDestroyOnLoad(canvasGO);
+            ScenePersistence.Apply(canvasGO);
             var canvas = canvasGO.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 32767;
@@ -202,6 +209,27 @@ namespace ReplayTimerMod
         public void Tick()
         {
             if (!isSetup) return;
+
+            // The host game destroyed the canvas (HK 1221's additive scene
+            // unload can do this despite DontDestroyOnLoad). Rebuild the
+            // whole panel; Setup() recreates every GameObject reference and
+            // BuildTabBar clears/refills tabButtons.
+            if (canvasGO == null)
+            {
+                Log.LogWarning("[ReplayUI] Canvas was destroyed externally - rebuilding");
+                expanded = false;
+                wasPaused = false;
+                rebuildPending = false;
+                _rightScroll = null;
+                _renderedLbScene = null;
+                _renderedLbVersion = -1;
+                _renderedServerScenesVersion = -1;
+                _lastContentTab = (TabKind)(-1);
+                _lastContentScene = null;
+                ClearConfigRefs();
+                Setup();
+                if (canvasGO == null) return; // Setup always assigns
+            }
 
             bool paused = GameUiState.IsPaused();
 
@@ -228,6 +256,8 @@ namespace ReplayTimerMod
                     _networkClient.SetMenuOpen(false);
                 }
                 ResetClearAllConfirm();
+                ClosePicker();
+                CloseFilterPopup();
                 wasPaused = false;
                 return;
             }
@@ -242,7 +272,7 @@ namespace ReplayTimerMod
                 RefreshCurrentView();
             }
 
-            // Revert expired ✓/✗ download states back to idle (in place)
+            // Revert expired Saved/Retry download states back to idle (in place)
             TickGhostStateExpiry();
 
             // Poll in-flight name-save request
@@ -250,6 +280,9 @@ namespace ReplayTimerMod
 
             // Show/position/hide the shared hover tooltip
             TickTooltip();
+
+            // Close the (non-modal) filter popup on outside clicks
+            TickFilterPopup();
         }
 
         /// <summary>
@@ -319,6 +352,10 @@ namespace ReplayTimerMod
             expanded = !expanded;
             panelGO.SetActive(expanded);
             deleteConfirmId = null;
+            routeClearConfirmKey = null;
+            ResetSceneClearConfirm();
+            ClosePicker();
+            CloseFilterPopup();
             if (_networkClient != null)
                 _networkClient.SetMenuOpen(expanded);
             if (expanded)
@@ -336,6 +373,9 @@ namespace ReplayTimerMod
             if (activeTab == tab) return;
             activeTab = tab;
             deleteConfirmId = null;
+            routeClearConfirmKey = null;
+            ClosePicker();
+            CloseFilterPopup();
             UpdateTabBarVisuals();
             UpdateRightSubHeader();
             RebuildRightContent();
@@ -347,7 +387,7 @@ namespace ReplayTimerMod
             {
                 bool active = kvp.Key == activeTab;
                 kvp.Value.bg.color = active
-                    ? UIStyle.Accent with { a = 0.15f }
+                    ? UIStyle.BtnBg(UIStyle.Accent)
                     : Color.clear;
                 kvp.Value.label.color = active ? UIStyle.Accent : UIStyle.Subtext;
             }
@@ -375,6 +415,23 @@ namespace ReplayTimerMod
 
             if (runsActionButtons != null)
                 runsActionButtons.SetActive(activeTab == TabKind.Runs);
+
+            // A pending scene-Clear confirm doesn't survive tab/scene changes
+            ResetSceneClearConfirm();
+        }
+
+        /// <summary>Reverts the sub-header Clear button from its "Sure?"
+        /// confirm state back to idle.</summary>
+        private void ResetSceneClearConfirm()
+        {
+            sceneClearPending = false;
+            if (sceneClearLbl != null)
+            {
+                sceneClearLbl.text = "Clear";
+                sceneClearLbl.color = UIStyle.Red;
+            }
+            if (sceneClearBg != null)
+                sceneClearBg.color = UIStyle.BtnBgStrong(UIStyle.Red);
         }
 
         private void RefreshCurrentView()
@@ -450,6 +507,9 @@ namespace ReplayTimerMod
         {
             selectedScene = scene;
             deleteConfirmId = null;
+            routeClearConfirmKey = null;
+            ClosePicker();
+            CloseFilterPopup();
 
             // If this room has no local runs but exists on the server,
             // the Runs tab would be empty — jump straight to the leaderboard.
@@ -470,6 +530,7 @@ namespace ReplayTimerMod
         private void ClearSelectedScene()
         {
             selectedScene = null;
+            CloseFilterPopup(); // its header row is about to disappear
             UpdateRightSubHeader();
             if (rightContent != null)
             {
@@ -496,28 +557,6 @@ namespace ReplayTimerMod
         }
 
         private ReplaySelectionState? SelectionState => PBManager.SelectionState;
-        private string? SelectedSnapshotId => SelectionState?.SelectedSnapshotId;
-        private static Color CurrentGlobalGhostColor => GhostSettings.GhostColor;
-
-        private bool TryGetSelectedSnapshot(out RoomKey key, out ReplaySnapshot? snapshot)
-        {
-            key = default;
-            snapshot = null;
-
-            string? snapshotId = SelectedSnapshotId;
-            if (string.IsNullOrEmpty(snapshotId)) return false;
-
-            foreach (var route in PBManager.AllHistories())
-            {
-                snapshot = PBManager.GetSnapshot(route.Key, snapshotId!);
-                if (snapshot != null)
-                {
-                    key = route.Key;
-                    return true;
-                }
-            }
-            return false;
-        }
 
         private static Color GetResolvedSnapshotColor(ReplaySnapshot snapshot) =>
             snapshot.ResolveGhostColor(GhostSettings.GhostColor);

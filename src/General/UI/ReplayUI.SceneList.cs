@@ -125,26 +125,36 @@ namespace ReplayTimerMod
             var row = MakeGO("SceneRow", parent);
             Img(row, bgColor);
             Btn(row, () => SelectScene(scene));
+            AddHoverEffect(row);
 
             var le = row.AddComponent<LayoutElement>();
             le.minHeight = le.preferredHeight = RH;
 
+            // Selection affordance: same accent edge bar as the Runs tab's
+            // editing row, so "selected" looks identical everywhere.
+            if (selected)
+            {
+                var bar = MakeGO("SelBar", row.transform);
+                Img(bar, (current ? UIStyle.Gold : UIStyle.Accent) with { a = 0.9f });
+                Rect(bar, 0, 0, UIStyle.W(3), RH);
+                bar.GetComponent<Graphic>().raycastTarget = false;
+            }
+
             int labelX = M;
             int labelW = LW - M * 2;
 
-            // Server-only indicator: small circle prefix
-            string displayName = isServerOnly
-                ? "\u25CB " + scene   // ○ prefix for server-only rooms
-                : scene;
-
-            MakeLbl(row.transform, displayName,
-                UIStyle.FontSizeSm - 1, textColor, TextAnchor.MiddleLeft,
+            // Server-only rooms (no local runs yet) are distinguished by
+            // their dimmer text color alone - no glyph prefix, so the label
+            // is always exactly the scene name.
+            MakeLbl(row.transform, scene,
+                UIStyle.FontSizeRow, textColor, TextAnchor.MiddleLeft,
                 x: labelX, w: labelW, h: RH);
         }
 
         /// <summary>
         /// Scrolls the scene list so that the specified scene row is visible.
-        /// Uses a text-match against row labels to find the correct child index.
+        /// Row labels are exactly the scene name, so a direct text match finds
+        /// the child index.
         /// </summary>
         private void ScrollToScene(string scene)
         {
@@ -160,12 +170,7 @@ namespace ReplayTimerMod
                 var lbl = sceneListContent.GetChild(i).GetComponentInChildren<Text>();
                 if (lbl == null) continue;
 
-                string text = lbl.text;
-                // Strip server-only prefix if present
-                if (text.StartsWith("\u25CB "))
-                    text = text.Substring(2);
-
-                if (text == scene)
+                if (lbl.text == scene)
                 {
                     targetIndex = i;
                     break;

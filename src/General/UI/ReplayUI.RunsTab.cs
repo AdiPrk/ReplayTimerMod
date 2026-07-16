@@ -24,29 +24,54 @@ namespace ReplayTimerMod
 
             AddModifierFilterBar(rightContent);
 
-            bool stripe = false;
-            bool anyShown = false;
+            // Filtered view of each route's snapshots. The route header,
+            // PB deltas, and prune behavior stay based on the FULL
+            // history — the filter only hides rows. Collected up front so
+            // the time column can be sized to the widest visible time
+            // before any row is built.
+            var visibleRoutes = new System.Collections.Generic.List<RouteReplayHistory>();
+            var visibleLists =
+                new System.Collections.Generic.List<System.Collections.Generic.IList<ReplaySnapshot>>();
+            var visibleTimes = new System.Collections.Generic.List<float>();
+            filterShownCount = 0;
+            filterTotalCount = 0;
+            filterCountUnit = "runs";
             foreach (var route in routes)
             {
-                // Filtered view of the route's snapshots. The route header,
-                // PB deltas, and prune behavior stay based on the FULL
-                // history — the filter only hides rows.
+                filterTotalCount += route.Snapshots.Count;
+
                 var visible = ModifierFilterActive
                     ? route.Snapshots.Where(s => PassesModifierFilter(s.Modifiers)).ToList()
                     : (System.Collections.Generic.IList<ReplaySnapshot>)route.Snapshots;
                 if (visible.Count == 0) continue;
 
-                AddRouteGroup(rightContent, route, visible, stripe);
-                stripe = !stripe;
-                anyShown = true;
+                filterShownCount += visible.Count;
+                visibleRoutes.Add(route);
+                visibleLists.Add(visible);
+                foreach (var s in visible)
+                    visibleTimes.Add(s.TotalTime);
             }
 
-            if (!anyShown)
+            if (visibleRoutes.Count == 0)
+            {
                 AddCenteredMessage(rightContent, "No runs match the modifier filter.");
+                return;
+            }
+
+            int timeColW = TimeColumnWidth(visibleTimes);
+
+            bool stripe = false;
+            for (int i = 0; i < visibleRoutes.Count; i++)
+            {
+                AddRouteGroup(rightContent, visibleRoutes[i], visibleLists[i],
+                    stripe, timeColW);
+                stripe = !stripe;
+            }
         }
 
         private void AddRouteGroup(Transform parent, RouteReplayHistory route,
-            System.Collections.Generic.IList<ReplaySnapshot> visible, bool stripe)
+            System.Collections.Generic.IList<ReplaySnapshot> visible, bool stripe,
+            int timeColW)
         {
             int headerH = RH + 2;
             int totalH = headerH + visible.Count * RH;
@@ -59,7 +84,8 @@ namespace ReplayTimerMod
             AddRouteHeader(group.transform, route, headerH);
 
             for (int i = 0; i < visible.Count; i++)
-                AddSnapshotRow(group.transform, route, visible[i], i, headerH);
+                AddSnapshotRow(group.transform, route, visible[i], i, headerH,
+                    timeColW);
         }
 
         private void AddRouteHeader(Transform parent, RouteReplayHistory route, int h)
@@ -67,28 +93,32 @@ namespace ReplayTimerMod
             int btnH = UIStyle.H(20);
             int btnY = (h - btnH) / 2;
             int clearW = UIStyle.W(48);
-            int warpW = UIStyle.W(28);
-            int sp = UIStyle.W(4);
+            int warpW = UIStyle.W(44);
+            int sp = UIStyle.Gap;
 
             var row = MakeGO("RouteHeader", parent);
             Img(row, UIStyle.Overlay with { a = 0.45f });
             Rect(row, 0, 0, RW, h);
 
             RoomKey key = route.Key;
-            MakeButton(row.transform, "ClearRoute", "Clear",
-                UIStyle.FontSizeSm - 2, UIStyle.Red, UIStyle.Red with { a = 0.18f },
+            bool clearPending = routeClearConfirmKey == RouteConfirmKey(key);
+            MakeButton(row.transform, "ClearRoute", clearPending ? "Sure?" : "Clear",
+                UIStyle.FontSizeBtn,
+                clearPending ? UIStyle.Text : UIStyle.Red,
+                clearPending ? UIStyle.Red with { a = 0.55f } : UIStyle.BtnBg(UIStyle.Red),
                 RW - clearW - M, btnY, clearW, btnH,
-                () => DeleteRoute(key));
+                () => OnRouteClearClicked(key));
 
-            // Warp button — shown for any route whose entry transition is
-            // known. Lands the player in the previous room at a door leading
-            // into the run room. Placed left of Clear.
+            // Warp button (experimental, hidden unless enabled in Config) —
+            // shown for any route whose entry transition is known. Lands the
+            // player in the previous room at a door leading into the run
+            // room. Placed left of Clear.
             int labelRight = clearW + M;
-            if (QuickWarp.CanWarp(key))
+            if (GhostSettings.RoomWarpEnabled && QuickWarp.CanWarp(key))
             {
                 RoomKey warpKey = key;
-                MakeButton(row.transform, "WarpRoute", "\u25B6",
-                    UIStyle.FontSizeSm - 2, UIStyle.Green, UIStyle.Green with { a = 0.18f },
+                MakeButton(row.transform, "WarpRoute", "Warp",
+                    UIStyle.FontSizeBtn, UIStyle.Green, UIStyle.BtnBg(UIStyle.Green),
                     RW - clearW - M - warpW - sp, btnY, warpW, btnH,
                     () => OnRouteWarpClicked(warpKey));
                 labelRight += warpW + sp;
@@ -96,147 +126,264 @@ namespace ReplayTimerMod
 
             string from = string.IsNullOrEmpty(route.Key.EntryFromScene)
                 ? "spawn" : route.Key.EntryFromScene;
-            MakeLbl(row.transform, from + " > " + route.Key.ExitToScene,
-                UIStyle.FontSizeSm - 1, UIStyle.Text, TextAnchor.MiddleLeft,
+            MakeLbl(row.transform, from + " to " + route.Key.ExitToScene,
+                UIStyle.FontSizeRow, UIStyle.Text, TextAnchor.MiddleLeft,
                 x: M, w: RW - labelRight - M * 2, h: h);
         }
 
+        /// <summary>Stable string identity for a route's two-click Clear
+        /// confirm (RoomKey itself isn't used as the pending marker so the
+        /// field can be a simple nullable string like deleteConfirmId).</summary>
+        private static string RouteConfirmKey(RoomKey key) =>
+            key.SceneName + "|" + key.EntryFromScene + "|" + key.ExitToScene;
+
+        private void OnRouteClearClicked(RoomKey key)
+        {
+            if (routeClearConfirmKey == RouteConfirmKey(key))
+            {
+                routeClearConfirmKey = null;
+                DeleteRoute(key);
+            }
+            else
+            {
+                routeClearConfirmKey = RouteConfirmKey(key);
+                RebuildRunsContentOnly();
+            }
+        }
+
         private void AddSnapshotRow(Transform parent, RouteReplayHistory route,
-            ReplaySnapshot snapshot, int index, int headerH)
+            ReplaySnapshot snapshot, int index, int headerH, int timeColW)
         {
             int h = RH;
             int top = headerH + index * RH;
 
             bool playbackOn = SelectionState?.IsPlaybackSelected(snapshot.SnapshotId) ?? false;
-            bool editing = SelectedSnapshotId == snapshot.SnapshotId;
-            bool isCurrent = snapshot.SnapshotId == route.Current.SnapshotId;
             bool pendingDelete = deleteConfirmId == snapshot.SnapshotId;
 
-            Color rowBg = editing
-                ? UIStyle.Accent with { a = 0.15f }
-                : (playbackOn
-                    ? UIStyle.Gold with { a = 0.08f }
-                    : (index % 2 == 1 ? UIStyle.Surface with { a = 0.35f } : Color.clear));
+            Color rowBg = playbackOn
+                ? UIStyle.Gold with { a = 0.08f }
+                : (index % 2 == 1 ? UIStyle.Surface with { a = 0.35f } : Color.clear);
 
             var row = MakeGO("Snap", parent);
             Img(row, rowBg);
             Rect(row, 0, top, RW, h);
 
+            // Clicking anywhere on the row toggles ghost playback.
             RoomKey rowKey = route.Key;
             string rowSnapshotId = snapshot.SnapshotId;
-            Btn(row, () => SelectSnapshotForEditing(rowKey, rowSnapshotId));
+            Btn(row, () => ToggleSnapshotPlayback(rowKey, rowSnapshotId));
+            AddHoverEffect(row);
 
-            int x = M / 2;
+            int x = M;
             int btnH = UIStyle.H(20);
             int btnY = (h - btnH) / 2;
-            int sp = UIStyle.W(6);
 
-            if (editing)
+            // Ghost-active affordance: the run currently playing as the
+            // ghost gets a gold caret (right-pointing triangle) tucked
+            // into the row's left margin, plus the gold row tint and gold
+            // label. The caret lives entirely inside the margin so it
+            // costs no layout space; inactive rows are untouched.
+            if (playbackOn)
             {
-                var bar = MakeGO("EditBar", row.transform);
-                Img(bar, UIStyle.Accent with { a = 0.9f });
-                Rect(bar, 0, 0, UIStyle.W(3), h);
+                int markH = UIStyle.H(10);
+                var mark = MakeGO("Playing", row.transform);
+                var markImg = mark.AddComponent<RawImage>();
+                markImg.texture = PlayMarkerTexture();
+                markImg.color = UIStyle.Gold;
+                markImg.raycastTarget = false;
+                Rect(mark, 0, (h - markH) / 2, M - 1, markH);
             }
 
-            // Playback toggle
-            int toggleW = UIStyle.W(22);
-            var playBtn = MakeGO("Play", row.transform);
-            Img(playBtn, playbackOn
-                ? UIStyle.Gold with { a = 0.25f }
-                : UIStyle.Overlay with { a = 0.4f });
-            string playId = snapshot.SnapshotId;
-            RoomKey playKey = route.Key;
-            Btn(playBtn, () => ToggleSnapshotPlayback(playKey, playId));
-            Rect(playBtn, x, btnY, toggleW, btnH);
-            MakeLbl(playBtn.transform, playbackOn ? "ON" : "",
-                UIStyle.FontSizeSm - 3,
-                playbackOn ? UIStyle.Gold : UIStyle.Subtext,
-                TextAnchor.MiddleCenter, fill: true);
-            x += toggleW + M / 2;
-
-            // Color swatch
-            int swatchW = UIStyle.W(14);
-            int swatchH = UIStyle.H(14);
+            // Ghost color swatch — a bordered chip that opens the color
+            // picker for this run. Solid, bright-bordered fill = custom
+            // color; dimmed fill = following the global color.
+            int swatchS = UIStyle.H(16);
             var swatch = MakeGO("Color", row.transform);
-            Img(swatch, GetResolvedSnapshotColor(snapshot));
-            Rect(swatch, x, (h - swatchH) / 2, swatchW, swatchH);
+            Img(swatch, snapshot.HasVisualOverride
+                ? UIStyle.Text with { a = 0.75f }
+                : UIStyle.Overlay with { a = 0.9f });
+            Rect(swatch, x, (h - swatchS) / 2, swatchS, swatchS);
 
-            if (!snapshot.HasVisualOverride)
-            {
-                var inner = MakeGO("InheritMark", swatch.transform);
-                Img(inner, UIStyle.Text with { a = 0.3f });
-                Rect(inner, UIStyle.W(3), UIStyle.H(3),
-                    swatchW - UIStyle.W(6), swatchH - UIStyle.H(6));
-                inner.GetComponent<Graphic>().raycastTarget = false;
-            }
-            x += swatchW + M;
+            Color resolved = GetResolvedSnapshotColor(snapshot);
+            var swatchFill = MakeGO("Fill", swatch.transform);
+            Img(swatchFill, new Color(resolved.r, resolved.g, resolved.b, 1f));
+            Rect(swatchFill, 1, 1, swatchS - 2, swatchS - 2);
+            swatchFill.GetComponent<Graphic>().raycastTarget = false;
 
-            // --- Right-aligned elements (positioned from right edge) ---
+            string swId = snapshot.SnapshotId;
+            RoomKey swKey = route.Key;
+            int swIndex = index;
+            Btn(swatch, () => OpenSnapshotColorPicker(swatch, swKey, swId, swIndex));
+            AddButtonHover(swatch);
+            AttachTooltip(swatch, snapshot.HasVisualOverride
+                ? ColorHex(resolved)
+                : ColorHex(resolved) + " (global)");
+            x += swatchS + M;
 
-            // Delete button (two-click confirm)
-            int delW = UIStyle.W(22);
+            // --- Right side: geometry comes from RowRightCluster (shared
+            // with the Leaderboard tab) so the two tabs stay in lockstep.
+
+            var cluster = RowRightCluster.Begin(RW);
+
+            // Delete button (two-click confirm). Fixed width so the row
+            // doesn't shift when the label flips to the confirm state.
+            int delW = UIStyle.W(44);
             string delId = snapshot.SnapshotId;
             RoomKey delKey = route.Key;
-            Color delBg = pendingDelete ? UIStyle.Red with { a = 0.7f } : UIStyle.Red with { a = 0.15f };
+            Color delBg = pendingDelete
+                ? UIStyle.Red with { a = 0.55f }
+                : UIStyle.BtnBg(UIStyle.Red);
             Color delFg = pendingDelete ? UIStyle.Text : UIStyle.Red;
-            MakeButton(row.transform, "Del", pendingDelete ? "!" : "X",
-                UIStyle.FontSizeSm - 2, delFg, delBg,
-                RW - delW - M, btnY, delW, btnH,
+            MakeButton(row.transform, "Del", pendingDelete ? "Sure?" : "Del",
+                UIStyle.FontSizeBtn, delFg, delBg,
+                cluster.AddButton(delW), btnY, delW, btnH,
                 () => OnSnapshotDeleteClicked(delKey, delId));
 
             // Copy button
             int copyW = UIStyle.W(40);
-            int copyX = RW - delW - M - copyW - sp;
             string copyId = snapshot.SnapshotId;
             RoomKey copyKey = route.Key;
             MakeButton(row.transform, "Copy", "Copy",
-                UIStyle.FontSizeSm - 2, UIStyle.Accent, UIStyle.Accent with { a = 0.15f },
-                copyX, btnY, copyW, btnH,
+                UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
+                cluster.AddButton(copyW), btnY, copyW, btnH,
                 () => CopyReplay(copyKey, copyId));
 
-            // Time
-            int timeW = UIStyle.W(50);
-            int timeX = copyX - timeW - sp * 2;
-            MakeLbl(row.transform, TimeUtil.Format(snapshot.TotalTime),
-                UIStyle.FontSizeSm, UIStyle.Gold, TextAnchor.MiddleRight,
-                x: timeX, w: timeW, h: h);
-
-            // Delta (only for non-PB)
-            string delta = FormatSnapshotDelta(route.Current.TotalTime, snapshot.TotalTime, isCurrent);
-            int deltaW = UIStyle.W(46);
-            int deltaX = timeX - deltaW - sp;
-            if (!string.IsNullOrEmpty(delta))
+            // Camera-follow button (experimental, gated by the Config
+            // toggle so the column only exists when the feature is on).
+            // Leftmost of the button cluster; one run at a time can hold
+            // the follow slot, and following also enables the ghost.
+            if (GhostSettings.CameraFollowEnabled)
             {
-                MakeLbl(row.transform, delta, UIStyle.FontSizeSm - 2,
-                    UIStyle.Subtext, TextAnchor.MiddleRight,
-                    x: deltaX, w: deltaW, h: h);
+                int camW = btnH;
+                int camX = cluster.AddButton(camW);
+                bool followOn =
+                    SelectionState?.CameraFollowSnapshotId == snapshot.SnapshotId;
+
+                var camBtn = MakeGO("CamFollow", row.transform);
+                Img(camBtn, followOn
+                    ? UIStyle.BtnBgStrong(UIStyle.Gold)
+                    : UIStyle.Overlay);
+                Rect(camBtn, camX, btnY, camW, btnH);
+
+                var camIcon = MakeGO("Icon", camBtn.transform);
+                var camImg = camIcon.AddComponent<RawImage>();
+                camImg.texture = CameraMarkerTexture();
+                camImg.color = followOn ? UIStyle.Gold : UIStyle.Subtext;
+                camImg.raycastTarget = false;
+                int camIconS = UIStyle.H(14);
+                Rect(camIcon, (camW - camIconS) / 2, (btnH - camIconS) / 2,
+                    camIconS, camIconS);
+
+                string camId = snapshot.SnapshotId;
+                RoomKey camKey = route.Key;
+                Btn(camBtn, () => OnCameraFollowClicked(camKey, camId));
+                AddButtonHover(camBtn);
+                AttachTooltip(camBtn, followOn
+                    ? "Camera following this run"
+                    : "Follow with camera (experimental)");
             }
 
-            // Label — "#N" for your own runs; downloaded replays append
-            // the owner's runner name in accent so it's clear whose run
-            // this is. Rich text keeps it in one layout slot.
-            int labelEnd = string.IsNullOrEmpty(delta) ? timeX : deltaX;
+            // Time
+            int timeX = cluster.AddTime(timeColW);
+            MakeLbl(row.transform, TimeUtil.Format(snapshot.TotalTime),
+                UIStyle.FontSizeSm, UIStyle.Gold, TextAnchor.MiddleRight,
+                x: timeX, w: timeColW, h: h);
 
             // "?" marker at the right end of the label slot — hovering it
             // shows the run's full loadout.
-            int markerW = AddModifierMarker(row.transform, labelEnd - sp, h,
-                snapshot.Modifiers);
+            int markerW = AddModifierMarker(row.transform, cluster.MarkerRight,
+                h, snapshot.Modifiers);
 
-            int labelW = labelEnd - markerW - sp - x - sp;
-            Color labelColor = editing ? UIStyle.Text : UIStyle.Subtext;
+            // Label — "#N" for your own runs; downloaded replays append
+            // the owner's runner name so it's clear whose run this is.
+            int labelW = cluster.LabelEnd(markerW) - x;
+            Color labelColor = playbackOn ? UIStyle.Gold : UIStyle.Subtext;
 
             string labelText = "#" + (index + 1);
 
             string? owner = ReplayOwners.Get(snapshot.SnapshotId);
             if (!string.IsNullOrEmpty(owner))
-            {
-                string accentHex = ColorUtility.ToHtmlStringRGB(UIStyle.Accent);
-                labelText += "  <color=#" + accentHex + ">\u25B8 " + owner + "</color>";
-            }
+                labelText += "  by " + owner;
 
             MakeLbl(row.transform, labelText,
-                UIStyle.FontSizeSm - 1, labelColor, TextAnchor.MiddleLeft,
+                UIStyle.FontSizeRow, labelColor, TextAnchor.MiddleLeft,
                 x: x, w: labelW, h: h);
+        }
+
+        /// <summary>"#RRGGBB" for a color (alpha ignored).</summary>
+        private static string ColorHex(Color c) =>
+            "#" + Mathf.RoundToInt(Mathf.Clamp01(c.r) * 255f).ToString("X2")
+                + Mathf.RoundToInt(Mathf.Clamp01(c.g) * 255f).ToString("X2")
+                + Mathf.RoundToInt(Mathf.Clamp01(c.b) * 255f).ToString("X2");
+
+        private static Texture2D? playMarkerTex;
+
+        /// <summary>White right-pointing triangle on transparent, tinted by
+        /// the RawImage that displays it. Built once, shared by every row,
+        /// and survives canvas destruction (textures aren't scene objects).
+        /// Edges get a 1px alpha ramp so the diagonal isn't jagged.</summary>
+        private static Texture2D PlayMarkerTexture()
+        {
+            if (playMarkerTex == null)
+            {
+                const int n = 24;
+                playMarkerTex = new Texture2D(n, n, TextureFormat.RGBA32, false);
+                playMarkerTex.wrapMode = TextureWrapMode.Clamp;
+                var px = new Color[n * n];
+                for (int y = 0; y < n; y++)
+                {
+                    // Apex at the right middle: each row is filled from the
+                    // left edge out to xEdge, which shrinks with the row's
+                    // distance from the vertical center.
+                    float xEdge = n - 2f * Mathf.Abs(y + 0.5f - n / 2f);
+                    for (int x = 0; x < n; x++)
+                        px[y * n + x] = new Color(1f, 1f, 1f,
+                            Mathf.Clamp01(xEdge - x));
+                }
+                playMarkerTex.SetPixels(px);
+                playMarkerTex.Apply();
+            }
+            return playMarkerTex;
+        }
+
+        private static Texture2D? cameraMarkerTex;
+
+        /// <summary>White video-camera glyph (body plus a right-widening
+        /// lens wedge) on transparent, tinted by the RawImage that displays
+        /// it. Same idiom as PlayMarkerTexture: built once, shared by every
+        /// row, 1px alpha ramps so the edges aren't jagged.</summary>
+        private static Texture2D CameraMarkerTexture()
+        {
+            if (cameraMarkerTex == null)
+            {
+                const int n = 24;
+                cameraMarkerTex = new Texture2D(n, n, TextureFormat.RGBA32, false);
+                cameraMarkerTex.wrapMode = TextureWrapMode.Clamp;
+                var px = new Color[n * n];
+                for (int y = 0; y < n; y++)
+                {
+                    float yc = y + 0.5f;
+                    for (int x = 0; x < n; x++)
+                    {
+                        float xc = x + 0.5f;
+                        // Camera body: rectangle on the left.
+                        float body = Mathf.Min(
+                            Mathf.Min(xc - 0.5f, 13.5f - xc),
+                            Mathf.Min(yc - 4.5f, 19.5f - yc));
+                        // Lens wedge: apex touching the body at mid
+                        // height, widening toward the right edge.
+                        float half = 1f + (xc - 13f) * 0.6f;
+                        float wedge = Mathf.Min(
+                            Mathf.Min(xc - 13f, 23.5f - xc),
+                            half - Mathf.Abs(yc - 12f));
+                        px[y * n + x] = new Color(1f, 1f, 1f,
+                            Mathf.Clamp01(Mathf.Max(body, wedge)));
+                    }
+                }
+                cameraMarkerTex.SetPixels(px);
+                cameraMarkerTex.Apply();
+            }
+            return cameraMarkerTex;
         }
 
         private void OnSnapshotDeleteClicked(RoomKey key, string snapshotId)
@@ -254,8 +401,5 @@ namespace ReplayTimerMod
                     RebuildRightContent();
             }
         }
-
-        private static string FormatSnapshotDelta(float pbTime, float snapTime, bool isPb) =>
-            isPb ? "" : TimeUtil.FormatDelta(Mathf.Max(0f, snapTime - pbTime), padSeconds: true);
     }
 }

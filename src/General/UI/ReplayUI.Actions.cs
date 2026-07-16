@@ -84,9 +84,9 @@ namespace ReplayTimerMod
         {
             clearAllPending = false;
             ShowButtonFeedback(clearAllCfgLbl, clearAllCfgBg, "Clear all data", UIStyle.Red);
-            if (clearAllCfgBg != null) clearAllCfgBg.color = UIStyle.Red with { a = 0.15f };
+            if (clearAllCfgBg != null) clearAllCfgBg.color = UIStyle.BtnBg(UIStyle.Red);
             ShowButtonFeedback(exportAllCfgLbl, exportAllCfgBg, "Copy all", UIStyle.Accent);
-            if (exportAllCfgBg != null) exportAllCfgBg.color = UIStyle.Accent with { a = 0.18f };
+            if (exportAllCfgBg != null) exportAllCfgBg.color = UIStyle.BtnBg(UIStyle.Accent);
         }
 
         private static void ShowButtonFeedback(Text? label, Image? bg, string msg, Color color)
@@ -120,11 +120,28 @@ namespace ReplayTimerMod
         private void OnClearSceneClicked()
         {
             if (selectedScene == null) return;
+
+            // Two-click confirm: deleting every run in the room is too
+            // destructive for a single click.
+            if (!sceneClearPending)
+            {
+                sceneClearPending = true;
+                if (sceneClearLbl != null)
+                {
+                    sceneClearLbl.text = "Sure?";
+                    sceneClearLbl.color = UIStyle.Text;
+                }
+                if (sceneClearBg != null)
+                    sceneClearBg.color = UIStyle.Red with { a = 0.55f };
+                return;
+            }
+
             PBManager.DeleteScene(selectedScene);
             InvalidateDownloadStates();
             selectedScene = null;
             ClearSelectedScene();
             RebuildSceneList();
+            ResetSceneClearConfirm();
         }
 
         // -- Paste --
@@ -307,7 +324,7 @@ namespace ReplayTimerMod
                 || string.IsNullOrEmpty(runId))
                 return;
 
-            if (feedback != null) feedback.text = "\u2026"; // …
+            if (feedback != null) feedback.text = "...";
 
             _networkClient.CreateShareByRunId(runId, resp =>
             {
@@ -316,14 +333,14 @@ namespace ReplayTimerMod
                     GUIUtility.systemCopyBuffer = ReplaySharing.BuildShareText(resp.Code);
                     if (feedback != null)
                     {
-                        feedback.text = "\u2713"; // ✓
+                        feedback.text = "Copied";
                         feedback.color = UIStyle.Gold;
                     }
                     Log.LogInfo($"[ReplayUI] Copied link for run {runId}: {resp.Code}");
                 }
                 else if (feedback != null)
                 {
-                    feedback.text = "\u2717"; // ✗
+                    feedback.text = "Failed";
                     feedback.color = UIStyle.Red;
                 }
             });
@@ -359,28 +376,27 @@ namespace ReplayTimerMod
                 Log.LogInfo($"[ReplayUI] Warp unavailable for {key}");
         }
 
-        private void SelectSnapshotForEditing(RoomKey key, string snapshotId)
-        {
-            var snapshot = PBManager.GetSnapshot(key, snapshotId);
-            if (snapshot == null) return;
-
-            if (!snapshot.HasVisualOverride)
-            {
-                Color color = snapshot.ResolveGhostColor(CurrentGlobalGhostColor);
-                if (!PBManager.UpdateSnapshotVisuals(key, snapshotId, true, color))
-                    return;
-            }
-
-            SelectionState?.SelectSnapshot(snapshotId);
-            if (activeTab == TabKind.Runs && selectedScene == key.SceneName)
-                RebuildRightContent();
-            if (activeTab == TabKind.Config)
-                RefreshConfigValues();
-        }
-
         private void ToggleSnapshotPlayback(RoomKey key, string snapshotId)
         {
             SelectionState?.TogglePlayback(snapshotId);
+            if (activeTab == TabKind.Runs && selectedScene == key.SceneName)
+                RebuildRightContent();
+        }
+
+        /// <summary>
+        /// Experimental camera-follow toggle for a run. Following implies
+        /// playback: engaging the slot also enables the run's ghost so
+        /// there is always something for the camera to track. Takes effect
+        /// immediately if that ghost is already playing, otherwise on the
+        /// next entry into its room.
+        /// </summary>
+        private void OnCameraFollowClicked(RoomKey key, string snapshotId)
+        {
+            if (SelectionState == null)
+                return;
+
+            if (SelectionState.ToggleCameraFollow(snapshotId))
+                SelectionState.SetPlaybackSelected(snapshotId, true);
             if (activeTab == TabKind.Runs && selectedScene == key.SceneName)
                 RebuildRightContent();
         }
@@ -432,13 +448,13 @@ namespace ReplayTimerMod
         private void ResetJumpFeedback()
         {
             if (jumpCurrentLbl != null) { jumpCurrentLbl.text = "Current"; jumpCurrentLbl.color = UIStyle.Gold; }
-            if (jumpCurrentBg != null) jumpCurrentBg.color = UIStyle.Gold with { a = 0.18f };
+            if (jumpCurrentBg != null) jumpCurrentBg.color = UIStyle.BtnBg(UIStyle.Gold);
         }
 
         private void ResetJumpLastFeedback()
         {
             if (jumpPreviousLbl != null) { jumpPreviousLbl.text = "Previous"; jumpPreviousLbl.color = UIStyle.Accent; }
-            if (jumpPreviousBg != null) jumpPreviousBg.color = UIStyle.Accent with { a = 0.18f };
+            if (jumpPreviousBg != null) jumpPreviousBg.color = UIStyle.BtnBg(UIStyle.Accent);
         }
 
         // -- Settings toggles --
@@ -483,59 +499,6 @@ namespace ReplayTimerMod
                 RebuildRightContent();
         }
 
-        private void OnEditGlobalContext()
-        {
-            SelectionState?.SelectSnapshot(null);
-            if (activeTab == TabKind.Config) RefreshConfigValues();
-            if (activeTab == TabKind.Runs && selectedScene != null)
-                RebuildRightContent();
-        }
-
-        private void OnAlphaMinus() => AdjustAlpha(-0.05f);
-        private void OnAlphaPlus() => AdjustAlpha(0.05f);
-
-        private void AdjustAlpha(float delta)
-        {
-            if (TryGetSelectedSnapshot(out var key, out var snapshot) && snapshot != null)
-            {
-                if (!snapshot.HasVisualOverride) return;
-
-                Color color = snapshot.ResolveGhostColor(CurrentGlobalGhostColor);
-                color.a = Mathf.Clamp01(Mathf.Round((color.a + delta) * 20f) / 20f);
-                PBManager.UpdateSnapshotVisuals(key, snapshot.SnapshotId, true, color);
-            }
-            else
-            {
-                GhostSettings.GhostAlpha = Mathf.Round((GhostSettings.GhostAlpha + delta) * 20f) / 20f;
-            }
-
-            if (activeTab == TabKind.Config) RefreshConfigValues();
-            if (activeTab == TabKind.Runs && selectedScene != null)
-                RebuildRightContent();
-        }
-
-        private void OnColorSwatch(Color rgb)
-        {
-            if (TryGetSelectedSnapshot(out var key, out var snapshot) && snapshot != null)
-            {
-                if (!snapshot.HasVisualOverride) return;
-
-                Color color = snapshot.ResolveGhostColor(CurrentGlobalGhostColor);
-                color.r = rgb.r;
-                color.g = rgb.g;
-                color.b = rgb.b;
-                PBManager.UpdateSnapshotVisuals(key, snapshot.SnapshotId, true, color);
-            }
-            else
-            {
-                GhostSettings.GhostColor = new Color(rgb.r, rgb.g, rgb.b, GhostSettings.GhostAlpha);
-            }
-
-            if (activeTab == TabKind.Config) RefreshConfigValues();
-            if (activeTab == TabKind.Runs && selectedScene != null)
-                RebuildRightContent();
-        }
-
         private void OnTimerToggleClicked()
         {
             GhostSettings.TimerHudEnabled = !GhostSettings.TimerHudEnabled;
@@ -558,6 +521,29 @@ namespace ReplayTimerMod
         private void OnSkipBacktrackTimerToggle()
         {
             GhostSettings.SkipBacktrackTimer = !GhostSettings.SkipBacktrackTimer;
+            if (activeTab == TabKind.Config) RefreshConfigValues();
+        }
+
+        /// <summary>
+        /// Experimental room-warp toggle. Warp buttons in the Runs and
+        /// Leaderboard tabs only render when this is on, so no extra rebuild
+        /// is needed here - those tabs rebuild on switch.
+        /// </summary>
+        private void OnRoomWarpToggle()
+        {
+            GhostSettings.RoomWarpEnabled = !GhostSettings.RoomWarpEnabled;
+            if (activeTab == TabKind.Config) RefreshConfigValues();
+        }
+
+        /// <summary>
+        /// Experimental camera-follow feature toggle. Turning it off
+        /// releases the camera on the next ghost tick (GhostPlayback
+        /// reconciles the follow slot against this setting every frame);
+        /// the Runs tab camera buttons only render while it is on.
+        /// </summary>
+        private void OnCameraFollowFeatureToggle()
+        {
+            GhostSettings.CameraFollowEnabled = !GhostSettings.CameraFollowEnabled;
             if (activeTab == TabKind.Config) RefreshConfigValues();
         }
     }

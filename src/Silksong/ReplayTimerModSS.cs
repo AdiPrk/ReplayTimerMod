@@ -67,12 +67,29 @@ namespace ReplayTimerMod
             bool shouldTick = false;
             try { shouldTick = LoadRemover.ShouldTick(); } catch { }
 
-            RoomTracker.Tick(shouldTick);
-            frameRecorder.Tick(shouldTick);
-            ghostPlayback.Tick(shouldTick);
-            replayUI.Tick();
-            roomTimerHUD.Tick(shouldTick);
-            if (networkClient != null) networkClient.Tick();
+            // Each subsystem ticks in its own guard so one failure can't
+            // take the whole mod down for the rest of the session.
+            // Mirrored in ReplayTimerModHK.
+            try { RoomTracker.Tick(shouldTick); } catch (System.Exception ex) { LogTickError("RoomTracker", ex); }
+            try { frameRecorder.Tick(shouldTick); } catch (System.Exception ex) { LogTickError("FrameRecorder", ex); }
+            try { ghostPlayback.Tick(shouldTick); } catch (System.Exception ex) { LogTickError("GhostPlayback", ex); }
+            try { replayUI.Tick(); } catch (System.Exception ex) { LogTickError("ReplayUI", ex); }
+            try { roomTimerHUD.Tick(shouldTick); } catch (System.Exception ex) { LogTickError("RoomTimerHUD", ex); }
+            try { if (networkClient != null) networkClient.Tick(); } catch (System.Exception ex) { LogTickError("NetworkClient", ex); }
+        }
+
+        // Throttled per-subsystem error log so a persistent per-frame fault
+        // doesn't flood the BepInEx log.
+        private readonly System.Collections.Generic.Dictionary<string, float> _lastTickErrorLog =
+            new System.Collections.Generic.Dictionary<string, float>();
+
+        private void LogTickError(string subsystem, System.Exception ex)
+        {
+            float now = Time.realtimeSinceStartup;
+            if (_lastTickErrorLog.TryGetValue(subsystem, out float last) && now - last < 5f)
+                return;
+            _lastTickErrorLog[subsystem] = now;
+            Logger.LogError("[Tick] " + subsystem + " failed: " + ex);
         }
 
         private void TryLateInit()

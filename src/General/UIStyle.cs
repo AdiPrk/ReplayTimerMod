@@ -39,11 +39,28 @@ namespace ReplayTimerMod
         public static int SearchBarHeight => H(26);
         public static int FooterHeight => H(24);
         public static int Margin => H(6);
-        public static int FontSizeLg => H(15);
-        public static int FontSizeSm => H(13);
 
-        // Tab toggle button
-        public static int TabBtnWidth => W(44);
+        /// <summary>Standard horizontal gap between row elements
+        /// (buttons, markers, labels). Use this instead of ad-hoc
+        /// M/2 / M/4 spacing so rows stay visually consistent.</summary>
+        public static int Gap => W(6);
+
+        // Semantic font scale. Use these instead of FontSizeSm - 1/-2/-3
+        // arithmetic so every label of the same kind is the same size.
+        public static int FontSizeLg => H(15);   // panel/section headers
+        public static int FontSizeSm => H(13);   // primary values (times)
+        public static int FontSizeRow => H(12);  // row labels, names
+        public static int FontSizeBtn => H(11);  // compact buttons, meta text
+        public static int FontSizeTiny => H(10); // markers, fine print
+
+        // Standard button-background tints. Buttons are a colored label on
+        // a low-alpha tint of the same color; use BtnBg for normal buttons
+        // and BtnBgStrong for emphasis (toggled-on, destructive-confirm).
+        public static Color BtnBg(Color c) => c with { a = 0.18f };
+        public static Color BtnBgStrong(Color c) => c with { a = 0.28f };
+
+        // Pause-menu toggle chip that opens/closes the panel
+        public static int TabBtnWidth => W(72);
         public static int TabBtnHeight => H(28);
 
         // Fonts

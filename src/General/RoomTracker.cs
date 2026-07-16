@@ -81,6 +81,7 @@ namespace ReplayTimerMod
         // ── Private state ────────────────────────────────────────────────────
         private static string _lastSceneName = "";
         private static bool _pendingGateTransition = false;
+        private static bool _menuTraversalPending = false;
         private static int _debugModHookRetryCooldown = 0;
         private static bool _wasLoadingSavestate = false;
 
@@ -89,6 +90,7 @@ namespace ReplayTimerMod
             _lastSceneName = "";
             RoomUsedDebugAbilities = false;
             _wasLoadingSavestate = false;
+            _menuTraversalPending = false;
 
             GameHooks.OnPlayerDead += HandleInvalidation;
             GameHooks.OnGateTransitionBegin += HandleGateTransitionBegin;
@@ -98,6 +100,34 @@ namespace ReplayTimerMod
 
         private static void HandleGateTransitionBegin(string destScene, string entryGate)
         {
+            // A load INTO the menu is never a gate transition, and it also
+            // means the next observed scene change (loading a save) must not
+            // start a recording. On HK the mod only ticks while the hero
+            // exists, so the menu scenes themselves are never observed by
+            // Tick() - this flag bridges that gap.
+            if (destScene == MENU_TITLE || destScene == QUIT_TO_MENU)
+            {
+                _pendingGateTransition = false;
+                _menuTraversalPending = true;
+                Log.LogDebug($"[Gate] menu load -> '{destScene}' - clearing pending gate");
+                return;
+            }
+
+#if V1221
+            // HK 1.2.2.1 fires BeforeSceneLoadHook for EVERY LoadScene call,
+            // including save loads and respawns - those carry no entry gate
+            // (GameManager.entryGateName is empty), while real gate
+            // transitions always set gate.entryPoint before loading. A
+            // gateless full-scene load also invalidates any stale pending
+            // flag.
+            if (string.IsNullOrEmpty(entryGate))
+            {
+                _pendingGateTransition = false;
+                Log.LogDebug($"[Gate] gateless load -> '{destScene}' - not a gate transition");
+                return;
+            }
+#endif
+
             _pendingGateTransition = true;
             Log.LogDebug($"[Gate] pending -> {destScene} via '{entryGate}'");
         }
@@ -139,7 +169,19 @@ namespace ReplayTimerMod
             bool arrivedViaGate = _pendingGateTransition;
             _pendingGateTransition = false;
 
-            if (fromName == MENU_TITLE || fromName == QUIT_TO_MENU)
+            // A trip through the main menu happened since the last observed
+            // scene (set by HandleGateTransitionBegin; on HK the menu scenes
+            // are never seen by Tick because the hero doesn't update there).
+            if (_menuTraversalPending)
+            {
+                _menuTraversalPending = false;
+                arrivedViaGate = false;
+            }
+
+            // An empty fromName means this is the first scene the mod has
+            // ever observed - a save-load spawn, never a gate arrival.
+            if (string.IsNullOrEmpty(fromName)
+                || fromName == MENU_TITLE || fromName == QUIT_TO_MENU)
                 arrivedViaGate = false;
 
             bool toMenu = toName == MENU_TITLE || toName == QUIT_TO_MENU;

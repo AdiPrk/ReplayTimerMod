@@ -136,7 +136,23 @@ namespace ReplayTimerMod
                 {
                     hasAnim = true;
                     int idx = clipTable.IndexOf(clip);
-                    if (idx < 0) { idx = clipTable.Count; clipTable.Add(clip); }
+                    if (idx < 0)
+                    {
+                        // Valid indexes are 0-254 (0xFF = "no clip"), so the
+                        // table caps at 255 names. Beyond that, overflow clips
+                        // share the last slot — without this cap the clip
+                        // count byte below would silently truncate
+                        // ((byte)300 == 44) and produce a corrupt blob.
+                        if (clipTable.Count < 255)
+                        {
+                            idx = clipTable.Count;
+                            clipTable.Add(clip);
+                        }
+                        else
+                        {
+                            idx = 254;
+                        }
+                    }
                     clipIndex[i] = (byte)Math.Min(idx, 254); // 0xFF reserved
                 }
                 animFrames[i] = (byte)Math.Min(room.Frames[i].animFrame, 255);

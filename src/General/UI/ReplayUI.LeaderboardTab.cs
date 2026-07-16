@@ -1,153 +1,11 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace ReplayTimerMod
 {
-    // ── Interaction MonoBehaviours ──────────────────────────────────────
-    //
-    // IMPORTANT: these components must stay ENABLED. Unity's EventSystem
-    // (ExecuteEvents.ShouldSendToComponent) skips disabled Behaviours, so
-    // a disabled component never receives OnPointerEnter/Exit. The Update
-    // methods early-out when settled instead
-
-    /// <summary>
-    /// Subtle hover highlight on any interactive row.
-    /// </summary>
-    internal sealed class RowHover : MonoBehaviour,
-        IPointerEnterHandler, IPointerExitHandler
-    {
-        public Image? overlay;
-
-        private float _current;
-        private float _target;
-
-        private const float HoverAlpha = 0.055f;
-        private const float Speed = 14f;
-
-        public void Init()
-        {
-            _current = 0f;
-            _target = 0f;
-            if (overlay != null)
-                overlay.color = SetAlpha(overlay.color, 0f);
-        }
-
-        public void OnPointerEnter(PointerEventData e) { _target = HoverAlpha; }
-        public void OnPointerExit(PointerEventData e) { _target = 0f; }
-
-        private void Update()
-        {
-            if (_current == _target) return; // settled — skip all work
-
-            _current = Mathf.MoveTowards(_current, _target,
-                Time.unscaledDeltaTime * Speed);
-            if (overlay != null)
-                overlay.color = SetAlpha(overlay.color, _current);
-        }
-
-        private static Color SetAlpha(Color c, float a) =>
-            new Color(c.r, c.g, c.b, a);
-    }
-
-    /// <summary>
-    /// Animates the ghost download button: slide-in-from-the-right + fade
-    /// on hover, reverse on exit. When <see cref="pinned"/> is set (active
-    /// download / done / failed), the button stays fully visible regardless
-    /// of hover.
-    /// </summary>
-    internal sealed class RowHoverReveal : MonoBehaviour,
-        IPointerEnterHandler, IPointerExitHandler
-    {
-        public CanvasGroup? ghostCg;
-        public RectTransform? ghostRt;
-        public float shownX;
-        public float hiddenX;
-
-        /// <summary>Forces the button visible (downloading/done/failed).</summary>
-        public bool pinned;
-
-        /// <summary>
-        /// Forces the button permanently visible regardless of hover. Used so
-        /// the download button is always reachable — hover-only reveal was
-        /// unreliable (pointer/raycast quirks could leave it stuck hidden).
-        /// </summary>
-        public bool alwaysShown;
-
-        private float _progress;
-        private bool _hovered;
-
-        private const float Speed = 10f;
-
-        /// <param name="startShown">
-        /// Start fully revealed (for buttons rebuilt in a pinned state) so
-        /// content rebuilds don't replay the slide-in animation on every
-        /// existing ✓/✗ button.
-        /// </param>
-        public void Init(bool startShown = false)
-        {
-            _progress = startShown ? 1f : 0f;
-            _hovered = false;
-            pinned = false;
-            Apply(_progress);
-        }
-
-        public void OnPointerEnter(PointerEventData e) { _hovered = true; }
-        public void OnPointerExit(PointerEventData e) { _hovered = false; }
-
-        private void Update()
-        {
-            float target = (alwaysShown || pinned || _hovered) ? 1f : 0f;
-            if (_progress == target) return; // settled — skip all work
-
-            _progress = Mathf.MoveTowards(_progress, target,
-                Time.unscaledDeltaTime * Speed);
-            Apply(_progress);
-        }
-
-        private void Apply(float p)
-        {
-            if (ghostCg != null)
-            {
-                ghostCg.alpha = p;
-                ghostCg.blocksRaycasts = p > 0.5f;
-                ghostCg.interactable = p > 0.5f;
-            }
-
-            if (ghostRt != null)
-            {
-                float x = Mathf.Lerp(hiddenX, shownX, p);
-                ghostRt.anchoredPosition = new Vector2(x, ghostRt.anchoredPosition.y);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Bridges hover events from a child element (ghost button) back to
-    /// the parent row's hover components, so the reveal doesn't collapse
-    /// when the cursor moves onto the button to click it.
-    /// </summary>
-    internal sealed class ChildHoverBridge : MonoBehaviour,
-        IPointerEnterHandler, IPointerExitHandler
-    {
-        public RowHoverReveal? reveal;
-        public RowHover? hover;
-
-        public void OnPointerEnter(PointerEventData e)
-        {
-            if (reveal != null) reveal.OnPointerEnter(e);
-            if (hover != null) hover.OnPointerEnter(e);
-        }
-
-        public void OnPointerExit(PointerEventData e)
-        {
-            if (reveal != null) reveal.OnPointerExit(e);
-            if (hover != null) hover.OnPointerExit(e);
-        }
-    }
-
     // ── Leaderboard tab ────────────────────────────────────────────────
+    // (RowHover / ButtonHover / AddHoverEffect live in ReplayUI.Widgets.cs)
 
     public partial class ReplayUI
     {
@@ -163,7 +21,7 @@ namespace ReplayTimerMod
         // When each Done/Failed state reverts back to Idle (unscaled time).
         // Done reverts so a replay can be re-downloaded (e.g. after deleting
         // the imported copy); Failed reverts so a transient error doesn't
-        // leave a permanent ✗ on the row.
+        // leave a permanent "Retry" on the row.
         private readonly Dictionary<string, float> _stateExpiry =
             new Dictionary<string, float>();
 
@@ -171,11 +29,11 @@ namespace ReplayTimerMod
         private const float FailedRevertSeconds = 6f;
 
         /// <summary>
-        /// Drops all transient download states (✓ Done / ✗ Failed / derived
+        /// Drops all transient download states (Done / Failed / derived
         /// Full). Called whenever local replays are deleted, so the next
         /// leaderboard build re-derives every button from ground truth
-        /// (actual local capacity) instead of leaving a stale ✓ or "full"
-        /// that blocks re-downloading.
+        /// (actual local capacity) instead of leaving a stale "Loaded" or
+        /// "Full" that blocks re-downloading.
         /// </summary>
         private void InvalidateDownloadStates()
         {
@@ -196,8 +54,6 @@ namespace ReplayTimerMod
             public GameObject go = null!;
             public Image bg = null!;
             public Text label = null!;
-            public CanvasGroup cg = null!;
-            public RowHoverReveal? reveal;
             public RoomKey roomKey;     // for capacity re-checks on revert
             public float entryTime;
             public int entryMask;       // modifier mask, for mask-best capacity
@@ -205,20 +61,6 @@ namespace ReplayTimerMod
 
         private readonly Dictionary<string, GhostBtnRefs> _ghostBtnRefs =
             new Dictionary<string, GhostBtnRefs>();
-
-        private static RowHover AddHoverEffect(GameObject row)
-        {
-            var overlayGO = MakeGO("HoverOverlay", row.transform);
-            var img = overlayGO.AddComponent<Image>();
-            img.color = new Color(UIStyle.Text.r, UIStyle.Text.g, UIStyle.Text.b, 0f);
-            img.raycastTarget = false;
-            Fill(overlayGO);
-
-            var hover = row.AddComponent<RowHover>();
-            hover.overlay = img;
-            hover.Init();
-            return hover;
-        }
 
         private void BuildLeaderboardContent()
         {
@@ -272,30 +114,63 @@ namespace ReplayTimerMod
             // Each route renders a VIEW of its cached rows: filtered by the
             // modifier filter, collapsed to best-per-runner, re-ranked
             // client-side (see BuildRouteView). The server's raw per-mask
-            // ranks are never displayed.
-            bool stripe = false;
-            bool anyShown = false;
+            // ranks are never displayed. Views are collected up front so
+            // the time column can be sized to the widest time before any
+            // row is built (all view entries, not just the visible window,
+            // so expanding a route never shifts the columns).
+            var shownRoutes = new System.Collections.Generic.List<RouteLeaderboard>();
+            var shownViews =
+                new System.Collections.Generic.List<System.Collections.Generic.List<LeaderboardEntry>>();
+            var shownRanks = new System.Collections.Generic.List<int>();
+            var shownYourRows = new System.Collections.Generic.List<LeaderboardEntry?>();
+            var shownTimes = new System.Collections.Generic.List<float>();
+            filterShownCount = 0;
+            filterTotalCount = 0;
+            filterCountUnit = "entries";
             foreach (var route in cached.Routes)
             {
+                // Footer total: the unfiltered collapsed board (what the
+                // route would show with no filter), not raw server rows.
+                filterTotalCount += RouteView.Build(route, 0, 0,
+                    out _, out _).Count;
+
                 var view = BuildRouteView(route,
                     out int yourViewRank, out var yourRow);
                 if (view.Count == 0) continue;
 
-                AddLeaderboardRouteGroup(rightContent, route, view,
-                    yourViewRank, yourRow, stripe);
-                stripe = !stripe;
-                anyShown = true;
+                filterShownCount += view.Count;
+                shownRoutes.Add(route);
+                shownViews.Add(view);
+                shownRanks.Add(yourViewRank);
+                shownYourRows.Add(yourRow);
+                foreach (var e in view)
+                    shownTimes.Add(e.TotalTime);
             }
 
-            if (!anyShown)
+            if (shownRoutes.Count == 0)
+            {
                 AddCenteredMessage(rightContent,
                     "No leaderboard runs match the modifier filter.");
+                return;
+            }
+
+            int timeColW = TimeColumnWidth(shownTimes);
+
+            bool stripe = false;
+            for (int i = 0; i < shownRoutes.Count; i++)
+            {
+                AddLeaderboardRouteGroup(rightContent, shownRoutes[i],
+                    shownViews[i], shownRanks[i], shownYourRows[i], stripe,
+                    timeColW);
+                stripe = !stripe;
+            }
         }
 
         private void AddLeaderboardRouteGroup(Transform parent,
             RouteLeaderboard route,
             System.Collections.Generic.List<LeaderboardEntry> view,
-            int yourViewRank, LeaderboardEntry? yourRow, bool stripe)
+            int yourViewRank, LeaderboardEntry? yourRow, bool stripe,
+            int timeColW)
         {
             string routeKey = route.EntryFrom + ">" + route.ExitTo;
             bool isExpanded = _expandedRoutes.Contains(routeKey);
@@ -327,7 +202,7 @@ namespace ReplayTimerMod
 
             for (int i = 0; i < showCount; i++)
                 AddLeaderboardRow(group.transform, route, view[i],
-                    wrTime, i, headerH);
+                    wrTime, i, headerH, timeColW);
 
             int nextY = headerH + showCount * RH;
 
@@ -337,7 +212,7 @@ namespace ReplayTimerMod
                 AddLeaderboardGapRow(group.transform, gapCount, nextY);
                 nextY += RH;
                 AddLeaderboardRow(group.transform, route, yourRow,
-                    wrTime, -1, nextY, forceYou: true);
+                    wrTime, -1, nextY, timeColW, forceYou: true);
                 nextY += RH;
             }
 
@@ -366,32 +241,32 @@ namespace ReplayTimerMod
             string from = string.IsNullOrEmpty(route.EntryFrom)
                 ? "spawn" : route.EntryFrom;
 
-            // Warp button (far right) — only when the entry transition into
-            // this room is known. Its own Button consumes the click, so it
-            // doesn't trigger the row-wide expand toggle. Same warp action as
-            // the Runs tab.
+            // Warp button (far right; experimental, hidden unless enabled in
+            // Config) — only when the entry transition into this room is
+            // known. Its own Button consumes the click, so it doesn't trigger
+            // the row-wide expand toggle. Same warp action as the Runs tab.
             int rightEdge = RW - M;
-            if (selectedScene != null)
+            if (GhostSettings.RoomWarpEnabled && selectedScene != null)
             {
                 var warpKey = new RoomKey(selectedScene, route.EntryFrom, route.ExitTo);
                 if (QuickWarp.CanWarp(warpKey))
                 {
-                    int warpW = UIStyle.W(24);
-                    int warpH = UIStyle.H(18);
-                    int warpX = RW - warpW - M / 2;
+                    int warpW = UIStyle.W(44);
+                    int warpH = UIStyle.H(20);
+                    int warpX = RW - warpW - M;
                     int warpY = (h - warpH) / 2;
                     RoomKey wk = warpKey;
-                    MakeButton(row.transform, "LBWarp", "\u25B6",
-                        UIStyle.FontSizeSm - 2, UIStyle.Green,
-                        UIStyle.Green with { a = 0.18f },
+                    MakeButton(row.transform, "LBWarp", "Warp",
+                        UIStyle.FontSizeBtn, UIStyle.Green,
+                        UIStyle.BtnBg(UIStyle.Green),
                         warpX, warpY, warpW, warpH,
                         () => OnRouteWarpClicked(wk));
-                    rightEdge = warpX - M / 4;
+                    rightEdge = warpX - M * 2;
                 }
             }
 
-            MakeLbl(row.transform, arrow + from + " \u2192 " + route.ExitTo,
-                UIStyle.FontSizeSm - 1, UIStyle.Text, TextAnchor.MiddleLeft,
+            MakeLbl(row.transform, arrow + from + " to " + route.ExitTo,
+                UIStyle.FontSizeRow, UIStyle.Text, TextAnchor.MiddleLeft,
                 x: M, w: RW / 2, h: h);
 
             // Runner count: server truth when unfiltered, matching-view count
@@ -401,13 +276,13 @@ namespace ReplayTimerMod
                 : route.TotalRunners + " runner" + (route.TotalRunners != 1 ? "s" : "");
             int runnersX = RW / 2;
             MakeLbl(row.transform, runnersText,
-                UIStyle.FontSizeSm - 2, UIStyle.Subtext, TextAnchor.MiddleRight,
+                UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleRight,
                 x: runnersX, w: rightEdge - runnersX, h: h);
         }
 
         private void AddLeaderboardRow(Transform parent, RouteLeaderboard route,
             LeaderboardEntry entry, float wrTime,
-            int visualIndex, int yOffset, bool forceYou = false)
+            int visualIndex, int yOffset, int timeColW, bool forceYou = false)
         {
             int h = RH;
             int top = visualIndex >= 0 ? yOffset + visualIndex * RH : yOffset;
@@ -435,37 +310,21 @@ namespace ReplayTimerMod
 
             int rankW = UIStyle.W(26);
             MakeLbl(row.transform, "#" + entry.Rank,
-                UIStyle.FontSizeSm - 1,
+                UIStyle.FontSizeRow,
                 isWR ? UIStyle.Gold : UIStyle.Text,
                 TextAnchor.MiddleRight, x: x, w: rankW, h: h);
             x += rankW + M;
 
-            // ── Layout: time is ALWAYS flush right ─────────────────────
+            // ── Layout: RowRightCluster (shared with the Runs tab) owns
+            // the right-side geometry so the two tabs stay in lockstep.
             //
-            // [#] [Name .............] [↓ ghost] [Δdelta] [Time]
-            //                            slides in          flush
-            //                            from the right     right
-
-            int timeW = UIStyle.W(56);
-            int timeX = RW - timeW - M / 2;
-
-            // ── Delta vs WR ─────────────────────────────────────────────
+            // [#] [Name .......] [?] [delta] [Time] [Copy] [Load]
+            //                                             flush right
 
             int deltaW = UIStyle.W(52);
-            int deltaX = timeX - deltaW - M / 4;
-
-            bool hasDelta = !isWR && wrTime > 0f;
-            if (hasDelta)
-            {
-                float delta = entry.TotalTime - wrTime;
-                MakeLbl(row.transform, FormatDelta(delta),
-                    UIStyle.FontSizeSm - 2, UIStyle.Subtext, TextAnchor.MiddleRight,
-                    x: deltaX, w: deltaW, h: h);
-            }
-
-            // ── Ghost download button (left of delta/time) ─────────────
-
-            int ghostW = UIStyle.W(26);
+            int btnH = UIStyle.H(20);
+            int btnY = (h - btnH) / 2;
+            int ghostW = UIStyle.W(46);
 
             GhostDownloadState dlState = GhostDownloadState.Idle;
             if (!string.IsNullOrEmpty(entry.RunId))
@@ -499,36 +358,35 @@ namespace ReplayTimerMod
                     dlState = GhostDownloadState.Full;
             }
 
-            int ghostRightEdge = hasDelta ? deltaX : timeX;
-            int ghostShownX = ghostRightEdge - ghostW;
-            int slideOffset = ghostW + M / 2;
-            int ghostHiddenX = ghostShownX + slideOffset;
-
             // Copy-link button sits just left of the ghost button (online only,
             // and only when there is a run id to share).
             bool showCopyLink = showGhost
                 && _networkClient != null && _networkClient.IsStarted;
-            int linkW = ghostW;
-            int linkX = ghostShownX - linkW - M / 2;
+            int linkW = UIStyle.W(46);
+
+            var cluster = RowRightCluster.Begin(RW);
+            int ghostX = showGhost ? cluster.AddButton(ghostW) : 0;
+            int linkX = showCopyLink ? cluster.AddButton(linkW) : 0;
+            int timeX = cluster.AddTime(timeColW);
+
+            bool hasDelta = !isWR && wrTime > 0f;
+            if (hasDelta)
+            {
+                float delta = entry.TotalTime - wrTime;
+                MakeLbl(row.transform, FormatDelta(delta),
+                    UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleRight,
+                    x: cluster.AddSlot(deltaW), w: deltaW, h: h);
+            }
 
             if (showGhost)
             {
-                // Pinned states stay visible without hover
-                bool pinned = dlState == GhostDownloadState.Downloading
-                    || dlState == GhostDownloadState.Done
-                    || dlState == GhostDownloadState.Failed;
-
                 var ghostGO = MakeGO("LBGhost", row.transform);
                 var ghostImg = ghostGO.AddComponent<Image>();
-                // Always positioned at the shown spot — the button is
-                // permanently visible (no hover dependency).
-                Rect(ghostGO, ghostShownX, 0, ghostW, h);
-
-                var ghostCg = ghostGO.AddComponent<CanvasGroup>();
+                Rect(ghostGO, ghostX, btnY, ghostW, btnH);
 
                 var ghostLbl = MakeLbl(ghostGO.transform, "",
-                    UIStyle.FontSizeSm - 1, UIStyle.Accent, TextAnchor.MiddleCenter,
-                    w: ghostW, h: h);
+                    UIStyle.FontSizeBtn, UIStyle.Accent, TextAnchor.MiddleCenter,
+                    fill: true);
 
                 // Click handler (Idle and Failed are actionable; the state
                 // guard in OnGhostDownloadClicked covers in-place transitions)
@@ -546,17 +404,8 @@ namespace ReplayTimerMod
                         ghostBtn.navigation = new Navigation
                         { mode = Navigation.Mode.None };
                     }
+                    AddButtonHover(ghostGO);
                 }
-
-                // Reveal component kept for the bg-pin semantics, but forced
-                // permanently shown so the button can never get stuck hidden.
-                var reveal = row.AddComponent<RowHoverReveal>();
-                reveal.ghostCg = ghostCg;
-                reveal.ghostRt = ghostGO.GetComponent<RectTransform>();
-                reveal.shownX = ghostShownX;
-                reveal.hiddenX = ghostHiddenX;
-                reveal.alwaysShown = true;
-                reveal.Init(startShown: true);
 
                 // Register refs + paint the state
                 var refs = new GhostBtnRefs
@@ -564,8 +413,6 @@ namespace ReplayTimerMod
                     go = ghostGO,
                     bg = ghostImg,
                     label = ghostLbl,
-                    cg = ghostCg,
-                    reveal = reveal,
                     roomKey = selectedScene != null
                         ? new RoomKey(selectedScene, route.EntryFrom, route.ExitTo)
                         : default,
@@ -579,12 +426,12 @@ namespace ReplayTimerMod
             if (showCopyLink)
             {
                 var linkGO = MakeGO("LBCopyLink", row.transform);
-                Img(linkGO, Color.clear);                 // raycast target
-                Rect(linkGO, linkX, 0, linkW, h);
+                Img(linkGO, UIStyle.BtnBg(UIStyle.Accent));
+                Rect(linkGO, linkX, btnY, linkW, btnH);
 
-                var linkLbl = MakeLbl(linkGO.transform, "\u2934", // ⤴
-                    UIStyle.FontSizeSm - 1, UIStyle.Accent, TextAnchor.MiddleCenter,
-                    w: linkW, h: h);
+                var linkLbl = MakeLbl(linkGO.transform, "Copy",
+                    UIStyle.FontSizeBtn, UIStyle.Accent, TextAnchor.MiddleCenter,
+                    fill: true);
 
                 string linkRid = entry.RunId;
                 Btn(linkGO, () => OnCopyLinkClicked(linkRid, linkLbl));
@@ -594,6 +441,7 @@ namespace ReplayTimerMod
                     linkBtn.transition = Selectable.Transition.None;
                     linkBtn.navigation = new Navigation { mode = Navigation.Mode.None };
                 }
+                AddButtonHover(linkGO);
             }
 
             // ── Time ───────────────────────────────────────────────────
@@ -601,31 +449,25 @@ namespace ReplayTimerMod
             MakeLbl(row.transform, TimeUtil.Format(entry.TotalTime),
                 UIStyle.FontSizeSm,
                 isWR ? UIStyle.Gold : UIStyle.Text,
-                TextAnchor.MiddleRight, x: timeX, w: timeW, h: h);
+                TextAnchor.MiddleRight, x: timeX, w: timeColW, h: h);
 
             // ── Runner name (fills remaining space) ─────────────────────
             // Always shows the actual runner name; your own entry is
             // indicated by accent color + the row highlight instead of
             // replacing the name with "You".
 
-            int nameEnd = hasDelta ? deltaX : timeX;
-            if (showCopyLink)
-                nameEnd = linkX;
-            else if (showGhost)
-                nameEnd = ghostShownX;
-
             // "?" marker right-aligned against the buttons — hovering it
             // shows the run's full loadout; the name label shrinks to fit.
-            int markerW = AddModifierMarker(row.transform, nameEnd - M / 4, h,
-                entry.Modifiers);
+            int markerW = AddModifierMarker(row.transform, cluster.MarkerRight,
+                h, entry.Modifiers);
 
-            int nameW = nameEnd - markerW - M / 4 - x - M / 2;
+            int nameW = cluster.LabelEnd(markerW) - x;
 
             string displayName = string.IsNullOrEmpty(entry.RunnerName)
                 ? "???" : entry.RunnerName!;
 
             MakeLbl(row.transform, displayName,
-                UIStyle.FontSizeSm - 1,
+                UIStyle.FontSizeRow,
                 isYou ? UIStyle.Accent : UIStyle.Text,
                 TextAnchor.MiddleLeft, x: x, w: nameW, h: h);
         }
@@ -637,12 +479,11 @@ namespace ReplayTimerMod
             Rect(row, 0, yOffset, RW, RH);
 
             string text = gapCount > 0
-                ? "...  " + gapCount + " more runner"
-                    + (gapCount != 1 ? "s" : "") + "  ..."
+                ? gapCount + " more runner" + (gapCount != 1 ? "s" : "")
                 : "...";
 
             MakeLbl(row.transform, text,
-                UIStyle.FontSizeSm - 2, UIStyle.Subtext, TextAnchor.MiddleCenter,
+                UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleCenter,
                 x: 0, w: RW, h: RH);
         }
 
@@ -663,7 +504,7 @@ namespace ReplayTimerMod
                 : "\u25BE Show " + (entryCount - LeaderboardCollapsedCount) + " more";
 
             MakeLbl(row.transform, text,
-                UIStyle.FontSizeSm - 2, UIStyle.Accent, TextAnchor.MiddleCenter,
+                UIStyle.FontSizeBtn, UIStyle.Accent, TextAnchor.MiddleCenter,
                 x: 0, w: RW, h: RH);
         }
 
@@ -692,15 +533,16 @@ namespace ReplayTimerMod
             if (rightContent == null) return;
 
             var scroll = RightScroll;
-            float keepScroll = scroll != null
-                ? scroll.verticalNormalizedPosition : 1f;
+            float keepScroll = scroll != null ? ScrollOffsetFromTop(scroll) : 0f;
 
             ClearContentDetached(rightContent);
             BuildLeaderboardContent();
             ForceLayout(rightContent);
 
             if (scroll != null)
-                scroll.verticalNormalizedPosition = Mathf.Clamp01(keepScroll);
+                RestoreScrollOffsetFromTop(scroll, keepScroll);
+
+            RefreshFilterPopupIfOpen();
         }
 
         // Empty for a non-positive delta (ties / the WR row show no delta).
@@ -730,56 +572,40 @@ namespace ReplayTimerMod
         private void SetGhostVisual(GhostBtnRefs refs, GhostDownloadState state)
         {
             string label;
-            Color color;
-            int fontSize = UIStyle.FontSizeSm - 1;
-            bool pinned = false;
+            Color fg, bg;
 
             switch (state)
             {
                 case GhostDownloadState.Downloading:
                     label = "...";
-                    color = UIStyle.Subtext;
-                    pinned = true;
+                    fg = UIStyle.Subtext;
+                    bg = UIStyle.Surface with { a = 0.5f };
                     break;
                 case GhostDownloadState.Done:
-                    label = "\u2713";
-                    color = UIStyle.Green;
-                    pinned = true;
+                    label = "Loaded";
+                    fg = UIStyle.Green;
+                    bg = UIStyle.BtnBg(UIStyle.Green);
                     break;
                 case GhostDownloadState.Failed:
-                    label = "\u2717";
-                    color = UIStyle.Red;
-                    pinned = true;
+                    label = "Retry";
+                    fg = UIStyle.Red;
+                    bg = UIStyle.BtnBg(UIStyle.Red);
                     break;
                 case GhostDownloadState.Full:
-                    label = "full";
-                    color = UIStyle.Overlay;
-                    fontSize = UIStyle.FontSizeSm - 3;
+                    label = "Full";
+                    fg = UIStyle.Subtext;
+                    bg = UIStyle.Overlay with { a = 0.35f };
                     break;
                 default: // Idle
-                    label = "\u2193";
-                    color = UIStyle.Accent;
+                    label = "Load";
+                    fg = UIStyle.Accent;
+                    bg = UIStyle.BtnBg(UIStyle.Accent);
                     break;
             }
 
             refs.label.text = label;
-            refs.label.color = color;
-            refs.label.fontSize = fontSize;
-
-            refs.bg.color = pinned
-                ? UIStyle.Surface with { a = 0.5f }
-                : Color.clear;
-
-            if (refs.reveal != null)
-                refs.reveal.pinned = pinned;
-
-            if (pinned)
-            {
-                // Make sure it's interactive/visible immediately even if
-                // the reveal animation is still catching up
-                refs.cg.blocksRaycasts = true;
-                refs.cg.interactable = true;
-            }
+            refs.label.color = fg;
+            refs.bg.color = bg;
         }
 
         /// <summary>
@@ -818,9 +644,9 @@ namespace ReplayTimerMod
         }
 
         /// <summary>
-        /// Reverts expired ✓ (Done) and ✗ (Failed) states back to Idle —
-        /// Done so replays can be re-downloaded (e.g. after deleting the
-        /// imported copy), Failed so errors don't stick forever. Updates
+        /// Reverts expired Done ("Loaded") and Failed ("Retry") states back to
+        /// Idle — Done so replays can be re-downloaded (e.g. after deleting
+        /// the imported copy), Failed so errors don't stick forever. Updates
         /// buttons in place — no rebuild. Called from Tick while paused.
         /// </summary>
         private void TickGhostStateExpiry()
@@ -842,7 +668,7 @@ namespace ReplayTimerMod
             {
                 _stateExpiry.Remove(runId);
                 _downloadStates.Remove(runId);
-                TryUpdateGhostVisual(runId); // back to ↓ (or "full")
+                TryUpdateGhostVisual(runId); // back to "Load" (or "Full")
             }
         }
 

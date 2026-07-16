@@ -1,4 +1,6 @@
 #if HOLLOW_KNIGHT_BUILD
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using Modding;
@@ -83,12 +85,31 @@ namespace ReplayTimerMod
             try { shouldTick = LoadRemover.ShouldTick(); }
             catch { Log("couldnt check tick timer"); }
 
-            RoomTracker.Tick(shouldTick);
-            frameRecorder.Tick(shouldTick);
-            ghostPlayback.Tick(shouldTick);
-            replayUI.Tick();
-            roomTimerHUD.Tick(shouldTick);
-            if (networkClient != null) networkClient.Tick();
+            // Each subsystem ticks in its own guard so one failure can't
+            // take the whole mod down for the rest of the session (the old
+            // Modding API logs the exception but everything after the throw
+            // is skipped, every frame). Mirrored in ReplayTimerModSS.
+            try { RoomTracker.Tick(shouldTick); } catch (Exception ex) { LogTickError("RoomTracker", ex); }
+            try { frameRecorder.Tick(shouldTick); } catch (Exception ex) { LogTickError("FrameRecorder", ex); }
+            try { ghostPlayback.Tick(shouldTick); } catch (Exception ex) { LogTickError("GhostPlayback", ex); }
+            try { replayUI.Tick(); } catch (Exception ex) { LogTickError("ReplayUI", ex); }
+            try { roomTimerHUD.Tick(shouldTick); } catch (Exception ex) { LogTickError("RoomTimerHUD", ex); }
+            try { if (networkClient != null) networkClient.Tick(); } catch (Exception ex) { LogTickError("NetworkClient", ex); }
+        }
+
+        // Throttled per-subsystem error log so a persistent per-frame fault
+        // doesn't flood ModLog.txt.
+        private readonly Dictionary<string, float> _lastTickErrorLog =
+            new Dictionary<string, float>();
+
+        private void LogTickError(string subsystem, Exception ex)
+        {
+            float now = UnityEngine.Time.realtimeSinceStartup;
+            float last;
+            if (_lastTickErrorLog.TryGetValue(subsystem, out last) && now - last < 5f)
+                return;
+            _lastTickErrorLog[subsystem] = now;
+            Log("[Tick] " + subsystem + " failed: " + ex);
         }
 
         private void TryLateInit()

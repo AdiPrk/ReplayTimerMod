@@ -5,16 +5,6 @@ namespace ReplayTimerMod
 {
     public partial class ReplayUI
     {
-        private static readonly Color[] GhostColorSwatches =
-        {
-            new Color(1.00f, 1.00f, 1.00f),
-            new Color(0.40f, 0.80f, 1.00f),
-            new Color(0.93f, 0.83f, 0.62f),
-            new Color(0.40f, 0.85f, 0.40f),
-            new Color(0.93f, 0.53f, 0.59f),
-            new Color(0.75f, 0.55f, 1.00f),
-        };
-
         private void ClearConfigRefs()
         {
             ghostToggleLbl = null;
@@ -32,9 +22,8 @@ namespace ReplayTimerMod
             skipRunsToggleBg = null;
             skipTimerToggleLbl = null;
             skipTimerToggleBg = null;
-            alphaLbl = null;
-            editContextLbl = null;
-            editContextBg = null;
+            cfgGhostColorFill = null;
+            cfgGhostAlphaLbl = null;
             clearAllCfgLbl = null;
             clearAllCfgBg = null;
             exportAllCfgLbl = null;
@@ -42,6 +31,10 @@ namespace ReplayTimerMod
             clearAllPending = false;
             onlineToggleLbl = null;
             onlineToggleBg = null;
+            warpToggleLbl = null;
+            warpToggleBg = null;
+            camFollowToggleLbl = null;
+            camFollowToggleBg = null;
             nameInput = null;
             nameStatusLbl = null;
             nameSaveBg = null;
@@ -68,10 +61,10 @@ namespace ReplayTimerMod
             var onlineRow = AddConfigRow(rightContent, "Upload PBs", rowH, labelW);
             br = MakeButton(onlineRow.transform, "OnlineToggle",
                 GhostSettings.OnlineEnabled ? "ON" : "OFF",
-                UIStyle.FontSizeSm - 1,
+                UIStyle.FontSizeRow,
                 GhostSettings.OnlineEnabled ? UIStyle.Accent : UIStyle.Subtext,
                 GhostSettings.OnlineEnabled
-                    ? UIStyle.Accent with { a = 0.22f }
+                    ? UIStyle.BtnBgStrong(UIStyle.Accent)
                     : UIStyle.Overlay,
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnOnlineToggle);
             onlineToggleBg = br.bg;
@@ -94,7 +87,7 @@ namespace ReplayTimerMod
                 var textGO = MakeGO("Text", inputGO.transform);
                 var textComp = textGO.AddComponent<Text>();
                 textComp.font = UIStyle.Arial;
-                textComp.fontSize = UIStyle.FontSizeSm - 1;
+                textComp.fontSize = UIStyle.FontSizeRow;
                 textComp.color = UIStyle.Text;
                 textComp.alignment = TextAnchor.MiddleLeft;
                 textComp.supportRichText = false;
@@ -108,7 +101,7 @@ namespace ReplayTimerMod
                 var phGO = MakeGO("Placeholder", inputGO.transform);
                 var phText = phGO.AddComponent<Text>();
                 phText.font = UIStyle.Arial;
-                phText.fontSize = UIStyle.FontSizeSm - 1;
+                phText.fontSize = UIStyle.FontSizeRow;
                 phText.color = UIStyle.Subtext with { a = 0.5f };
                 phText.fontStyle = FontStyle.Italic;
                 phText.alignment = TextAnchor.MiddleLeft;
@@ -131,7 +124,7 @@ namespace ReplayTimerMod
                 // Save button
                 int saveX = labelW + inputW + gap;
                 br = MakeButton(nameRow.transform, "NameSave", "Save",
-                    UIStyle.FontSizeSm - 2, UIStyle.Base, UIStyle.Accent,
+                    UIStyle.FontSizeBtn, UIStyle.Base, UIStyle.Accent,
                     saveX, (rowH - btnH) / 2, saveBtnW, btnH, OnNameSave);
                 nameSaveBg = br.bg;
                 nameSaveLbl = br.label;
@@ -142,7 +135,7 @@ namespace ReplayTimerMod
                 var statusLE = statusRow.AddComponent<LayoutElement>();
                 statusLE.minHeight = statusLE.preferredHeight = UIStyle.H(16);
                 nameStatusLbl = MakeLbl(statusRow.transform, "",
-                    UIStyle.FontSizeSm - 2, UIStyle.Subtext,
+                    UIStyle.FontSizeBtn, UIStyle.Subtext,
                     TextAnchor.MiddleLeft,
                     x: UIStyle.W(8), w: UIStyle.W(280), h: UIStyle.H(16));
 
@@ -158,7 +151,7 @@ namespace ReplayTimerMod
 
             var trackRow = AddConfigRow(rightContent, "Tracking", rowH, labelW);
             br = MakeButton(trackRow.transform, "TrackToggle", "ON",
-                UIStyle.FontSizeSm - 1, UIStyle.Accent, UIStyle.Accent with { a = 0.22f },
+                UIStyle.FontSizeRow, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnTrackingToggle);
             trackingToggleBg = br.bg;
             trackingToggleLbl = br.label;
@@ -166,14 +159,14 @@ namespace ReplayTimerMod
             var saveRow = AddConfigRow(rightContent, "Save policy", rowH, labelW);
             br = MakeButton(saveRow.transform, "SaveToggle",
                 GhostSettings.SaveAllRunsEnabled ? "Save all" : "PB only",
-                UIStyle.FontSizeSm - 1, UIStyle.Gold, UIStyle.Gold with { a = 0.18f },
+                UIStyle.FontSizeRow, UIStyle.Gold, UIStyle.BtnBg(UIStyle.Gold),
                 labelW, (rowH - btnH) / 2, UIStyle.W(72), btnH, OnSavePolicyToggle);
             savePolicyBg = br.bg;
             savePolicyLbl = br.label;
 
             var skipRunRow = AddConfigRow(rightContent, "Skip backtrack", rowH, labelW);
             br = MakeButton(skipRunRow.transform, "SkipBacktrackRuns", "OFF",
-                UIStyle.FontSizeSm - 1, UIStyle.Subtext, UIStyle.Overlay,
+                UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnSkipBacktrackRunsToggle);
             skipRunsToggleBg = br.bg;
             skipRunsToggleLbl = br.label;
@@ -181,16 +174,16 @@ namespace ReplayTimerMod
             var keepRow = AddConfigRow(rightContent, "Keep per route", rowH, labelW);
             int keepX = labelW;
             MakeButton(keepRow.transform, "KeepMinus", "-",
-                UIStyle.FontSizeSm - 1, UIStyle.Text, UIStyle.Overlay,
+                UIStyle.FontSizeRow, UIStyle.Text, UIStyle.Overlay,
                 keepX, (rowH - btnH) / 2, stepW, btnH, OnMaxSavedReplaysMinus);
             keepX += stepW + gap;
             maxSavedLbl = MakeLbl(keepRow.transform,
                 GhostSettings.MaxSavedReplaysPerRoute.ToString(),
-                UIStyle.FontSizeSm - 1, UIStyle.Text, TextAnchor.MiddleCenter,
+                UIStyle.FontSizeRow, UIStyle.Text, TextAnchor.MiddleCenter,
                 x: keepX, w: valueW, h: rowH);
             keepX += valueW + gap;
             MakeButton(keepRow.transform, "KeepPlus", "+",
-                UIStyle.FontSizeSm - 1, UIStyle.Text, UIStyle.Overlay,
+                UIStyle.FontSizeRow, UIStyle.Text, UIStyle.Overlay,
                 keepX, (rowH - btnH) / 2, stepW, btnH, OnMaxSavedReplaysPlus);
 
             AddSectionSeparator(rightContent);
@@ -200,67 +193,61 @@ namespace ReplayTimerMod
 
             var ghostRow = AddConfigRow(rightContent, "Ghost", rowH, labelW);
             br = MakeButton(ghostRow.transform, "GhostToggle", "ON",
-                UIStyle.FontSizeSm - 1, UIStyle.Accent, UIStyle.Accent with { a = 0.22f },
+                UIStyle.FontSizeRow, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnGhostToggle);
             ghostToggleBg = br.bg;
             ghostToggleLbl = br.label;
 
             var hudRow = AddConfigRow(rightContent, "Timer HUD", rowH, labelW);
             br = MakeButton(hudRow.transform, "HUDToggle", "ON",
-                UIStyle.FontSizeSm - 1, UIStyle.Accent, UIStyle.Accent with { a = 0.22f },
+                UIStyle.FontSizeRow, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnTimerToggleClicked);
             timerToggleBg = br.bg;
             timerToggleLbl = br.label;
 
             var chainRow = AddConfigRow(rightContent, "Chain rooms", rowH, labelW);
             br = MakeButton(chainRow.transform, "ChainToggle", "OFF",
-                UIStyle.FontSizeSm - 1, UIStyle.Subtext, UIStyle.Overlay,
+                UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnChainTimersToggleClicked);
             chainToggleBg = br.bg;
             chainToggleLbl = br.label;
 
             var skipTimerRow = AddConfigRow(rightContent, "Hide backtrack", rowH, labelW);
             br = MakeButton(skipTimerRow.transform, "SkipBacktrackTimer", "OFF",
-                UIStyle.FontSizeSm - 1, UIStyle.Subtext, UIStyle.Overlay,
+                UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnSkipBacktrackTimerToggle);
             skipTimerToggleBg = br.bg;
             skipTimerToggleLbl = br.label;
 
-            var ctxRow = AddConfigRow(rightContent, "Editing", rowH, labelW);
-            br = MakeButton(ctxRow.transform, "EditContext", "Global",
-                UIStyle.FontSizeSm - 1, UIStyle.Text, UIStyle.Overlay with { a = 0.55f },
-                labelW, (rowH - btnH) / 2, UIStyle.W(160), btnH, OnEditGlobalContext);
-            editContextBg = br.bg;
-            editContextLbl = br.label;
+            // Ghost color: one chip that opens the color picker for the
+            // global color. Per-run overrides are set from the Runs tab.
+            var colorRow = AddConfigRow(rightContent, "Ghost color", rowH, labelW);
+            int chipW = UIStyle.W(46);
+            var chip = MakeGO("GhostColorChip", colorRow.transform);
+            Img(chip, UIStyle.Overlay with { a = 0.9f });
+            Rect(chip, labelW, (rowH - btnH) / 2, chipW, btnH);
+            var chipFill = MakeGO("Fill", chip.transform);
+            Color gc = GhostSettings.GhostColor;
+            Img(chipFill, new Color(gc.r, gc.g, gc.b, 1f));
+            Rect(chipFill, 1, 1, chipW - 2, btnH - 2);
+            chipFill.GetComponent<Graphic>().raycastTarget = false;
+            cfgGhostColorFill = chipFill.GetComponent<Image>();
+            Btn(chip, () => OpenGlobalColorPicker(chip));
+            AddButtonHover(chip);
+            cfgGhostAlphaLbl = MakeLbl(colorRow.transform,
+                "alpha " + gc.a.ToString("0.00"),
+                UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: labelW + chipW + UIStyle.Gap, w: UIStyle.W(120), h: rowH);
 
-            var alphaRow = AddConfigRow(rightContent, "Alpha", rowH, labelW);
-            int alphaX = labelW;
-            MakeButton(alphaRow.transform, "AlphaMinus", "-",
-                UIStyle.FontSizeSm - 1, UIStyle.Text, UIStyle.Overlay,
-                alphaX, (rowH - btnH) / 2, stepW, btnH, OnAlphaMinus);
-            alphaX += stepW + gap;
-            alphaLbl = MakeLbl(alphaRow.transform,
-                GhostSettings.GhostAlpha.ToString("0.00"),
-                UIStyle.FontSizeSm - 1, UIStyle.Text, TextAnchor.MiddleCenter,
-                x: alphaX, w: valueW, h: rowH);
-            alphaX += valueW + gap;
-            MakeButton(alphaRow.transform, "AlphaPlus", "+",
-                UIStyle.FontSizeSm - 1, UIStyle.Text, UIStyle.Overlay,
-                alphaX, (rowH - btnH) / 2, stepW, btnH, OnAlphaPlus);
-
-            var colorRow = AddConfigRow(rightContent, "Color", rowH, labelW);
-            int swatchSize = UIStyle.W(22);
-            int swatchGap = UIStyle.W(4);
-            int swatchX = labelW;
-            foreach (var swatch in GhostColorSwatches)
-            {
-                Color c = swatch;
-                var sw = MakeGO("Swatch", colorRow.transform);
-                Img(sw, c);
-                Btn(sw, () => OnColorSwatch(c));
-                Rect(sw, swatchX, (rowH - btnH) / 2, swatchSize, btnH);
-                swatchX += swatchSize + swatchGap;
-            }
+            // Hint line pointing at per-run overrides
+            var colorHintRow = MakeGO("GhostColorHint", rightContent);
+            Img(colorHintRow, Color.clear);
+            var colorHintLE = colorHintRow.AddComponent<LayoutElement>();
+            colorHintLE.minHeight = colorHintLE.preferredHeight = UIStyle.H(16);
+            MakeLbl(colorHintRow.transform,
+                "Click a run's color swatch in the Runs tab to give it its own color.",
+                UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: UIStyle.W(8), w: UIStyle.W(320), h: UIStyle.H(16));
 
             AddSectionSeparator(rightContent);
 
@@ -278,19 +265,19 @@ namespace ReplayTimerMod
             int dataX = UIStyle.W(8);
 
             br = MakeButton(dataRow1.transform, "ExportAllCfg", "Copy all",
-                UIStyle.FontSizeSm - 2, UIStyle.Accent, UIStyle.Accent with { a = 0.18f },
+                UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
                 dataX, dataY, dataBtnW, dataBtnH, OnExportAllClicked);
             exportAllCfgBg = br.bg;
             exportAllCfgLbl = br.label;
             dataX += dataBtnW + gap;
 
             MakeButton(dataRow1.transform, "DownloadCfg", "Export All",
-                UIStyle.FontSizeSm - 2, UIStyle.Accent, UIStyle.Accent with { a = 0.12f },
+                UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
                 dataX, dataY, dataBtnW, dataBtnH, OnDownloadAllClicked);
             dataX += dataBtnW + gap;
 
             MakeButton(dataRow1.transform, "OpenExportsCfg", "Open exports",
-                UIStyle.FontSizeSm - 2, UIStyle.Text, UIStyle.Overlay with { a = 0.6f },
+                UIStyle.FontSizeBtn, UIStyle.Text, UIStyle.Overlay with { a = 0.6f },
                 dataX, dataY, dataBtnW, dataBtnH, OnOpenExportFolderClicked);
 
             var dataRow2 = MakeGO("DataRow2", rightContent);
@@ -299,10 +286,58 @@ namespace ReplayTimerMod
             d2LE.minHeight = d2LE.preferredHeight = UIStyle.H(30);
 
             br = MakeButton(dataRow2.transform, "ClearAllCfg", "Clear all data",
-                UIStyle.FontSizeSm - 2, UIStyle.Red, UIStyle.Red with { a = 0.15f },
+                UIStyle.FontSizeBtn, UIStyle.Red, UIStyle.BtnBg(UIStyle.Red),
                 UIStyle.W(8), dataY, UIStyle.W(100), dataBtnH, OnClearAllClicked);
             clearAllCfgBg = br.bg;
             clearAllCfgLbl = br.label;
+
+            AddSectionSeparator(rightContent);
+
+            // -- Experimental --
+            AddSectionHeader(rightContent, "Experimental");
+
+            var warpRow = AddConfigRow(rightContent, "Room warp", rowH, labelW);
+            br = MakeButton(warpRow.transform, "RoomWarpToggle",
+                GhostSettings.RoomWarpEnabled ? "ON" : "OFF",
+                UIStyle.FontSizeRow,
+                GhostSettings.RoomWarpEnabled ? UIStyle.Accent : UIStyle.Subtext,
+                GhostSettings.RoomWarpEnabled
+                    ? UIStyle.BtnBgStrong(UIStyle.Accent)
+                    : UIStyle.Overlay,
+                labelW, (rowH - btnH) / 2, toggleW, btnH, OnRoomWarpToggle);
+            warpToggleBg = br.bg;
+            warpToggleLbl = br.label;
+
+            // Hint line explaining what the toggle unlocks
+            var warpHintRow = MakeGO("RoomWarpHint", rightContent);
+            Img(warpHintRow, Color.clear);
+            var warpHintLE = warpHintRow.AddComponent<LayoutElement>();
+            warpHintLE.minHeight = warpHintLE.preferredHeight = UIStyle.H(16);
+            MakeLbl(warpHintRow.transform,
+                "Adds Warp buttons to route headers.",
+                UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: UIStyle.W(8), w: UIStyle.W(320), h: UIStyle.H(16));
+
+            var camFollowRow = AddConfigRow(rightContent, "Camera follow", rowH, labelW);
+            br = MakeButton(camFollowRow.transform, "CameraFollowToggle",
+                GhostSettings.CameraFollowEnabled ? "ON" : "OFF",
+                UIStyle.FontSizeRow,
+                GhostSettings.CameraFollowEnabled ? UIStyle.Accent : UIStyle.Subtext,
+                GhostSettings.CameraFollowEnabled
+                    ? UIStyle.BtnBgStrong(UIStyle.Accent)
+                    : UIStyle.Overlay,
+                labelW, (rowH - btnH) / 2, toggleW, btnH, OnCameraFollowFeatureToggle);
+            camFollowToggleBg = br.bg;
+            camFollowToggleLbl = br.label;
+
+            var camFollowHintRow = MakeGO("CameraFollowHint", rightContent);
+            Img(camFollowHintRow, Color.clear);
+            var camFollowHintLE = camFollowHintRow.AddComponent<LayoutElement>();
+            camFollowHintLE.minHeight = camFollowHintLE.preferredHeight = UIStyle.H(16);
+            MakeLbl(camFollowHintRow.transform,
+                "Adds camera buttons to runs; the camera tracks that ghost.",
+                UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: UIStyle.W(8), w: UIStyle.W(320), h: UIStyle.H(16));
         }
 
         private void RefreshConfigValues()
@@ -314,8 +349,8 @@ namespace ReplayTimerMod
                 trackingToggleLbl.color = on ? UIStyle.Accent : UIStyle.Red;
                 if (trackingToggleBg != null)
                     trackingToggleBg.color = on
-                        ? UIStyle.Accent with { a = 0.22f }
-                        : UIStyle.Red with { a = 0.22f };
+                        ? UIStyle.BtnBgStrong(UIStyle.Accent)
+                        : UIStyle.BtnBgStrong(UIStyle.Red);
             }
 
             StyleToggle(ghostToggleLbl, ghostToggleBg, GhostSettings.GhostEnabled);
@@ -327,8 +362,8 @@ namespace ReplayTimerMod
                 savePolicyLbl.color = all ? UIStyle.Accent : UIStyle.Gold;
                 if (savePolicyBg != null)
                     savePolicyBg.color = all
-                        ? UIStyle.Accent with { a = 0.22f }
-                        : UIStyle.Gold with { a = 0.18f };
+                        ? UIStyle.BtnBgStrong(UIStyle.Accent)
+                        : UIStyle.BtnBg(UIStyle.Gold);
             }
 
             if (maxSavedLbl != null)
@@ -339,45 +374,11 @@ namespace ReplayTimerMod
             StyleToggle(skipRunsToggleLbl, skipRunsToggleBg, GhostSettings.SkipBacktrackRuns);
             StyleToggle(skipTimerToggleLbl, skipTimerToggleBg, GhostSettings.SkipBacktrackTimer);
 
-            if (TryGetSelectedSnapshot(out _, out var snap) && snap != null)
-            {
-                if (editContextLbl != null)
-                {
-                    editContextLbl.text = FindSnapshotEditLabel(snap);
-                    editContextLbl.color = UIStyle.Accent;
-                }
-                if (editContextBg != null)
-                    editContextBg.color = UIStyle.Accent with { a = 0.22f };
-                if (alphaLbl != null)
-                    alphaLbl.text = snap.ResolveGhostColor(CurrentGlobalGhostColor).a.ToString("0.00");
-            }
-            else
-            {
-                if (editContextLbl != null)
-                {
-                    editContextLbl.text = "Global";
-                    editContextLbl.color = UIStyle.Text;
-                }
-                if (editContextBg != null)
-                    editContextBg.color = UIStyle.Overlay with { a = 0.55f };
-                if (alphaLbl != null)
-                    alphaLbl.text = GhostSettings.GhostAlpha.ToString("0.00");
-            }
+            RefreshGhostColorChip();
 
             StyleToggle(onlineToggleLbl, onlineToggleBg, GhostSettings.OnlineEnabled);
-        }
-
-        private string FindSnapshotEditLabel(ReplaySnapshot snapshot)
-        {
-            foreach (var route in PBManager.AllHistories())
-            {
-                for (int i = 0; i < route.Snapshots.Count; i++)
-                {
-                    if (route.Snapshots[i].SnapshotId == snapshot.SnapshotId)
-                        return "PB #" + (i + 1) + " - " + route.Key.SceneName;
-                }
-            }
-            return "Snapshot";
+            StyleToggle(warpToggleLbl, warpToggleBg, GhostSettings.RoomWarpEnabled);
+            StyleToggle(camFollowToggleLbl, camFollowToggleBg, GhostSettings.CameraFollowEnabled);
         }
 
         /// <summary>
@@ -393,7 +394,7 @@ namespace ReplayTimerMod
                 label.color = on ? UIStyle.Accent : UIStyle.Subtext;
             }
             if (bg != null)
-                bg.color = on ? UIStyle.Accent with { a = 0.22f } : UIStyle.Overlay;
+                bg.color = on ? UIStyle.BtnBgStrong(UIStyle.Accent) : UIStyle.Overlay;
         }
 
         private static void AddSectionHeader(Transform parent, string title)
@@ -402,7 +403,7 @@ namespace ReplayTimerMod
             Img(row, Color.clear);
             var le = row.AddComponent<LayoutElement>();
             le.minHeight = le.preferredHeight = UIStyle.H(22);
-            MakeLbl(row.transform, title, UIStyle.FontSizeSm - 2,
+            MakeLbl(row.transform, title, UIStyle.FontSizeBtn,
                 UIStyle.Subtext, TextAnchor.LowerLeft,
                 x: UIStyle.W(8), w: UIStyle.W(200), h: UIStyle.H(22));
         }
@@ -413,7 +414,7 @@ namespace ReplayTimerMod
             Img(row, Color.clear);
             var le = row.AddComponent<LayoutElement>();
             le.minHeight = le.preferredHeight = rowH;
-            MakeLbl(row.transform, label, UIStyle.FontSizeSm - 1,
+            MakeLbl(row.transform, label, UIStyle.FontSizeRow,
                 UIStyle.Text, TextAnchor.MiddleLeft,
                 x: UIStyle.W(8), w: labelW - UIStyle.W(8), h: rowH);
             return row;

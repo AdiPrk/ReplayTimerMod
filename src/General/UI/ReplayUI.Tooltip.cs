@@ -47,13 +47,18 @@ namespace ReplayTimerMod
             }
         }
 
-        /// <summary>Makes hovering the given element show a tooltip with the
-        /// full modifier names for <paramref name="mask"/>.</summary>
-        private static void AttachModifierTooltip(GameObject go, int mask)
+        /// <summary>Makes hovering the given element show a plain-text
+        /// tooltip.</summary>
+        private static void AttachTooltip(GameObject go, string text)
         {
             var trigger = go.AddComponent<TooltipTrigger>();
-            trigger.text = ModifierMask.ToTooltip(mask);
+            trigger.text = text;
         }
+
+        /// <summary>Makes hovering the given element show a tooltip with the
+        /// full modifier names for <paramref name="mask"/>.</summary>
+        private static void AttachModifierTooltip(GameObject go, int mask) =>
+            AttachTooltip(go, ModifierMask.ToTooltip(mask));
 
         /// <summary>Called every frame from Tick. Shows/positions/hides the
         /// shared tooltip based on the current hover state.</summary>
@@ -131,7 +136,7 @@ namespace ReplayTimerMod
             innerRt.offsetMax = new Vector2(-1, -1);
 
             tooltipLbl = MakeLbl(tooltipGO.transform, "",
-                UIStyle.FontSizeSm - 1, UIStyle.Text, TextAnchor.UpperLeft,
+                UIStyle.FontSizeRow, UIStyle.Text, TextAnchor.UpperLeft,
                 x: UIStyle.W(8), y: UIStyle.H(8), w: UIStyle.W(204), h: UIStyle.H(16));
             // MakeLbl defaults to no-wrap/truncate; the tooltip needs wrapped
             // multi-line text and a measurable preferredHeight.

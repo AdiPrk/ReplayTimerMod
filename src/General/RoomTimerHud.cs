@@ -159,7 +159,28 @@ namespace ReplayTimerMod
         // ── Frame update ──────────────────────────────────────────────────────
         public void Tick(bool shouldTick)
         {
-            if (!_setup || _canvasGO == null) return;
+            if (!_setup) return;
+
+            // The host game destroyed the canvas (HK 1221's additive scene
+            // unload can do this despite DontDestroyOnLoad). Rebuild it;
+            // the cards died with it, so drop their references too.
+            if (_canvasGO == null)
+            {
+                Log.LogWarning("[RoomTimerHUD] Canvas was destroyed externally - rebuilding");
+                _cards.Clear();
+                _live = null;
+                _rollPending = false;
+                _rollTimer = 0f;
+                _bannerState = BannerState.Hidden;
+                BuildCanvas();
+
+                // If a room is being timed right now, restore its live card
+                // so the timer reappears instead of waiting for the next room.
+                if (RoomTracker.IsRecording && GhostSettings.TimerHudEnabled)
+                    HandleRoomEnter(RoomTracker.CurrentScene, RoomTracker.EntryFromScene);
+
+                if (_canvasGO == null) return; // BuildCanvas always assigns
+            }
 
             bool enabled      = GhostSettings.TimerHudEnabled;
             bool shouldShow   = enabled && !GameUiState.IsPaused();
@@ -202,10 +223,31 @@ namespace ReplayTimerMod
             UpdateBanner();
         }
 
+        /// <summary>
+        /// Drops cards whose GameObjects were destroyed externally (scene
+        /// unload on HK 1221). RoomTracker's events fire BEFORE this HUD's
+        /// Tick gets a chance to rebuild a destroyed canvas, so every event
+        /// handler must purge dead cards before touching them.
+        /// </summary>
+        private void PruneDeadCards()
+        {
+            for (int i = _cards.Count - 1; i >= 0; i--)
+                if (_cards[i].go == null)
+                    _cards.RemoveAt(i);
+
+            if (_live != null && _live.go == null)
+                _live = null;
+
+            if (_cards.Count < 2)
+                _rollPending = false;
+        }
+
         // ── RoomTracker handlers ───────────────────────────────────────────────
         private void HandleRoomEnter(string sceneName, string entryFromScene)
         {
             if (!GhostSettings.TimerHudEnabled) return;
+            PruneDeadCards();
+            if (_canvasGO == null || _cardParent == null) return; // rebuilt on next Tick
 
             if (GhostSettings.ChainRoomTimers)
                 EnterChaining(sceneName, entryFromScene);
@@ -270,6 +312,7 @@ namespace ReplayTimerMod
         private void HandleRoomExit(string sceneName, string entryFromScene,
             string exitToScene, float lrTime)
         {
+            PruneDeadCards();
             if (_live == null) return;
 
             // Always freeze and show the time — including same-transition
@@ -621,6 +664,7 @@ namespace ReplayTimerMod
         /// </summary>
         public void ShowRank(RankInfo rankInfo)
         {
+            PruneDeadCards();
             for (int i = _cards.Count - 1; i >= 0; i--)
             {
                 TimerCard c = _cards[i];
@@ -701,7 +745,7 @@ namespace ReplayTimerMod
         private void BuildCanvas()
         {
             _canvasGO = new GameObject("RoomTimerHUD_Canvas");
-            Object.DontDestroyOnLoad(_canvasGO);
+            ScenePersistence.Apply(_canvasGO);
 
             var canvas = _canvasGO.AddComponent<Canvas>();
             canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
