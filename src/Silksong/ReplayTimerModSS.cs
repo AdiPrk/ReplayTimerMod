@@ -1,7 +1,9 @@
 #if SILKSONG_BUILD
-using BepInEx;
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using BepInEx;
 using HarmonyLib;
 using UnityEngine;
 
@@ -11,7 +13,6 @@ namespace ReplayTimerMod
     [BepInAutoPlugin(id: "io.github.adiprk.replaytimermod")]
     public partial class ReplayTimerModSS : BaseUnityPlugin
     {
-        internal static ReplayTimerModSS Instance { get; private set; } = null!;
         private static GameManager? cachedGameManager;
 
         private FrameRecorder frameRecorder = null!;
@@ -25,7 +26,6 @@ namespace ReplayTimerMod
 
         private void Awake()
         {
-            Instance = this;
             Logger.LogInfo($"Plugin {Name} ({Id}) has loaded!");
 
             new Harmony(Id).PatchAll(Assembly.GetExecutingAssembly());
@@ -65,25 +65,25 @@ namespace ReplayTimerMod
                 return;
 
             bool shouldTick = false;
-            try { shouldTick = LoadRemover.ShouldTick(); } catch { }
+            try { shouldTick = LoadRemover.ShouldTick(); } catch (Exception ex) { LogTickError("LoadRemover", ex); }
 
             // Each subsystem ticks in its own guard so one failure can't
             // take the whole mod down for the rest of the session.
             // Mirrored in ReplayTimerModHK.
-            try { RoomTracker.Tick(shouldTick); } catch (System.Exception ex) { LogTickError("RoomTracker", ex); }
-            try { frameRecorder.Tick(shouldTick); } catch (System.Exception ex) { LogTickError("FrameRecorder", ex); }
-            try { ghostPlayback.Tick(shouldTick); } catch (System.Exception ex) { LogTickError("GhostPlayback", ex); }
-            try { replayUI.Tick(); } catch (System.Exception ex) { LogTickError("ReplayUI", ex); }
-            try { roomTimerHUD.Tick(shouldTick); } catch (System.Exception ex) { LogTickError("RoomTimerHUD", ex); }
-            try { if (networkClient != null) networkClient.Tick(); } catch (System.Exception ex) { LogTickError("NetworkClient", ex); }
+            try { RoomTracker.Tick(shouldTick); } catch (Exception ex) { LogTickError("RoomTracker", ex); }
+            try { frameRecorder.Tick(shouldTick); } catch (Exception ex) { LogTickError("FrameRecorder", ex); }
+            try { ghostPlayback.Tick(shouldTick); } catch (Exception ex) { LogTickError("GhostPlayback", ex); }
+            try { replayUI.Tick(); } catch (Exception ex) { LogTickError("ReplayUI", ex); }
+            try { roomTimerHUD.Tick(shouldTick); } catch (Exception ex) { LogTickError("RoomTimerHUD", ex); }
+            try { if (networkClient != null) networkClient.Tick(); } catch (Exception ex) { LogTickError("NetworkClient", ex); }
         }
 
         // Throttled per-subsystem error log so a persistent per-frame fault
         // doesn't flood the BepInEx log.
-        private readonly System.Collections.Generic.Dictionary<string, float> _lastTickErrorLog =
-            new System.Collections.Generic.Dictionary<string, float>();
+        private readonly Dictionary<string, float> _lastTickErrorLog =
+            new Dictionary<string, float>();
 
-        private void LogTickError(string subsystem, System.Exception ex)
+        private void LogTickError(string subsystem, Exception ex)
         {
             float now = Time.realtimeSinceStartup;
             if (_lastTickErrorLog.TryGetValue(subsystem, out float last) && now - last < 5f)
@@ -99,14 +99,11 @@ namespace ReplayTimerMod
 
             lateInitDone = true;
             Logger.LogInfo("Hero ready - setting up UI and ghost");
-            ghostPlayback.Setup();
             replayUI.Setup();
             roomTimerHUD.Setup();
 
-            // Set game tag for leaderboard cache keys
             replayUI.SetGameTag("silksong");
 
-            // Wire the online toggle handler
             replayUI.SetOnlineToggleHandler(OnOnlineToggled);
 
             replayUI.OnDisplayNameSet += OnDisplayNameSet;
@@ -182,6 +179,7 @@ namespace ReplayTimerMod
         {
             if (networkClient != null) networkClient.Stop();
             roomTimerHUD.Teardown();
+            GhostSettings.Flush(); // commit any throttled color/alpha change
         }
 
         private static bool TryGetGameManager(out GameManager? gm)
@@ -192,7 +190,7 @@ namespace ReplayTimerMod
                 return true;
             }
 
-            gm = Object.FindFirstObjectByType<GameManager>();
+            gm = UnityEngine.Object.FindFirstObjectByType<GameManager>();
             if (gm == null) return false;
 
             cachedGameManager = gm;

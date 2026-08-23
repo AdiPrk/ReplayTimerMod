@@ -31,7 +31,7 @@ namespace ReplayTimerMod
         }
 
         public override string ToString() =>
-            $"{SceneName}[{EntryFromScene}→{ExitToScene}]";
+            $"{SceneName}[{EntryFromScene}->{ExitToScene}]";
 
         public override bool Equals(object? obj) =>
             obj is RoomKey other &&
@@ -56,10 +56,13 @@ namespace ReplayTimerMod
     {
         public static string Format(float t)
         {
-            int ms = (int)(t * 100) % 100;
+            // Truncate to centiseconds (never round a timer up past the real
+            // time). FormatDelta below truncates the same way so a time and
+            // its delta can't disagree by 0.01.
+            int cs = (int)(t * 100) % 100;
             int s = (int)t % 60;
             int min = (int)t / 60;
-            return $"{min}:{s:00}.{ms:00}";
+            return $"{min}:{s:00}.{cs:00}";
         }
 
         /// <summary>
@@ -71,7 +74,8 @@ namespace ReplayTimerMod
         public static string FormatDelta(float seconds, bool padSeconds = false)
         {
             string sign = seconds >= 0f ? "+" : "-";
-            int cs = Mathf.RoundToInt(Mathf.Abs(seconds) * 100f);
+            // Truncate like Format above - one rounding rule everywhere.
+            int cs = (int)(Mathf.Abs(seconds) * 100f);
             int min = cs / 6000;
             int sec = (cs / 100) % 60;
             int rem = cs % 100;

@@ -87,12 +87,11 @@ namespace ReplayTimerMod
                 }
 
                 ParseFlatStringMap(json, _map);
-                Log.LogInfo("[QuickWarp] Loaded " + _map.Count
-                    + " transitions from " + resourceName);
+                Log.LogInfo($"[QuickWarp] Loaded {_map.Count} transitions from {resourceName}");
             }
             catch (Exception ex)
             {
-                Log.LogError("[QuickWarp] Failed to load transition map: " + ex.Message);
+                Log.LogError($"[QuickWarp] Failed to load transition map: {ex.Message}");
             }
         }
 
@@ -148,7 +147,7 @@ namespace ReplayTimerMod
             string? gate = ResolveExitGate(routeKey);
             if (gate == null)
             {
-                Log.LogWarning("[QuickWarp] No known gate for " + routeKey);
+                Log.LogWarning($"[QuickWarp] No known gate for {routeKey}");
                 return false;
             }
             WarpToTransition(routeKey.EntryFromScene, gate);
@@ -177,8 +176,7 @@ namespace ReplayTimerMod
                 return;
             }
 
-            Log.LogInfo(string.Format(
-                "[QuickWarp] Warping to {0} via '{1}'", sceneName, gateName));
+            Log.LogInfo($"[QuickWarp] Warping to {sceneName} via '{gateName}'");
 
             try
             {
@@ -195,7 +193,7 @@ namespace ReplayTimerMod
             catch (Exception ex)
             {
                 IsWarping = false;
-                Log.LogError("[QuickWarp] Warp failed: " + ex.Message);
+                Log.LogError($"[QuickWarp] Warp failed: {ex.Message}");
             }
         }
 
@@ -270,7 +268,7 @@ namespace ReplayTimerMod
             }
             catch (Exception ex)
             {
-                Log.LogWarning("[QuickWarp] Unpause failed: " + ex.Message);
+                Log.LogWarning($"[QuickWarp] Unpause failed: {ex.Message}");
                 return null;
             }
         }
@@ -295,7 +293,7 @@ namespace ReplayTimerMod
             }
             catch (Exception ex)
             {
-                Log.LogWarning("[QuickWarp] Unpause failed: " + ex.Message);
+                Log.LogWarning($"[QuickWarp] Unpause failed: {ex.Message}");
             }
         }
 #endif
@@ -334,7 +332,7 @@ namespace ReplayTimerMod
             }
             catch (Exception ex)
             {
-                Log.LogWarning("[QuickWarp] v1221 SceneLoadInfo path failed: " + ex.Message);
+                Log.LogWarning($"[QuickWarp] v1221 SceneLoadInfo path failed: {ex.Message}");
             }
             UnityEngine.SceneManagement.SceneManager.LoadScene(sceneName);
 #else
@@ -393,7 +391,7 @@ namespace ReplayTimerMod
 
             SkipWs(json, ref i);
             if (i >= n || json[i] != '{') return;
-            i++; // consume '{'
+            i++;
 
             while (i < n)
             {
@@ -405,7 +403,7 @@ namespace ReplayTimerMod
 
                 SkipWs(json, ref i);
                 if (i >= n || json[i] != ':') return;
-                i++; // consume ':'
+                i++;
 
                 SkipWs(json, ref i);
                 string? val = ParseString(json, ref i);
@@ -432,7 +430,7 @@ namespace ReplayTimerMod
         private static string? ParseString(string s, ref int i)
         {
             if (i >= s.Length || s[i] != '"') return null;
-            i++; // consume opening quote
+            i++;
 
             System.Text.StringBuilder sb = new System.Text.StringBuilder();
             while (i < s.Length)

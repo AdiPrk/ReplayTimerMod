@@ -51,6 +51,37 @@ namespace ReplayTimerMod
         }
 
         /// <summary>
+        /// Crest chips are single-select: selecting a crest bit replaces any
+        /// other crest bit in <paramref name="require"/>; re-selecting the
+        /// current crest - or passing bitMask 0 ("Any crest") - clears the
+        /// choice. Non-crest bits are untouched. Returns the new require mask.
+        /// </summary>
+        public static int SelectCrestBit(int require, int crestBitsMask, int bitMask)
+        {
+            int result = require & ~crestBitsMask;
+            if (bitMask != 0 && (require & bitMask) == 0)
+                result |= bitMask;
+            return result;
+        }
+
+        /// <summary>
+        /// Repairs stale crest filter state (e.g. persisted by older
+        /// versions): crest bits never live in the exclude mask, and at most
+        /// one crest bit may be required (multi-crest state clears them all).
+        /// </summary>
+        public static void SanitizeCrestBits(int crestBitsMask,
+            ref int require, ref int exclude)
+        {
+            if (crestBitsMask == 0) return;
+
+            exclude &= ~crestBitsMask;
+
+            int crestRequire = require & crestBitsMask;
+            if (crestRequire != 0 && (crestRequire & (crestRequire - 1)) != 0)
+                require &= ~crestBitsMask;
+        }
+
+        /// <summary>
         /// Builds the display view of a route's leaderboard from the cached
         /// best-per-(runner, mask) rows: filter by the modifier filter,
         /// collapse to each runner's best surviving row, sort by time, and
@@ -109,6 +140,21 @@ namespace ReplayTimerMod
             }
 
             return view;
+        }
+
+        /// <summary>
+        /// Number of rows an UNFILTERED collapsed view of the route would
+        /// have (= distinct runners). Cheap count-only companion to
+        /// <see cref="Build"/> for the filter footer's "x of y" total -
+        /// building, cloning, and sorting a full view just to count it would
+        /// be wasted work on every rebuild.
+        /// </summary>
+        public static int CountCollapsed(RouteLeaderboard route)
+        {
+            var runnerKeys = new HashSet<string>();
+            foreach (var e in route.Entries)
+                runnerKeys.Add(e.IsYou ? "you" : "r" + e.Rid);
+            return runnerKeys.Count;
         }
     }
 }

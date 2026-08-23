@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 namespace ReplayTimerMod
@@ -117,11 +116,15 @@ namespace ReplayTimerMod
 
         /// <summary>
         /// Copy of all scene names the server has leaderboard data for.
+        /// For a single membership test use <see cref="HasServerScene"/>.
         /// </summary>
         public HashSet<string> GetServerScenes()
         {
             return new HashSet<string>(_serverScenes);
         }
+
+        /// <summary>True if the server has leaderboard data for the scene.</summary>
+        public bool HasServerScene(string scene) => _serverScenes.Contains(scene);
 
         /// <summary>
         /// Returns aggregate info for a scene, or null if not in index.
@@ -140,7 +143,6 @@ namespace ReplayTimerMod
             _sceneIndexVersion = serverVersion;
             _sceneIndexLoaded = true;
 
-            // Check if scene set changed.
             bool setChanged = _serverScenes.Count != scenes.Count;
             if (!setChanged)
             {
@@ -252,13 +254,12 @@ namespace ReplayTimerMod
 
             if (!_cache.TryGetValue(key, out var data))
             {
-                // No cached data for this room. Create a stub so the player
-                // can at least see their own entry if they open the tab.
+                // Stub so the player can at least see their own entry if
+                // they open the tab before the room is ever fetched.
                 data = new LeaderboardData();
                 _cache[key] = data;
             }
 
-            // Find or create the route.
             RouteLeaderboard? route = null;
             foreach (var r in data.Routes)
             {
@@ -279,16 +280,15 @@ namespace ReplayTimerMod
                 data.Routes.Add(route);
             }
 
-            // Remove only your old entry for the SAME modifier mask - you
-            // legitimately hold one row per mask now, and this upload only
-            // supersedes its own mask's row.
+            // Remove only your old entry for the SAME modifier mask - a
+            // runner legitimately holds one row per mask, and this upload
+            // only supersedes its own mask's row.
             route.Entries.RemoveAll(e => e.IsYou && e.Modifiers == modifierMask);
-            if (route.YourEntry != null && route.YourEntry.IsYou
-                && route.YourEntry.Modifiers == modifierMask)
+            if (route.YourEntry != null && route.YourEntry.Modifiers == modifierMask)
                 route.YourEntry = null;
 
-            // Create new entry. Rid stays -1 (client sentinel) - the UI
-            // collapses IsYou rows under a "you" key, not by rid.
+            // Rid stays -1 (client sentinel) - the UI collapses IsYou rows
+            // under a "you" key, not by rid.
             var newEntry = new LeaderboardEntry
             {
                 Rank = rank,
@@ -299,7 +299,6 @@ namespace ReplayTimerMod
                 Modifiers = modifierMask
             };
 
-            // Insert at correct position in sorted list.
             bool inserted = false;
             for (int i = 0; i < route.Entries.Count; i++)
             {
@@ -321,12 +320,10 @@ namespace ReplayTimerMod
             route.TotalRunners = totalRunners;
             route.YourRank = rank;
 
-            // Bump local version to trigger UI rebuild.
             _signatures.Remove(key);  // force next signature check to differ
             _versions[key] = (_versions.TryGetValue(key, out var v) ? v : 0) + 1;
             _roomFetchedAt[key] = Time.realtimeSinceStartup;
 
-            // Also ensure this scene is in the server scenes set.
             if (_serverScenes.Add(scene))
                 _serverScenesVersion++;
 

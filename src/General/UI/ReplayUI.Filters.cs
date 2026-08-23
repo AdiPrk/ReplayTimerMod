@@ -41,15 +41,15 @@ namespace ReplayTimerMod
 
         // ── Popup state ────────────────────────────────────────────────────
 
-        private GameObject? filterPopupGO;
-        private GameObject? filterToggleGO;   // sub-header toggle, rebuilt on demand
-        private int filterRunsRightEdge;      // toggle's right edge on the Runs tab
-        private RectTransform? filterToggleRT;
-        private RectTransform? filterCaretRT;
-        private Text? filterCountLbl;
-        private Image? filterResetBg;
-        private Text? filterResetLbl;
-        private int filterPopupW, filterPopupH;
+        private GameObject? _filterPopupGO;
+        private GameObject? _filterToggleGO;   // sub-header toggle, rebuilt on demand
+        private int _filterRunsRightEdge;      // toggle's right edge on the Runs tab
+        private RectTransform? _filterToggleRT;
+        private RectTransform? _filterCaretRT;
+        private Text? _filterCountLbl;
+        private Image? _filterResetBg;
+        private Text? _filterResetLbl;
+        private int _filterPopupW, _filterPopupH;
 
         // Live references so a state change restyles chips IN PLACE instead
         // of rebuilding the popup under the pointer.
@@ -65,9 +65,9 @@ namespace ReplayTimerMod
 
         // Result counts for the popup footer, published by the tab builders
         // on every content (re)build so they are always current.
-        private int filterShownCount;
-        private int filterTotalCount;
-        private string filterCountUnit = "runs";
+        private int _filterShownCount;
+        private int _filterTotalCount;
+        private string _filterCountUnit = "runs";
 
         // ── Sub-header toggle ──────────────────────────────────────────────
 
@@ -82,12 +82,12 @@ namespace ReplayTimerMod
         /// </summary>
         private void ShowFilterToggle()
         {
-            if (rightSubHeader == null) return;
+            if (_rightSubHeader == null) return;
             HideFilterToggle();
             SanitizeCrestFilterBits();
 
             bool active = ModifierFilterActive;
-            bool open = filterPopupGO != null && filterPopupGO.activeSelf;
+            bool open = _filterPopupGO != null && _filterPopupGO.activeSelf;
             int count = ActiveFilterCount();
 
             int btnH = UIStyle.H(20);
@@ -104,20 +104,20 @@ namespace ReplayTimerMod
 
             // Flush right on the Leaderboard tab; left of the
             // Export/Paste/Clear cluster on the Runs tab.
-            int rightEdge = activeTab == TabKind.Runs
-                ? filterRunsRightEdge
+            int rightEdge = _activeTab == TabKind.Runs
+                ? _filterRunsRightEdge
                 : RW - M;
 
-            var toggle = MakeGO("FilterToggle", rightSubHeader.transform);
-            filterToggleGO = toggle;
+            var toggle = MakeGO("FilterToggle", _rightSubHeader.transform);
+            _filterToggleGO = toggle;
             Img(toggle, active ? UIStyle.BtnBgStrong(UIStyle.Accent) : Color.clear);
             Rect(toggle, rightEdge - toggleW, btnY, toggleW, btnH);
             // TickFilterPopup exempts the toggle from outside-click closing
             // (its own click handler toggles the popup).
-            filterToggleRT = toggle.GetComponent<RectTransform>();
+            _filterToggleRT = toggle.GetComponent<RectTransform>();
 
             // Drawn caret: right = closed, down = popup open.
-            filterCaretRT = AddCaret(toggle.transform,
+            _filterCaretRT = AddCaret(toggle.transform,
                 caretX + caretS / 2f, btnH / 2f, caretS,
                 active ? UIStyle.Accent : UIStyle.Subtext,
                 open ? -90f : 0f);
@@ -134,8 +134,9 @@ namespace ReplayTimerMod
                 AttachTooltip(toggle, BuildFilterSummary());
 
             // The transient paste status text right-aligns against whatever
-            // is leftmost in the Runs cluster - now this toggle.
-            if (activeTab == TabKind.Runs)
+            // is leftmost in the Runs cluster - with the toggle shown, that
+            // is this toggle.
+            if (_activeTab == TabKind.Runs)
                 PositionPasteStatus(rightEdge - toggleW - M);
         }
 
@@ -146,25 +147,35 @@ namespace ReplayTimerMod
         /// existing SwitchTab/SelectScene/TogglePanel hooks.</summary>
         private void HideFilterToggle()
         {
-            if (filterToggleGO != null)
+            if (_filterToggleGO != null)
             {
-                Object.Destroy(filterToggleGO);
-                filterToggleGO = null;
-                filterToggleRT = null;
-                filterCaretRT = null;
+                // Detach before the (deferred) Destroy so the replacement
+                // toggle never overlaps a destroyed-but-pending one for a
+                // frame (same trick as ClearContentDetached).
+                _filterToggleGO.transform.SetParent(null, false);
+                Object.Destroy(_filterToggleGO);
+                _filterToggleGO = null;
+                _filterToggleRT = null;
+                _filterCaretRT = null;
             }
-            PositionPasteStatus(filterRunsRightEdge);
+            PositionPasteStatus(_filterRunsRightEdge);
         }
 
         /// <summary>Right-aligns the paste status label so it ends at
-        /// <paramref name="rightEdge"/> (sub-header x).</summary>
+        /// <paramref name="rightEdge"/> (sub-header x). Must match the width
+        /// the label was created with (see PasteStatusWidth).</summary>
         private void PositionPasteStatus(int rightEdge)
         {
-            if (pasteStatusLbl == null) return;
-            var rt = pasteStatusLbl.GetComponent<RectTransform>();
+            if (_pasteStatusLbl == null) return;
+            var rt = _pasteStatusLbl.GetComponent<RectTransform>();
             rt.anchoredPosition = new Vector2(
-                rightEdge - UIStyle.W(100), rt.anchoredPosition.y);
+                rightEdge - PasteStatusWidth, rt.anchoredPosition.y);
         }
+
+        /// <summary>Paste-status label width - shared by the creation site
+        /// (ReplayUI.Build) and PositionPasteStatus so the right edge can't
+        /// silently drift when one of them changes.</summary>
+        private static int PasteStatusWidth => UIStyle.W(100);
 
         /// <summary>Number of constrained attributes: each required or
         /// excluded ability counts once, the crest choice counts once.</summary>
@@ -225,7 +236,7 @@ namespace ReplayTimerMod
 
         private void ToggleFilterPopup(GameObject anchor)
         {
-            if (filterPopupGO != null && filterPopupGO.activeSelf)
+            if (_filterPopupGO != null && _filterPopupGO.activeSelf)
                 CloseFilterPopup();
             else
                 OpenFilterPopup(anchor);
@@ -234,28 +245,28 @@ namespace ReplayTimerMod
         private void OpenFilterPopup(GameObject anchor)
         {
             EnsureFilterPopup();
-            if (filterPopupGO == null) return;
+            if (_filterPopupGO == null) return;
 
             RefreshFilterPopup();
 
             // Keep it on top of everything else on the canvas
-            filterPopupGO.transform.SetAsLastSibling();
-            filterPopupGO.SetActive(true);
+            _filterPopupGO.transform.SetAsLastSibling();
+            _filterPopupGO.SetActive(true);
 
             // Drop down from the toggle button with right edges aligned
             // (the toggle sits at the right side of the sub-header), clamped
             // on-screen. Same screen-position convention as the color picker.
             var art = anchor.GetComponent<RectTransform>();
             Vector3 p = art.position; // pivot (top-left) in screen px
-            float x = p.x + art.rect.width - filterPopupW;
-            x = Mathf.Clamp(x, 4, Screen.width - filterPopupW - 4);
+            float x = p.x + art.rect.width - _filterPopupW;
+            x = Mathf.Clamp(x, 4, Screen.width - _filterPopupW - 4);
             float yTop = p.y - art.rect.height - UIStyle.H(4);
-            yTop = Mathf.Clamp(yTop, filterPopupH + 4, Screen.height - 4);
-            filterPopupGO.GetComponent<RectTransform>().anchoredPosition =
+            yTop = Mathf.Clamp(yTop, _filterPopupH + 4, Screen.height - 4);
+            _filterPopupGO.GetComponent<RectTransform>().anchoredPosition =
                 new Vector2(x, yTop);
 
-            if (filterCaretRT != null)
-                filterCaretRT.localEulerAngles = new Vector3(0, 0, -90);
+            if (_filterCaretRT != null)
+                _filterCaretRT.localEulerAngles = new Vector3(0, 0, -90);
         }
 
         /// <summary>Closes the filter popup if open. Safe to call any time;
@@ -263,14 +274,14 @@ namespace ReplayTimerMod
         /// unpause (alongside ClosePicker).</summary>
         private void CloseFilterPopup()
         {
-            if (filterPopupGO != null) filterPopupGO.SetActive(false);
-            if (filterCaretRT != null)
-                filterCaretRT.localEulerAngles = Vector3.zero;
+            if (_filterPopupGO != null) _filterPopupGO.SetActive(false);
+            if (_filterCaretRT != null)
+                _filterCaretRT.localEulerAngles = Vector3.zero;
         }
 
         private void RefreshFilterPopupIfOpen()
         {
-            if (filterPopupGO != null && filterPopupGO.activeSelf)
+            if (_filterPopupGO != null && _filterPopupGO.activeSelf)
                 RefreshFilterPopup();
         }
 
@@ -282,16 +293,16 @@ namespace ReplayTimerMod
         /// whatever was clicked.</summary>
         private void TickFilterPopup()
         {
-            if (filterPopupGO == null || !filterPopupGO.activeSelf) return;
+            if (_filterPopupGO == null || !_filterPopupGO.activeSelf) return;
             if (!Input.GetMouseButtonDown(0)) return;
 
             Vector2 mouse = Input.mousePosition;
             if (RectTransformUtility.RectangleContainsScreenPoint(
-                    (RectTransform)filterPopupGO.transform, mouse))
+                    (RectTransform)_filterPopupGO.transform, mouse))
                 return;
-            if (filterToggleRT != null
+            if (_filterToggleRT != null
                 && RectTransformUtility.RectangleContainsScreenPoint(
-                    filterToggleRT, mouse))
+                    _filterToggleRT, mouse))
                 return; // the toggle's own click handler closes it
 
             CloseFilterPopup();
@@ -309,15 +320,10 @@ namespace ReplayTimerMod
             RebuildActiveTabContentOnly(); // also refreshes the open popup
         }
 
-        /// <summary>Crest chips are single-select: clicking selects that
-        /// crest (replacing any other), clicking the selected crest - or the
-        /// "Any crest" chip (bitMask 0) - clears the choice.</summary>
         private void OnCrestChipClicked(int bitMask)
         {
-            int require = FilterRequire & ~ModifierRegistry.CrestBitsMask;
-            if (bitMask != 0 && (FilterRequire & bitMask) == 0)
-                require |= bitMask;
-            GhostSettings.ModifierRequireMask = require;
+            GhostSettings.ModifierRequireMask = RouteView.SelectCrestBit(
+                FilterRequire, ModifierRegistry.CrestBitsMask, bitMask);
             RebuildActiveTabContentOnly();
         }
 
@@ -333,23 +339,23 @@ namespace ReplayTimerMod
 
         private void EnsureFilterPopup()
         {
-            if (filterPopupGO != null) return;
-            if (canvasGO == null) return;
+            if (_filterPopupGO != null) return;
+            if (_canvasGO == null) return;
 
             abilityChips.Clear();
             crestChips.Clear();
 
-            filterPopupGO = MakeGO("FilterPopup", canvasGO.transform);
+            _filterPopupGO = MakeGO("FilterPopup", _canvasGO.transform);
 
             // 1px frame, same construction as the tooltip / color picker
-            var borderImg = filterPopupGO.AddComponent<Image>();
+            var borderImg = _filterPopupGO.AddComponent<Image>();
             borderImg.color = UIStyle.Overlay with { a = 0.9f };
 
-            var rt = filterPopupGO.GetComponent<RectTransform>();
+            var rt = _filterPopupGO.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = Vector2.zero; // bottom-left anchored
             rt.pivot = new Vector2(0f, 1f);             // position = top-left
 
-            var inner = MakeGO("Inner", filterPopupGO.transform);
+            var inner = MakeGO("Inner", _filterPopupGO.transform);
             var innerImg = inner.AddComponent<Image>();
             innerImg.color = UIStyle.Base with { a = 0.98f };
             var innerRt = inner.GetComponent<RectTransform>();
@@ -365,7 +371,7 @@ namespace ReplayTimerMod
 
             // Legend doubles as the title: the tri-state cycle isn't
             // discoverable without it.
-            MakeLbl(filterPopupGO.transform,
+            MakeLbl(_filterPopupGO.transform,
                 "Abilities",
                 UIStyle.FontSizeTiny, UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: pad, y: y, w: pw - pad * 2, h: lblH);
@@ -375,7 +381,7 @@ namespace ReplayTimerMod
             foreach (var def in NonCrestDefs())
             {
                 int bitMask = 1 << def.Bit;
-                abilityChips.Add(AddFilterChip(filterPopupGO.transform,
+                abilityChips.Add(AddFilterChip(_filterPopupGO.transform,
                     "Chip_" + def.Id, def.DisplayName, bitMask, flow,
                     () => OnAbilityChipClicked(bitMask)));
             }
@@ -384,48 +390,46 @@ namespace ReplayTimerMod
             var crests = CrestDefs();
             if (crests.Count > 0)
             {
-                MakeLbl(filterPopupGO.transform, "Crest",
+                MakeLbl(_filterPopupGO.transform, "Crest",
                     UIStyle.FontSizeTiny, UIStyle.Subtext, TextAnchor.MiddleLeft,
                     x: pad, y: y, w: pw - pad * 2, h: lblH);
                 y += lblH + UIStyle.H(6);
 
-                // "Any crest" first, then one chip per crest.
                 flow = new ChipFlow(pad, pw - pad, y);
-                crestChips.Add(AddFilterChip(filterPopupGO.transform,
+                crestChips.Add(AddFilterChip(_filterPopupGO.transform,
                     "Crest_any", "Any crest", 0, flow,
                     () => OnCrestChipClicked(0)));
                 foreach (var def in crests)
                 {
                     int bitMask = 1 << def.Bit;
-                    crestChips.Add(AddFilterChip(filterPopupGO.transform,
+                    crestChips.Add(AddFilterChip(_filterPopupGO.transform,
                         "Crest_" + def.Id, def.DisplayName, bitMask, flow,
                         () => OnCrestChipClicked(bitMask)));
                 }
                 y = flow.End + UIStyle.H(10);
             }
 
-            HLine(filterPopupGO.transform, pad, y, pw - pad * 2);
+            HLine(_filterPopupGO.transform, pad, y, pw - pad * 2);
             y += UIStyle.H(8);
 
-            // Footer: live result count + Reset.
             int footH = UIStyle.H(20);
             int resetW = UIStyle.W(52);
-            filterCountLbl = MakeLbl(filterPopupGO.transform, "",
+            _filterCountLbl = MakeLbl(_filterPopupGO.transform, "",
                 UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: pad, y: y, w: pw - pad * 2 - resetW - UIStyle.Gap, h: footH);
-            var resetRef = MakeButton(filterPopupGO.transform, "FilterReset",
+            var resetRef = MakeButton(_filterPopupGO.transform, "FilterReset",
                 "Reset", UIStyle.FontSizeBtn, UIStyle.Red,
                 UIStyle.BtnBg(UIStyle.Red),
                 pw - pad - resetW, y, resetW, footH, OnFilterResetClicked);
-            filterResetBg = resetRef.bg;
-            filterResetLbl = resetRef.label;
+            _filterResetBg = resetRef.bg;
+            _filterResetLbl = resetRef.label;
             y += footH + UIStyle.H(10);
 
-            filterPopupW = pw;
-            filterPopupH = y;
+            _filterPopupW = pw;
+            _filterPopupH = y;
             rt.sizeDelta = new Vector2(pw, y);
 
-            filterPopupGO.SetActive(false);
+            _filterPopupGO.SetActive(false);
         }
 
         /// <summary>Left-to-right chip placement that wraps within
@@ -496,7 +500,7 @@ namespace ReplayTimerMod
 
         // ── Text measurement ───────────────────────────────────────────────
 
-        private Text? measureLbl;
+        private Text? _measureLbl;
 
         /// <summary>
         /// Width of rendered text in canvas px (the canvas uses
@@ -506,32 +510,32 @@ namespace ReplayTimerMod
         /// </summary>
         private float MeasureTextWidth(string text, int fontSize)
         {
-            if (measureLbl == null)
+            if (_measureLbl == null)
             {
                 // Kept active with clear color: preferred-size queries are
                 // safest on an active Text across Unity versions, and a
                 // fully transparent zero-size label renders nothing.
-                var go = MakeGO("MeasureLbl", canvasGO.transform);
-                measureLbl = go.AddComponent<Text>();
-                measureLbl.font = UIStyle.Arial;
-                measureLbl.color = Color.clear;
-                measureLbl.raycastTarget = false;
-                measureLbl.supportRichText = false;
-                measureLbl.horizontalOverflow = HorizontalWrapMode.Overflow;
-                measureLbl.verticalOverflow = VerticalWrapMode.Overflow;
+                var go = MakeGO("MeasureLbl", _canvasGO.transform);
+                _measureLbl = go.AddComponent<Text>();
+                _measureLbl.font = UIStyle.Arial;
+                _measureLbl.color = Color.clear;
+                _measureLbl.raycastTarget = false;
+                _measureLbl.supportRichText = false;
+                _measureLbl.horizontalOverflow = HorizontalWrapMode.Overflow;
+                _measureLbl.verticalOverflow = VerticalWrapMode.Overflow;
                 Rect(go, 0, 0, 0, 0);
             }
 
-            measureLbl.fontSize = fontSize;
-            measureLbl.text = text;
-            return measureLbl.preferredWidth;
+            _measureLbl.fontSize = fontSize;
+            _measureLbl.text = text;
+            return _measureLbl.preferredWidth;
         }
 
         /// <summary>Restyles every chip and the footer from the current
         /// filter state and result counts - in place, no rebuild.</summary>
         private void RefreshFilterPopup()
         {
-            if (filterPopupGO == null) return;
+            if (_filterPopupGO == null) return;
 
             foreach (var chip in abilityChips)
                 StyleFilterChip(chip,
@@ -546,15 +550,15 @@ namespace ReplayTimerMod
                     without: false);
 
             bool active = ModifierFilterActive;
-            if (filterCountLbl != null)
-                filterCountLbl.text = active
-                    ? filterShownCount + " of " + filterTotalCount + " "
-                        + filterCountUnit + " shown"
-                    : filterTotalCount + " " + filterCountUnit;
-            if (filterResetLbl != null)
-                filterResetLbl.color = active ? UIStyle.Red : UIStyle.Subtext;
-            if (filterResetBg != null)
-                filterResetBg.color = active
+            if (_filterCountLbl != null)
+                _filterCountLbl.text = active
+                    ? _filterShownCount + " of " + _filterTotalCount + " "
+                        + _filterCountUnit + " shown"
+                    : _filterTotalCount + " " + _filterCountUnit;
+            if (_filterResetLbl != null)
+                _filterResetLbl.color = active ? UIStyle.Red : UIStyle.Subtext;
+            if (_filterResetBg != null)
+                _filterResetBg.color = active
                     ? UIStyle.BtnBg(UIStyle.Red)
                     : UIStyle.Surface with { a = 0.5f };
         }
@@ -584,18 +588,20 @@ namespace ReplayTimerMod
         // ── Registry helpers ───────────────────────────────────────────────
 
         /// <summary>Crest bits are single-choice via the chip row; drop any
-        /// stale multi-crest/exclude state (e.g. from older versions).</summary>
+        /// stale multi-crest/exclude state (e.g. from older versions). The
+        /// rules live in RouteView (unit tested); this wrapper only persists
+        /// what actually changed.</summary>
         private static void SanitizeCrestFilterBits()
         {
-            int crestBits = ModifierRegistry.CrestBitsMask;
-            if (crestBits == 0) return;
+            int require = FilterRequire;
+            int exclude = FilterExclude;
+            RouteView.SanitizeCrestBits(ModifierRegistry.CrestBitsMask,
+                ref require, ref exclude);
 
-            if ((FilterExclude & crestBits) != 0)
-                GhostSettings.ModifierExcludeMask = FilterExclude & ~crestBits;
-
-            int crestRequire = FilterRequire & crestBits;
-            if (crestRequire != 0 && (crestRequire & (crestRequire - 1)) != 0)
-                GhostSettings.ModifierRequireMask = FilterRequire & ~crestBits;
+            if (exclude != FilterExclude)
+                GhostSettings.ModifierExcludeMask = exclude;
+            if (require != FilterRequire)
+                GhostSettings.ModifierRequireMask = require;
         }
 
         private static List<ModifierDef> NonCrestDefs()
@@ -651,9 +657,9 @@ namespace ReplayTimerMod
         /// filter popup with the fresh state and result counts.</summary>
         private void RebuildActiveTabContentOnly()
         {
-            if (activeTab == TabKind.Leaderboard)
+            if (_activeTab == TabKind.Leaderboard)
                 RebuildLeaderboardContentOnly();
-            else if (activeTab == TabKind.Runs)
+            else if (_activeTab == TabKind.Runs)
                 RebuildRunsContentOnly();
         }
 
@@ -664,14 +670,14 @@ namespace ReplayTimerMod
         /// </summary>
         private void RebuildRunsContentOnly()
         {
-            if (rightContent == null || selectedScene == null) return;
+            if (_rightContent == null || _selectedScene == null) return;
 
             var scroll = RightScroll;
             float keepScroll = scroll != null ? ScrollOffsetFromTop(scroll) : 0f;
 
-            ClearContentDetached(rightContent);
-            BuildRunsContent(selectedScene);
-            ForceLayout(rightContent);
+            ClearContentDetached(_rightContent);
+            BuildRunsContent(_selectedScene);
+            ForceLayout(_rightContent);
 
             if (scroll != null)
                 RestoreScrollOffsetFromTop(scroll, keepScroll);

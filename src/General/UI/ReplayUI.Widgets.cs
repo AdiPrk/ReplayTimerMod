@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -187,7 +188,7 @@ namespace ReplayTimerMod
         /// the width is deterministic without live text measurement. Both
         /// tabs must size their time column with this.
         /// </summary>
-        private static int TimeColumnWidth(System.Collections.Generic.IEnumerable<float> times)
+        private static int TimeColumnWidth(IEnumerable<float> times)
         {
             float maxEm = 0f;
             foreach (float t in times)
@@ -220,6 +221,11 @@ namespace ReplayTimerMod
             var btn = go.GetComponent<Button>() ?? go.AddComponent<Button>();
             btn.onClick.RemoveAllListeners();
             btn.onClick.AddListener(action);
+            // Hover/press feedback comes from the hover helpers; the default
+            // ColorTint transition is inert (no targetGraphic) and Automatic
+            // navigation would let gamepad/keyboard focus wander onto rows.
+            btn.transition = Selectable.Transition.None;
+            btn.navigation = new Navigation { mode = Navigation.Mode.None };
         }
 
         private static void Rect(GameObject go, float x, float y, float w, float h)
@@ -331,6 +337,79 @@ namespace ReplayTimerMod
             buttonGO.AddComponent<ButtonHover>().overlay = img;
         }
 
+        // ── Shared marker textures ──────────────────────────────────────────
+        // Drawn once, shared by every consumer (Runs rows, leaderboard
+        // headers, the filter toggle), and they survive canvas destruction
+        // (textures aren't scene objects). Edges get a 1px alpha ramp so the
+        // diagonals aren't jagged.
+
+        private static Texture2D? _playMarkerTex;
+
+        /// <summary>White right-pointing triangle on transparent, tinted by
+        /// the RawImage that displays it.</summary>
+        private static Texture2D PlayMarkerTexture()
+        {
+            if (_playMarkerTex == null)
+            {
+                const int n = 24;
+                _playMarkerTex = new Texture2D(n, n, TextureFormat.RGBA32, false);
+                _playMarkerTex.wrapMode = TextureWrapMode.Clamp;
+                var px = new Color[n * n];
+                for (int y = 0; y < n; y++)
+                {
+                    // Apex at the right middle: each row is filled from the
+                    // left edge out to xEdge, which shrinks with the row's
+                    // distance from the vertical center.
+                    float xEdge = n - 2f * Mathf.Abs(y + 0.5f - n / 2f);
+                    for (int x = 0; x < n; x++)
+                        px[y * n + x] = new Color(1f, 1f, 1f,
+                            Mathf.Clamp01(xEdge - x));
+                }
+                _playMarkerTex.SetPixels(px);
+                _playMarkerTex.Apply();
+            }
+            return _playMarkerTex;
+        }
+
+        private static Texture2D? _cameraMarkerTex;
+
+        /// <summary>White video-camera glyph (body plus a right-widening
+        /// lens wedge) on transparent, tinted by the RawImage that displays
+        /// it.</summary>
+        private static Texture2D CameraMarkerTexture()
+        {
+            if (_cameraMarkerTex == null)
+            {
+                const int n = 24;
+                _cameraMarkerTex = new Texture2D(n, n, TextureFormat.RGBA32, false);
+                _cameraMarkerTex.wrapMode = TextureWrapMode.Clamp;
+                var px = new Color[n * n];
+                for (int y = 0; y < n; y++)
+                {
+                    float yc = y + 0.5f;
+                    for (int x = 0; x < n; x++)
+                    {
+                        float xc = x + 0.5f;
+                        // Camera body: rectangle on the left.
+                        float body = Mathf.Min(
+                            Mathf.Min(xc - 0.5f, 13.5f - xc),
+                            Mathf.Min(yc - 4.5f, 19.5f - yc));
+                        // Lens wedge: apex touching the body at mid
+                        // height, widening toward the right edge.
+                        float half = 1f + (xc - 13f) * 0.6f;
+                        float wedge = Mathf.Min(
+                            Mathf.Min(xc - 13f, 23.5f - xc),
+                            half - Mathf.Abs(yc - 12f));
+                        px[y * n + x] = new Color(1f, 1f, 1f,
+                            Mathf.Clamp01(Mathf.Max(body, wedge)));
+                    }
+                }
+                _cameraMarkerTex.SetPixels(px);
+                _cameraMarkerTex.Apply();
+            }
+            return _cameraMarkerTex;
+        }
+
         /// <summary>
         /// Small drawn triangle caret (PlayMarkerTexture, tinted), centered
         /// at (cx, cy) in the parent's top-left space. Points right at
@@ -366,7 +445,13 @@ namespace ReplayTimerMod
             var go = MakeGO(name, parent);
             var bg = go.AddComponent<Image>();
             bg.color = bgColor;
-            go.AddComponent<Button>().onClick.AddListener(onClick);
+            var btn = go.AddComponent<Button>();
+            btn.onClick.AddListener(onClick);
+            // Hover/press feedback comes from AddButtonHover; the default
+            // ColorTint transition is inert (no targetGraphic) and Automatic
+            // navigation would let gamepad/keyboard focus wander onto rows.
+            btn.transition = Selectable.Transition.None;
+            btn.navigation = new Navigation { mode = Navigation.Mode.None };
             Rect(go, x, y, w, h);
             var lbl = MakeLbl(go.transform, text, fontSize, textColor,
                 TextAnchor.MiddleCenter, fill: true);
@@ -430,12 +515,6 @@ namespace ReplayTimerMod
             input.onValueChanged.AddListener(onChanged);
 
             return input;
-        }
-
-        private static void ClearContent(Transform t)
-        {
-            for (int i = t.childCount - 1; i >= 0; i--)
-                Object.Destroy(t.GetChild(i).gameObject);
         }
 
         private static void ForceLayout(Transform content)

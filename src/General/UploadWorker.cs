@@ -59,7 +59,14 @@ namespace ReplayTimerMod
             var candidate = _queue.Peek();
             if (candidate.RetryAfterTicks > 0
                 && DateTime.UtcNow.Ticks < candidate.RetryAfterTicks)
+            {
+                // Head is in backoff — rotate it to the tail so a ready
+                // payload behind it (e.g. a fresh PB) isn't blocked for up
+                // to 32s of someone else's retry delay.
+                if (_queue.Count > 1)
+                    _queue.Enqueue(_queue.Dequeue());
                 return;
+            }
 
             var payload = _queue.Dequeue();
             _inFlight = true;
@@ -85,10 +92,10 @@ namespace ReplayTimerMod
                     var response = ApiJson.ParseUploadResponse(responseBody);
 
                     Log.LogInfo("[UploadWorker] Uploaded " + p.SceneName
-                        + "[" + p.EntryFrom + "→" + p.ExitTo + "] "
+                        + "[" + p.EntryFrom + "->" + p.ExitTo + "] "
                         + TimeUtil.Format(p.TotalTime)
                         + (response.HasRank
-                            ? " → #" + response.Rank + "/" + response.TotalRunners
+                            ? " -> #" + response.Rank + "/" + response.TotalRunners
                             : ""));
 
                     OnUploadSuccess?.Invoke(p, response);
@@ -99,13 +106,24 @@ namespace ReplayTimerMod
                 else
                 {
                     _health.RecordFailure();
-                    HandleFailure(p, status.ToString(), responseBody);
+                    HandleFailure(p, status, responseBody);
                 }
             }, headers);
         }
 
-        private void HandleFailure(UploadPayload payload, string status, string message)
+        private void HandleFailure(UploadPayload payload, long status, string message)
         {
+            // Permanent rejections (validation failures, quota, no runner)
+            // will never succeed with the identical payload — retrying only
+            // re-POSTs the full replay blob for the same answer. 429 is the
+            // exception: rate limits clear on their own.
+            if (status >= 400 && status < 500 && status != 429)
+            {
+                Log.LogWarning("[UploadWorker] Dropping " + payload.SceneName
+                    + " (rejected " + status + "): " + message);
+                return;
+            }
+
             payload.RetryCount++;
 
             if (payload.RetryCount > MaxRetries)

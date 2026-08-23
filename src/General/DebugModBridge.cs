@@ -60,13 +60,17 @@ namespace ReplayTimerMod
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("DebugModBridge");
 
-        private const string ASSEMBLY_NAME = "DebugMod";
+        private const string AssemblyName = "DebugMod";
 
         private const BindingFlags StaticAny =
             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
 
         private static bool _hooked;
         private static bool _giveUp;
+
+        // TryHook retry throttle (see TryHook).
+        private const int HookRetryIntervalMs = 1000;
+        private static int _nextHookAttemptTick;
 
         // SaveState.loadingSavestate - see IsLoadingSavestate for the type-shape note.
         private static PropertyInfo? _loadingSavestateProp;
@@ -109,7 +113,15 @@ namespace ReplayTimerMod
         {
             if (_hooked || _giveUp) return;
 
-            Assembly? asm = FindAssembly(ASSEMBLY_NAME);
+            // The state getters call this every frame; when DebugMod simply
+            // isn't installed the assembly scan below would otherwise run (and
+            // allocate) once per frame forever. Rate-limit retries to ~1/s.
+            // Unchecked subtraction stays correct across TickCount wraparound.
+            int now = Environment.TickCount;
+            if (now - _nextHookAttemptTick < 0) return;
+            _nextHookAttemptTick = now + HookRetryIntervalMs;
+
+            Assembly? asm = FindAssembly(AssemblyName);
             if (asm == null) return; // not loaded yet (or not installed) - try again later
 
             try

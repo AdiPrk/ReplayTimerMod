@@ -132,75 +132,28 @@ namespace ReplayTimerMod
             if (string.IsNullOrEmpty(json)) return result;
 
             int i = 0;
-            SkipWs(json, ref i);
+            JsonText.SkipWs(json, ref i);
             if (i >= json.Length || json[i] != '{') return result;
             i++;
 
             while (i < json.Length)
             {
-                SkipWs(json, ref i);
+                JsonText.SkipWs(json, ref i);
                 if (i >= json.Length || json[i] == '}') break;
                 if (json[i] == ',') { i++; continue; }
 
-                string key = ReadString(json, ref i);
-                SkipWs(json, ref i);
+                string key = JsonText.ReadString(json, ref i);
+                JsonText.SkipWs(json, ref i);
                 if (i >= json.Length || json[i] != ':') break;
                 i++;
-                SkipWs(json, ref i);
-                string value = ReadString(json, ref i);
+                JsonText.SkipWs(json, ref i);
+                string value = JsonText.ReadString(json, ref i);
 
                 if (!string.IsNullOrEmpty(key))
                     result[key] = value;
             }
 
             return result;
-        }
-
-        private static string ReadString(string json, ref int i)
-        {
-            if (i >= json.Length || json[i] != '"') return "";
-            i++;
-
-            var sb = new StringBuilder();
-            while (i < json.Length)
-            {
-                char c = json[i];
-                if (c == '"') { i++; break; }
-                if (c == '\\' && i + 1 < json.Length)
-                {
-                    i++;
-                    switch (json[i])
-                    {
-                        case '"':  sb.Append('"');  break;
-                        case '\\': sb.Append('\\'); break;
-                        case 'n':  sb.Append('\n'); break;
-                        case 'r':  sb.Append('\r'); break;
-                        case 't':  sb.Append('\t'); break;
-                        case 'u':
-                            if (i + 4 < json.Length)
-                            {
-                                sb.Append((char)Convert.ToInt32(
-                                    json.Substring(i + 1, 4), 16));
-                                i += 4;
-                            }
-                            break;
-                        default: sb.Append(json[i]); break;
-                    }
-                }
-                else
-                {
-                    sb.Append(c);
-                }
-                i++;
-            }
-            return sb.ToString();
-        }
-
-        private static void SkipWs(string json, ref int i)
-        {
-            while (i < json.Length && (json[i] == ' ' || json[i] == '\t'
-                || json[i] == '\n' || json[i] == '\r'))
-                i++;
         }
     }
 }

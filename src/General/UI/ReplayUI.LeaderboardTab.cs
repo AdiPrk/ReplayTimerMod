@@ -64,51 +64,50 @@ namespace ReplayTimerMod
 
         private void BuildLeaderboardContent()
         {
-            if (rightContent == null) return;
+            if (_rightContent == null) return;
 
             // Hidden unless this build reaches the filterable path below
             // (covers the lightweight ContentOnly rebuilds).
             HideFilterToggle();
 
-            // Stale refs from the previous build are invalid now
             _ghostBtnRefs.Clear();
 
             // Record what data version this build reflects so identical
             // polling responses can skip rebuilds entirely.
-            if (selectedScene != null)
+            if (_selectedScene != null)
             {
-                _renderedLbScene = selectedScene;
+                _renderedLbScene = _selectedScene;
                 _renderedLbVersion =
-                    _leaderboardCache.GetVersion(_gameTag, selectedScene);
+                    _leaderboardCache.GetVersion(_gameTag, _selectedScene);
             }
 
             if (!GhostSettings.OnlineEnabled)
             {
-                AddCenteredMessage(rightContent,
+                AddCenteredMessage(_rightContent,
                     "Enable online features in Config to view leaderboards.");
                 return;
             }
 
-            if (selectedScene == null)
+            if (_selectedScene == null)
             {
-                AddCenteredMessage(rightContent,
+                AddCenteredMessage(_rightContent,
                     "Select a room to view leaderboards.");
                 return;
             }
 
-            LeaderboardData? cached = _leaderboardCache.Get(_gameTag, selectedScene);
+            LeaderboardData? cached = _leaderboardCache.Get(_gameTag, _selectedScene);
 
             if (cached == null)
             {
                 bool polling = _networkClient != null && _networkClient.IsStarted;
-                AddCenteredMessage(rightContent,
+                AddCenteredMessage(_rightContent,
                     polling ? "Loading..." : "Leaderboard unavailable.");
                 return;
             }
 
             if (cached.Routes.Count == 0)
             {
-                AddCenteredMessage(rightContent,
+                AddCenteredMessage(_rightContent,
                     "No leaderboard data for this room yet.");
                 return;
             }
@@ -122,27 +121,26 @@ namespace ReplayTimerMod
             // the time column can be sized to the widest time before any
             // row is built (all view entries, not just the visible window,
             // so expanding a route never shifts the columns).
-            var shownRoutes = new System.Collections.Generic.List<RouteLeaderboard>();
+            var shownRoutes = new List<RouteLeaderboard>();
             var shownViews =
-                new System.Collections.Generic.List<System.Collections.Generic.List<LeaderboardEntry>>();
-            var shownRanks = new System.Collections.Generic.List<int>();
-            var shownYourRows = new System.Collections.Generic.List<LeaderboardEntry?>();
-            var shownTimes = new System.Collections.Generic.List<float>();
-            filterShownCount = 0;
-            filterTotalCount = 0;
-            filterCountUnit = "entries";
+                new List<List<LeaderboardEntry>>();
+            var shownRanks = new List<int>();
+            var shownYourRows = new List<LeaderboardEntry?>();
+            var shownTimes = new List<float>();
+            _filterShownCount = 0;
+            _filterTotalCount = 0;
+            _filterCountUnit = "entries";
             foreach (var route in cached.Routes)
             {
                 // Footer total: the unfiltered collapsed board (what the
                 // route would show with no filter), not raw server rows.
-                filterTotalCount += RouteView.Build(route, 0, 0,
-                    out _, out _).Count;
+                _filterTotalCount += RouteView.CountCollapsed(route);
 
                 var view = BuildRouteView(route,
                     out int yourViewRank, out var yourRow);
                 if (view.Count == 0) continue;
 
-                filterShownCount += view.Count;
+                _filterShownCount += view.Count;
                 shownRoutes.Add(route);
                 shownViews.Add(view);
                 shownRanks.Add(yourViewRank);
@@ -153,7 +151,7 @@ namespace ReplayTimerMod
 
             if (shownRoutes.Count == 0)
             {
-                AddCenteredMessage(rightContent,
+                AddCenteredMessage(_rightContent,
                     "No leaderboard runs match the modifier filter.");
                 return;
             }
@@ -163,7 +161,7 @@ namespace ReplayTimerMod
             bool stripe = false;
             for (int i = 0; i < shownRoutes.Count; i++)
             {
-                AddLeaderboardRouteGroup(rightContent, shownRoutes[i],
+                AddLeaderboardRouteGroup(_rightContent, shownRoutes[i],
                     shownViews[i], shownRanks[i], shownYourRows[i], stripe,
                     timeColW);
                 stripe = !stripe;
@@ -172,15 +170,18 @@ namespace ReplayTimerMod
 
         private void AddLeaderboardRouteGroup(Transform parent,
             RouteLeaderboard route,
-            System.Collections.Generic.List<LeaderboardEntry> view,
+            List<LeaderboardEntry> view,
             int yourViewRank, LeaderboardEntry? yourRow, bool stripe,
             int timeColW)
         {
-            string routeKey = route.EntryFrom + ">" + route.ExitTo;
+            // Scene-qualified: transition names repeat across rooms
+            // (left1>right1 exists nearly everywhere), and _expandedRoutes
+            // persists across scene selection.
+            string routeKey = _selectedScene + "|" + route.EntryFrom + ">" + route.ExitTo;
             bool isExpanded = _expandedRoutes.Contains(routeKey);
             int showCount = isExpanded
                 ? view.Count
-                : System.Math.Min(LeaderboardCollapsedCount, view.Count);
+                : Mathf.Min(LeaderboardCollapsedCount, view.Count);
 
             // View ranks are contiguous (1..N), so "you" sits below the
             // visible window exactly when your view rank exceeds it.
@@ -257,9 +258,9 @@ namespace ReplayTimerMod
             // known. Its own Button consumes the click, so it doesn't trigger
             // the row-wide expand toggle. Same warp action as the Runs tab.
             int rightEdge = RW - M;
-            if (GhostSettings.RoomWarpEnabled && selectedScene != null)
+            if (GhostSettings.RoomWarpEnabled && _selectedScene != null)
             {
-                var warpKey = new RoomKey(selectedScene, route.EntryFrom, route.ExitTo);
+                var warpKey = new RoomKey(_selectedScene, route.EntryFrom, route.ExitTo);
                 if (QuickWarp.CanWarp(warpKey))
                 {
                     int warpW = UIStyle.W(44);
@@ -360,9 +361,9 @@ namespace ReplayTimerMod
             // Capacity check (derived fresh every build — raising the limit
             // in Config immediately re-enables these buttons)
             if (showGhost && dlState == GhostDownloadState.Idle
-                && selectedScene != null)
+                && _selectedScene != null)
             {
-                var routeRoomKey = new RoomKey(selectedScene,
+                var routeRoomKey = new RoomKey(_selectedScene,
                     route.EntryFrom, route.ExitTo);
                 if (!RouteHistoryHasCapacity(routeRoomKey, entry.TotalTime,
                         entry.Modifiers))
@@ -399,8 +400,8 @@ namespace ReplayTimerMod
                     UIStyle.FontSizeBtn, UIStyle.Accent, TextAnchor.MiddleCenter,
                     fill: true);
 
-                // Click handler (Idle and Failed are actionable; the state
-                // guard in OnGhostDownloadClicked covers in-place transitions)
+                // Idle and Failed are actionable; the state guard in
+                // OnGhostDownloadClicked covers in-place transitions.
                 if (_networkClient != null && _networkClient.IsStarted
                     && dlState != GhostDownloadState.Full)
                 {
@@ -408,24 +409,16 @@ namespace ReplayTimerMod
                     string rname = entry.RunnerName ?? "";
                     bool isMe = entry.IsYou;
                     Btn(ghostGO, () => OnGhostDownloadClicked(rid, rname, isMe));
-                    var ghostBtn = ghostGO.GetComponent<Button>();
-                    if (ghostBtn != null)
-                    {
-                        ghostBtn.transition = Selectable.Transition.None;
-                        ghostBtn.navigation = new Navigation
-                        { mode = Navigation.Mode.None };
-                    }
                     AddButtonHover(ghostGO);
                 }
 
-                // Register refs + paint the state
                 var refs = new GhostBtnRefs
                 {
                     go = ghostGO,
                     bg = ghostImg,
                     label = ghostLbl,
-                    roomKey = selectedScene != null
-                        ? new RoomKey(selectedScene, route.EntryFrom, route.ExitTo)
+                    roomKey = _selectedScene != null
+                        ? new RoomKey(_selectedScene, route.EntryFrom, route.ExitTo)
                         : default,
                     entryTime = entry.TotalTime,
                     entryMask = entry.Modifiers
@@ -446,12 +439,6 @@ namespace ReplayTimerMod
 
                 string linkRid = entry.RunId;
                 Btn(linkGO, () => OnCopyLinkClicked(linkRid, linkLbl));
-                var linkBtn = linkGO.GetComponent<Button>();
-                if (linkBtn != null)
-                {
-                    linkBtn.transition = Selectable.Transition.None;
-                    linkBtn.navigation = new Navigation { mode = Navigation.Mode.None };
-                }
                 AddButtonHover(linkGO);
             }
 
@@ -539,7 +526,7 @@ namespace ReplayTimerMod
             else
                 _expandedRoutes.Add(routeKey);
 
-            if (activeTab == TabKind.Leaderboard)
+            if (_activeTab == TabKind.Leaderboard)
                 RebuildLeaderboardContentOnly();
         }
 
@@ -550,14 +537,14 @@ namespace ReplayTimerMod
         /// </summary>
         private void RebuildLeaderboardContentOnly()
         {
-            if (rightContent == null) return;
+            if (_rightContent == null) return;
 
             var scroll = RightScroll;
             float keepScroll = scroll != null ? ScrollOffsetFromTop(scroll) : 0f;
 
-            ClearContentDetached(rightContent);
+            ClearContentDetached(_rightContent);
             BuildLeaderboardContent();
-            ForceLayout(rightContent);
+            ForceLayout(_rightContent);
 
             if (scroll != null)
                 RestoreScrollOffsetFromTop(scroll, keepScroll);
@@ -709,7 +696,7 @@ namespace ReplayTimerMod
             _stateExpiry.Remove(runId);
 
             // In-place visual update — NO rebuild
-            if (!TryUpdateGhostVisual(runId) && activeTab == TabKind.Leaderboard)
+            if (!TryUpdateGhostVisual(runId) && _activeTab == TabKind.Leaderboard)
                 RebuildLeaderboardContentOnly();
 
             _networkClient.DownloadReplay(runId, replayBytes =>
@@ -740,7 +727,7 @@ namespace ReplayTimerMod
                         " max). Raise 'Max saved replays' in Config to keep " +
                         "slower replays.");
                     if (!TryUpdateGhostVisual(runId, GhostDownloadState.Full)
-                        && activeTab == TabKind.Leaderboard)
+                        && _activeTab == TabKind.Leaderboard)
                         RebuildLeaderboardContentOnly();
                     return;
                 }
@@ -785,7 +772,7 @@ namespace ReplayTimerMod
             _downloadStates[runId] = GhostDownloadState.Failed;
             _stateExpiry[runId] = Time.unscaledTime + FailedRevertSeconds;
             Log.LogInfo("[Leaderboard] Ghost " + reason + " for " + runId);
-            if (!TryUpdateGhostVisual(runId) && activeTab == TabKind.Leaderboard)
+            if (!TryUpdateGhostVisual(runId) && _activeTab == TabKind.Leaderboard)
                 RebuildLeaderboardContentOnly();
         }
 

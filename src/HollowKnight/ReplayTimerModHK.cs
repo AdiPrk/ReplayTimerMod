@@ -18,8 +18,6 @@ namespace ReplayTimerMod
         private RoomLifecycle roomLifecycle = null!;
         private bool lateInitDone = false;
 
-        public static ReplayTimerModHK Instance { get; private set; } = null!;
-
         private static string GameTag
         {
             get
@@ -37,7 +35,6 @@ namespace ReplayTimerMod
 
         public override void Initialize()
         {
-            Instance = this;
             Log("Initialize");
 
             GameHooks.Init();
@@ -83,7 +80,7 @@ namespace ReplayTimerMod
 
             bool shouldTick = false;
             try { shouldTick = LoadRemover.ShouldTick(); }
-            catch { Log("couldnt check tick timer"); }
+            catch (Exception ex) { LogTickError("LoadRemover", ex); }
 
             // Each subsystem ticks in its own guard so one failure can't
             // take the whole mod down for the rest of the session (the old
@@ -119,17 +116,13 @@ namespace ReplayTimerMod
 
             lateInitDone = true;
             Log("Hero ready - setting up UI and ghost");
-            ghostPlayback.Setup();
             replayUI.Setup();
             roomTimerHUD.Setup();
 
-            // Set game tag for leaderboard cache keys
             replayUI.SetGameTag(GameTag);
 
-            // Wire the online toggle handler
             replayUI.SetOnlineToggleHandler(OnOnlineToggled);
 
-            // When name is set via the config tab, start networking
             replayUI.OnDisplayNameSet += OnDisplayNameSet;
 
             if (GhostSettings.OnlineEnabled
@@ -173,8 +166,6 @@ namespace ReplayTimerMod
         {
             if (enabled)
             {
-                // Networking only starts once a display name is set.
-                // The config tab shows a name input when online is enabled.
                 if (!string.IsNullOrEmpty(GhostSettings.DisplayName))
                     StartNetworking();
             }
@@ -191,8 +182,6 @@ namespace ReplayTimerMod
             GhostSettings.Save();
             Log("Display name set: " + name);
 
-            // If online is enabled but networking hasn't started yet
-            // (was waiting for the name), start it now.
             if (GhostSettings.OnlineEnabled)
                 StartNetworking();
 
@@ -201,6 +190,9 @@ namespace ReplayTimerMod
                 networkClient.ForceRefreshAll();
         }
 
+        // No teardown counterpart to ReplayTimerModSS.OnDestroy on purpose:
+        // Modding API mods are never unloaded mid-session, and the Modding
+        // API has no unload hook to attach one to.
     }
 }
 #endif

@@ -106,7 +106,7 @@ namespace ReplayTimerMod
         {
             // Clamp in float space BEFORE the integer cast: a cast of an
             // out-of-int-range float is unspecified (in practice int.MinValue),
-            // which used to clamp huge positive positions to the WRONG end.
+            // which would clamp huge positive positions to the WRONG end.
             float scaled = world * PosScale;
             if (scaled >= short.MaxValue) return short.MaxValue;
             if (scaled <= short.MinValue) return short.MinValue;

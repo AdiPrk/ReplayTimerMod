@@ -86,6 +86,6 @@ namespace ReplayTimerMod
 
         public void Tick() { }
 
-        public void AbortAll() { }
+        public void CancelAll() { }
     }
 }

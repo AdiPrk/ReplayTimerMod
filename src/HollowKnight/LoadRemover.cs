@@ -10,23 +10,25 @@ namespace ReplayTimerMod
     // state, etc.) is preserved exactly as-is.
     public static class LoadRemover
     {
-        private const string MENU_TITLE = "Menu_Title";
-        private const string QUIT_TO_MENU = "Quit_To_Menu";
-
         private static GameState prevGameState = GameState.PLAYING;
         private static bool lookForTele = false;
 
         public static bool ShouldTick()
         {
-            UIState ui_state = GameManager.instance.ui.uiState;
-            string scene_name = GameManager.instance.GetSceneNameString();
-            string next_scene = GameManager.instance.nextSceneName;
+            var gm = GameManager.instance;
+            // Early boot: the managers may not exist yet - the timer is gated.
+            if (gm == null || gm.ui == null || gm.inputHandler == null)
+                return false;
 
-            bool loading_menu = (scene_name != MENU_TITLE && next_scene == "")
-                || (scene_name != MENU_TITLE && next_scene == MENU_TITLE
-                    || scene_name == QUIT_TO_MENU);
+            UIState ui_state = gm.ui.uiState;
+            string scene_name = gm.GetSceneNameString();
+            string next_scene = gm.nextSceneName;
 
-            GameState game_state = GameManager.instance.gameState;
+            bool loading_menu = (scene_name != KnownScenes.MenuTitle && next_scene == "")
+                || (scene_name != KnownScenes.MenuTitle && next_scene == KnownScenes.MenuTitle
+                    || scene_name == KnownScenes.QuitToMenu);
+
+            GameState game_state = gm.gameState;
 
             if (game_state == GameState.PLAYING && prevGameState == GameState.MAIN_MENU)
                 lookForTele = true;
@@ -34,12 +36,12 @@ namespace ReplayTimerMod
             if (lookForTele && (game_state != GameState.PLAYING && game_state != GameState.ENTERING_LEVEL))
                 lookForTele = false;
 
-            bool accepting_input = GameManager.instance.inputHandler.acceptingInput;
+            bool accepting_input = gm.inputHandler.acceptingInput;
 
             HeroTransitionState hero_transition_state;
             try
             {
-                hero_transition_state = GameManager.instance.hero_ctrl.transitionState;
+                hero_transition_state = gm.hero_ctrl.transitionState;
             }
             catch
             {

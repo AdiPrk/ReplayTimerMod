@@ -5,8 +5,7 @@ namespace ReplayTimerMod
     /// <summary>
     /// Drives the per-room record → evaluate → upload pipeline in response to
     /// <see cref="RoomTracker"/> events. Shared by both platform entry points
-    /// (Silksong and Hollow Knight), which previously held byte-identical copies
-    /// of this logic and had to be kept in sync by hand.
+    /// (Silksong and Hollow Knight) so the logic never diverges between them.
     ///
     /// The entry point constructs one of these, points
     /// <see cref="RoomTracker"/>'s events at its handlers, and updates
@@ -67,8 +66,6 @@ namespace ReplayTimerMod
 
             var key = new RoomKey(sceneName, entryFromScene, exitToScene);
 
-            // Option: don't save runs that exit back through the same
-            // transition they entered from (exitTo == entryFrom).
             if (GhostSettings.SkipBacktrackRuns
                 && !string.IsNullOrEmpty(entryFromScene)
                 && exitToScene == entryFromScene)

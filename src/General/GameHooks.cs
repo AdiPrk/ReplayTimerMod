@@ -19,14 +19,14 @@ namespace ReplayTimerMod
 
         // ── Death ─────────────────────────────────────────────────────────────
         public static event Action? OnPlayerDead;
-        private static bool pendingDeath = false;
+        private static bool _pendingDeath = false;
 
         [HarmonyPatch(typeof(GameManager), nameof(GameManager.PlayerDead))]
         [HarmonyPrefix]
         private static void GameManager_PlayerDead()
         {
             Log.LogInfo("[GameHooks] PlayerDead fired");
-            pendingDeath = true;
+            _pendingDeath = true;
             OnPlayerDead?.Invoke();
         }
 
@@ -57,10 +57,10 @@ namespace ReplayTimerMod
         {
             if (__0 == null) return;
 
-            if (pendingDeath)
+            if (_pendingDeath)
             {
                 Log.LogInfo("[GameHooks] BeginSceneTransition - death respawn, skipping");
-                pendingDeath = false;
+                _pendingDeath = false;
                 return;
             }
 
@@ -80,13 +80,13 @@ namespace ReplayTimerMod
         public static event Action? OnPlayerDead;
         public static event Action<string, string>? OnGateTransitionBegin;
 
-        private static bool pendingDeath = false;
-        private static bool initialized = false;
+        private static bool _pendingDeath = false;
+        private static bool _initialized = false;
 
         public static void Init()
         {
-            if (initialized) return;
-            initialized = true;
+            if (_initialized) return;
+            _initialized = true;
 
 #if V1221
             ModHooks.Instance.BeforePlayerDeadHook += GameManager_PlayerDead;
@@ -103,7 +103,7 @@ namespace ReplayTimerMod
         private static void GameManager_PlayerDead()
         {
             Log.LogInfo("[GameHooks] PlayerDead fired");
-            pendingDeath = true;
+            _pendingDeath = true;
             OnPlayerDead?.Invoke();
         }
 #else
@@ -113,20 +113,19 @@ namespace ReplayTimerMod
             float waitTime)
         {
             Log.LogInfo("[GameHooks] PlayerDead fired");
-            pendingDeath = true;
+            _pendingDeath = true;
             OnPlayerDead?.Invoke();
             return orig(self, waitTime);
         }
 #endif // v1221
 
-
 #if V1221
         private static string GameManager_BeginSceneTransition(string target)
         {
-            if (pendingDeath)
+            if (_pendingDeath)
             {
                 Log.LogInfo("[GameHooks] BeginSceneTransition - death respawn, skipping");
-                pendingDeath = false;
+                _pendingDeath = false;
                 return target;
             }
 
@@ -156,10 +155,10 @@ namespace ReplayTimerMod
                 return;
             }
 
-            if (pendingDeath)
+            if (_pendingDeath)
             {
                 Log.LogInfo("[GameHooks] BeginSceneTransition - death respawn, skipping");
-                pendingDeath = false;
+                _pendingDeath = false;
                 orig(self, info);
                 return;
             }
@@ -191,7 +190,7 @@ namespace ReplayTimerMod
                 try
                 {
                     var prop = type.GetProperty(name, Flags);
-                    
+
                     if (prop != null && prop.PropertyType == typeof(string))
                         return prop.GetValue(instance, null) as string ?? "";
 
@@ -205,5 +204,5 @@ namespace ReplayTimerMod
             return "";
         }
     }
-    
+
 }

@@ -186,6 +186,56 @@ namespace ReplayTimerMod.Tests
         }
 
         [Fact]
+        public void Failure_DropsPermanent4xxWithoutRetry()
+        {
+            // A validation reject (400/422) never succeeds with the identical
+            // payload; retrying would re-POST the full replay blob 5 times.
+            var (worker, http, _) = Make();
+            var payload = Payload();
+            worker.Enqueue(payload);
+            worker.Tick();
+
+            http.Requests[0].Complete(false, 422, "rejected");
+
+            Assert.Equal(0, worker.QueueCount);
+            worker.Tick();
+            Assert.Single(http.Requests);
+        }
+
+        [Fact]
+        public void Failure_Retries429()
+        {
+            // Rate limits clear on their own — the one 4xx worth retrying.
+            var (worker, http, _) = Make();
+            var payload = Payload();
+            worker.Enqueue(payload);
+            worker.Tick();
+
+            http.Requests[0].Complete(false, 429, "rate limited");
+
+            Assert.Equal(1, payload.RetryCount);
+            Assert.Equal(1, worker.QueueCount);
+        }
+
+        [Fact]
+        public void BackoffHead_RotatesSoReadyPayloadsAreNotBlocked()
+        {
+            var (worker, http, _) = Make();
+            var stuck = Payload("stuck");
+            worker.Enqueue(stuck);
+            worker.Tick();
+            http.Requests[0].Complete(false, 500, "boom"); // requeued with backoff
+
+            var fresh = Payload("fresh");
+            worker.Enqueue(fresh); // queue: [stuck(backoff), fresh(ready)]
+
+            worker.Tick(); // rotates the backoff head
+            worker.Tick(); // sends the ready payload
+            Assert.Equal(2, http.Requests.Count);
+            Assert.Contains("fresh", http.Requests[1].Body);
+        }
+
+        [Fact]
         public void QueueCapsAt100_DroppingOldest()
         {
             var (worker, _, _) = Make();

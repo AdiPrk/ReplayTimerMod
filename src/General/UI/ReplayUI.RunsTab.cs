@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,7 +9,7 @@ namespace ReplayTimerMod
     {
         private void BuildRunsContent(string scene)
         {
-            if (rightContent == null) return;
+            if (_rightContent == null) return;
 
             // Hidden unless this build reaches the filterable path below
             // (covers the lightweight ContentOnly rebuilds, e.g. deleting
@@ -23,7 +24,7 @@ namespace ReplayTimerMod
 
             if (routes.Count == 0)
             {
-                AddCenteredMessage(rightContent, "No entries for this room.");
+                AddCenteredMessage(_rightContent, "No entries for this room.");
                 return;
             }
 
@@ -34,23 +35,23 @@ namespace ReplayTimerMod
             // history — the filter only hides rows. Collected up front so
             // the time column can be sized to the widest visible time
             // before any row is built.
-            var visibleRoutes = new System.Collections.Generic.List<RouteReplayHistory>();
+            var visibleRoutes = new List<RouteReplayHistory>();
             var visibleLists =
-                new System.Collections.Generic.List<System.Collections.Generic.IList<ReplaySnapshot>>();
-            var visibleTimes = new System.Collections.Generic.List<float>();
-            filterShownCount = 0;
-            filterTotalCount = 0;
-            filterCountUnit = "runs";
+                new List<IList<ReplaySnapshot>>();
+            var visibleTimes = new List<float>();
+            _filterShownCount = 0;
+            _filterTotalCount = 0;
+            _filterCountUnit = "runs";
             foreach (var route in routes)
             {
-                filterTotalCount += route.Snapshots.Count;
+                _filterTotalCount += route.Snapshots.Count;
 
                 var visible = ModifierFilterActive
                     ? route.Snapshots.Where(s => PassesModifierFilter(s.Modifiers)).ToList()
-                    : (System.Collections.Generic.IList<ReplaySnapshot>)route.Snapshots;
+                    : (IList<ReplaySnapshot>)route.Snapshots;
                 if (visible.Count == 0) continue;
 
-                filterShownCount += visible.Count;
+                _filterShownCount += visible.Count;
                 visibleRoutes.Add(route);
                 visibleLists.Add(visible);
                 foreach (var s in visible)
@@ -59,7 +60,7 @@ namespace ReplayTimerMod
 
             if (visibleRoutes.Count == 0)
             {
-                AddCenteredMessage(rightContent, "No runs match the modifier filter.");
+                AddCenteredMessage(_rightContent, "No runs match the modifier filter.");
                 return;
             }
 
@@ -68,14 +69,14 @@ namespace ReplayTimerMod
             bool stripe = false;
             for (int i = 0; i < visibleRoutes.Count; i++)
             {
-                AddRouteGroup(rightContent, visibleRoutes[i], visibleLists[i],
+                AddRouteGroup(_rightContent, visibleRoutes[i], visibleLists[i],
                     stripe, timeColW);
                 stripe = !stripe;
             }
         }
 
         private void AddRouteGroup(Transform parent, RouteReplayHistory route,
-            System.Collections.Generic.IList<ReplaySnapshot> visible, bool stripe,
+            IList<ReplaySnapshot> visible, bool stripe,
             int timeColW)
         {
             int headerH = RH + 2;
@@ -106,7 +107,7 @@ namespace ReplayTimerMod
             Rect(row, 0, 0, RW, h);
 
             RoomKey key = route.Key;
-            bool clearPending = routeClearConfirmKey == RouteConfirmKey(key);
+            bool clearPending = _routeClearConfirmKey == RouteConfirmKey(key);
             MakeButton(row.transform, "ClearRoute", clearPending ? "Sure?" : "Clear",
                 UIStyle.FontSizeBtn,
                 clearPending ? UIStyle.Text : UIStyle.Red,
@@ -138,20 +139,20 @@ namespace ReplayTimerMod
 
         /// <summary>Stable string identity for a route's two-click Clear
         /// confirm (RoomKey itself isn't used as the pending marker so the
-        /// field can be a simple nullable string like deleteConfirmId).</summary>
+        /// field can be a simple nullable string like _deleteConfirmId).</summary>
         private static string RouteConfirmKey(RoomKey key) =>
             key.SceneName + "|" + key.EntryFromScene + "|" + key.ExitToScene;
 
         private void OnRouteClearClicked(RoomKey key)
         {
-            if (routeClearConfirmKey == RouteConfirmKey(key))
+            if (_routeClearConfirmKey == RouteConfirmKey(key))
             {
-                routeClearConfirmKey = null;
+                _routeClearConfirmKey = null;
                 DeleteRoute(key);
             }
             else
             {
-                routeClearConfirmKey = RouteConfirmKey(key);
+                _routeClearConfirmKey = RouteConfirmKey(key);
                 RebuildRunsContentOnly();
             }
         }
@@ -163,7 +164,7 @@ namespace ReplayTimerMod
             int top = headerH + index * RH;
 
             bool playbackOn = SelectionState?.IsPlaybackSelected(snapshot.SnapshotId) ?? false;
-            bool pendingDelete = deleteConfirmId == snapshot.SnapshotId;
+            bool pendingDelete = _deleteConfirmId == snapshot.SnapshotId;
 
             Color rowBg = playbackOn
                 ? UIStyle.Gold with { a = 0.08f }
@@ -173,7 +174,6 @@ namespace ReplayTimerMod
             Img(row, rowBg);
             Rect(row, 0, top, RW, h);
 
-            // Clicking anywhere on the row toggles ghost playback.
             RoomKey rowKey = route.Key;
             string rowSnapshotId = snapshot.SnapshotId;
             Btn(row, () => ToggleSnapshotPlayback(rowKey, rowSnapshotId));
@@ -217,8 +217,7 @@ namespace ReplayTimerMod
 
             string swId = snapshot.SnapshotId;
             RoomKey swKey = route.Key;
-            int swIndex = index;
-            Btn(swatch, () => OpenSnapshotColorPicker(swatch, swKey, swId, swIndex));
+            Btn(swatch, () => OpenSnapshotColorPicker(swatch, swKey, swId));
             AddButtonHover(swatch);
             AttachTooltip(swatch, snapshot.HasVisualOverride
                 ? ColorHex(resolved)
@@ -244,7 +243,6 @@ namespace ReplayTimerMod
                 cluster.AddButton(delW), btnY, delW, btnH,
                 () => OnSnapshotDeleteClicked(delKey, delId));
 
-            // Copy button
             int copyW = UIStyle.W(40);
             string copyId = snapshot.SnapshotId;
             RoomKey copyKey = route.Key;
@@ -288,7 +286,6 @@ namespace ReplayTimerMod
                     : "Follow with camera (experimental)");
             }
 
-            // Time
             int timeX = cluster.AddTime(timeColW);
             MakeLbl(row.transform, TimeUtil.Format(snapshot.TotalTime),
                 UIStyle.FontSizeSm, UIStyle.Gold, TextAnchor.MiddleRight,
@@ -321,89 +318,21 @@ namespace ReplayTimerMod
                 + Mathf.RoundToInt(Mathf.Clamp01(c.g) * 255f).ToString("X2")
                 + Mathf.RoundToInt(Mathf.Clamp01(c.b) * 255f).ToString("X2");
 
-        private static Texture2D? playMarkerTex;
-
-        /// <summary>White right-pointing triangle on transparent, tinted by
-        /// the RawImage that displays it. Built once, shared by every row,
-        /// and survives canvas destruction (textures aren't scene objects).
-        /// Edges get a 1px alpha ramp so the diagonal isn't jagged.</summary>
-        private static Texture2D PlayMarkerTexture()
-        {
-            if (playMarkerTex == null)
-            {
-                const int n = 24;
-                playMarkerTex = new Texture2D(n, n, TextureFormat.RGBA32, false);
-                playMarkerTex.wrapMode = TextureWrapMode.Clamp;
-                var px = new Color[n * n];
-                for (int y = 0; y < n; y++)
-                {
-                    // Apex at the right middle: each row is filled from the
-                    // left edge out to xEdge, which shrinks with the row's
-                    // distance from the vertical center.
-                    float xEdge = n - 2f * Mathf.Abs(y + 0.5f - n / 2f);
-                    for (int x = 0; x < n; x++)
-                        px[y * n + x] = new Color(1f, 1f, 1f,
-                            Mathf.Clamp01(xEdge - x));
-                }
-                playMarkerTex.SetPixels(px);
-                playMarkerTex.Apply();
-            }
-            return playMarkerTex;
-        }
-
-        private static Texture2D? cameraMarkerTex;
-
-        /// <summary>White video-camera glyph (body plus a right-widening
-        /// lens wedge) on transparent, tinted by the RawImage that displays
-        /// it. Same idiom as PlayMarkerTexture: built once, shared by every
-        /// row, 1px alpha ramps so the edges aren't jagged.</summary>
-        private static Texture2D CameraMarkerTexture()
-        {
-            if (cameraMarkerTex == null)
-            {
-                const int n = 24;
-                cameraMarkerTex = new Texture2D(n, n, TextureFormat.RGBA32, false);
-                cameraMarkerTex.wrapMode = TextureWrapMode.Clamp;
-                var px = new Color[n * n];
-                for (int y = 0; y < n; y++)
-                {
-                    float yc = y + 0.5f;
-                    for (int x = 0; x < n; x++)
-                    {
-                        float xc = x + 0.5f;
-                        // Camera body: rectangle on the left.
-                        float body = Mathf.Min(
-                            Mathf.Min(xc - 0.5f, 13.5f - xc),
-                            Mathf.Min(yc - 4.5f, 19.5f - yc));
-                        // Lens wedge: apex touching the body at mid
-                        // height, widening toward the right edge.
-                        float half = 1f + (xc - 13f) * 0.6f;
-                        float wedge = Mathf.Min(
-                            Mathf.Min(xc - 13f, 23.5f - xc),
-                            half - Mathf.Abs(yc - 12f));
-                        px[y * n + x] = new Color(1f, 1f, 1f,
-                            Mathf.Clamp01(Mathf.Max(body, wedge)));
-                    }
-                }
-                cameraMarkerTex.SetPixels(px);
-                cameraMarkerTex.Apply();
-            }
-            return cameraMarkerTex;
-        }
-
         private void OnSnapshotDeleteClicked(RoomKey key, string snapshotId)
         {
-            if (deleteConfirmId == snapshotId)
+            if (_deleteConfirmId == snapshotId)
             {
-                deleteConfirmId = null;
+                _deleteConfirmId = null;
                 ReplayOwners.Remove(snapshotId); // drop owner tag with the replay
                 DeleteSnapshot(key, snapshotId);
             }
             else
             {
-                deleteConfirmId = snapshotId;
-                if (selectedScene != null && activeTab == TabKind.Runs)
-                    RebuildRightContent();
+                // Arming the confirm only restyles this row - the lightweight
+                // rebuild, same as the route-clear confirm above.
+                _deleteConfirmId = snapshotId;
+                if (_selectedScene != null && _activeTab == TabKind.Runs)
+                    RebuildRunsContentOnly();
             }
         }
     }

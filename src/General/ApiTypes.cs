@@ -52,7 +52,7 @@ namespace ReplayTimerMod
     }
 
     /// <summary>
-    /// Parsed response from GET /config (or the config portion of /init).
+    /// Parsed config portion of GET /init.
     /// </summary>
     internal sealed class ConfigResponse
     {
@@ -84,7 +84,7 @@ namespace ReplayTimerMod
         }
     }
 
-    // ── New types for the redesigned networking ─────────────────────────
+    // ── Scene index / leaderboard wire types ────────────────────────────
 
     /// <summary>
     /// One scene in the scene index. Compact field names match the

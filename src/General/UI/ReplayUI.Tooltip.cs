@@ -16,8 +16,8 @@ namespace ReplayTimerMod
 
         private const float TooltipDelaySec = 0.45f;
 
-        private GameObject? tooltipGO;
-        private Text? tooltipLbl;
+        private GameObject? _tooltipGO;
+        private Text? _tooltipLbl;
 
         /// <summary>Pointer-hover tracker for tooltip-enabled elements.
         /// Rebuilds destroy them freely; OnDisable clears the static hover
@@ -65,39 +65,39 @@ namespace ReplayTimerMod
         private void TickTooltip()
         {
             var hovered = TooltipTrigger.Hovered;
-            bool show = expanded
+            bool show = _expanded
                 && hovered != null
                 && !string.IsNullOrEmpty(hovered.text)
                 && Time.unscaledTime - TooltipTrigger.HoverStartTime >= TooltipDelaySec;
 
             if (!show)
             {
-                if (tooltipGO != null && tooltipGO.activeSelf)
-                    tooltipGO.SetActive(false);
+                if (_tooltipGO != null && _tooltipGO.activeSelf)
+                    _tooltipGO.SetActive(false);
                 return;
             }
 
             EnsureTooltip();
-            if (tooltipGO == null || tooltipLbl == null) return;
+            if (_tooltipGO == null || _tooltipLbl == null) return;
 
-            if (!tooltipGO.activeSelf) tooltipGO.SetActive(true);
+            if (!_tooltipGO.activeSelf) _tooltipGO.SetActive(true);
 
             int pad = UIStyle.W(8);
             int width = UIStyle.W(220);
 
-            if (tooltipLbl.text != hovered!.text)
-                tooltipLbl.text = hovered.text;
+            if (_tooltipLbl.text != hovered!.text)
+                _tooltipLbl.text = hovered.text;
 
             // Size the label to the fixed width, then the panel to the
             // label's preferred (wrapped) height.
-            var lblRt = tooltipLbl.GetComponent<RectTransform>();
+            var lblRt = _tooltipLbl.GetComponent<RectTransform>();
             lblRt.sizeDelta = new Vector2(width - pad * 2, lblRt.sizeDelta.y);
-            float textH = Mathf.Max(UIStyle.H(16), tooltipLbl.preferredHeight);
+            float textH = Mathf.Max(UIStyle.H(16), _tooltipLbl.preferredHeight);
             lblRt.sizeDelta = new Vector2(width - pad * 2, textH);
             lblRt.anchoredPosition = new Vector2(pad, -pad);
 
             float height = textH + pad * 2;
-            var rt = tooltipGO.GetComponent<RectTransform>();
+            var rt = _tooltipGO.GetComponent<RectTransform>();
             rt.sizeDelta = new Vector2(width, height);
 
             // Position near the cursor, clamped on-screen. The canvas uses
@@ -110,22 +110,22 @@ namespace ReplayTimerMod
 
         private void EnsureTooltip()
         {
-            if (tooltipGO != null) return;
-            if (canvasGO == null) return;
+            if (_tooltipGO != null) return;
+            if (_canvasGO == null) return;
 
-            tooltipGO = MakeGO("ModifierTooltip", canvasGO.transform);
+            _tooltipGO = MakeGO("ModifierTooltip", _canvasGO.transform);
 
             // 1px frame: outer image is the border color, inner inset image
             // is the panel background.
-            var borderImg = tooltipGO.AddComponent<Image>();
+            var borderImg = _tooltipGO.AddComponent<Image>();
             borderImg.color = UIStyle.Overlay with { a = 0.9f };
             borderImg.raycastTarget = false;
 
-            var rt = tooltipGO.GetComponent<RectTransform>();
+            var rt = _tooltipGO.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = Vector2.zero; // bottom-left anchored
             rt.pivot = new Vector2(0f, 1f);             // position = top-left corner
 
-            var inner = MakeGO("Inner", tooltipGO.transform);
+            var inner = MakeGO("Inner", _tooltipGO.transform);
             var innerImg = inner.AddComponent<Image>();
             innerImg.color = UIStyle.Base with { a = 0.97f };
             innerImg.raycastTarget = false;
@@ -135,15 +135,15 @@ namespace ReplayTimerMod
             innerRt.offsetMin = new Vector2(1, 1);
             innerRt.offsetMax = new Vector2(-1, -1);
 
-            tooltipLbl = MakeLbl(tooltipGO.transform, "",
+            _tooltipLbl = MakeLbl(_tooltipGO.transform, "",
                 UIStyle.FontSizeRow, UIStyle.Text, TextAnchor.UpperLeft,
                 x: UIStyle.W(8), y: UIStyle.H(8), w: UIStyle.W(204), h: UIStyle.H(16));
             // MakeLbl defaults to no-wrap/truncate; the tooltip needs wrapped
             // multi-line text and a measurable preferredHeight.
-            tooltipLbl.horizontalOverflow = HorizontalWrapMode.Wrap;
-            tooltipLbl.verticalOverflow = VerticalWrapMode.Overflow;
+            _tooltipLbl.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _tooltipLbl.verticalOverflow = VerticalWrapMode.Overflow;
 
-            tooltipGO.SetActive(false);
+            _tooltipGO.SetActive(false);
         }
     }
 }

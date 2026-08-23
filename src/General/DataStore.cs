@@ -7,7 +7,7 @@ namespace ReplayTimerMod
 {
     // Persists replays to disk, one JSON file per scene.
     //
-    // File layout: <DataDirectory>/<sceneName>.json
+    // File layout: <_dataDirectory>/<sceneName>.json
     // JSON: { "entries": [ { snapshotId, capturedAtUtcTicks, sceneName,
     //                         entryFromScene, exitToScene, totalTime, data }, ... ] }
     //
@@ -47,15 +47,15 @@ namespace ReplayTimerMod
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("DataStore");
 
-        private static string DataDirectory = "";
+        private static string _dataDirectory = "";
 
         // ── Init ──────────────────────────────────────────────────────────────
 
         public static void Init(string baseDirectory)
         {
-            DataDirectory = baseDirectory;
-            Directory.CreateDirectory(DataDirectory);
-            Log.LogInfo($"[DataStore] Directory: {DataDirectory}");
+            _dataDirectory = baseDirectory;
+            Directory.CreateDirectory(_dataDirectory);
+            Log.LogInfo($"[DataStore] Directory: {_dataDirectory}");
 
             MigrateFromLegacy();
         }
@@ -72,7 +72,7 @@ namespace ReplayTimerMod
                 string legacyDir = Path.GetFullPath(LegacyDataDirectory(assemblyDir));
 
                 if (!Directory.Exists(legacyDir)) return;
-                if (legacyDir == Path.GetFullPath(DataDirectory)) return;
+                if (legacyDir == Path.GetFullPath(_dataDirectory)) return;
 
                 string[] files = Directory.GetFiles(legacyDir, "*.json");
                 if (files.Length == 0) return;
@@ -80,7 +80,7 @@ namespace ReplayTimerMod
                 int moved = 0;
                 foreach (string src in files)
                 {
-                    string dest = Path.Combine(DataDirectory, Path.GetFileName(src));
+                    string dest = Path.Combine(_dataDirectory, Path.GetFileName(src));
                     if (File.Exists(dest)) continue;  // never overwrite newer data
                     File.Move(src, dest);
                     moved++;
@@ -108,7 +108,7 @@ namespace ReplayTimerMod
         // ── Index I/O ─────────────────────────────────────────────────────────
 
         private static string FilePath(string sceneName) =>
-            Path.Combine(DataDirectory, $"{sceneName}.json");
+            Path.Combine(_dataDirectory, $"{sceneName}.json");
 
         private static SceneIndex LoadIndex(string path)
         {
@@ -361,9 +361,9 @@ namespace ReplayTimerMod
         public static List<ReplaySnapshot> LoadAll()
         {
             var result = new List<ReplaySnapshot>();
-            if (!Directory.Exists(DataDirectory)) return result;
+            if (!Directory.Exists(_dataDirectory)) return result;
 
-            foreach (string path in Directory.GetFiles(DataDirectory, "*.json"))
+            foreach (string path in Directory.GetFiles(_dataDirectory, "*.json"))
             {
                 string sceneName = Path.GetFileNameWithoutExtension(path);
                 foreach (var entry in LoadIndexAndUpgrade(path).entries)
@@ -376,7 +376,6 @@ namespace ReplayTimerMod
                             continue;
                         }
 
-                        NormalizeMetadata(entry);
                         var room = ReplayShareEncoder.Decode(entry.data);
                         if (room == null)
                         {

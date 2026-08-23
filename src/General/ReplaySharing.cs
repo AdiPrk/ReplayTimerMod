@@ -74,14 +74,20 @@ namespace ReplayTimerMod
                     path = path.Substring(0, q);
                 }
 
-                // ?code=XXXX wins if present.
+                // ?code=XXXX wins if present. Match only a whole parameter
+                // name (start of query or after '&') so e.g. "decode=" or
+                // "barcode=" never counts.
                 int cIdx = query.IndexOf("code=");
-                if (cIdx >= 0)
+                while (cIdx >= 0)
                 {
-                    string v = query.Substring(cIdx + 5);
-                    int amp = v.IndexOf('&');
-                    if (amp >= 0) v = v.Substring(0, amp);
-                    if (IsBareCode(v)) { code = v; return true; }
+                    if (cIdx == 0 || query[cIdx - 1] == '&')
+                    {
+                        string v = query.Substring(cIdx + 5);
+                        int amp = v.IndexOf('&');
+                        if (amp >= 0) v = v.Substring(0, amp);
+                        if (IsBareCode(v)) { code = v; return true; }
+                    }
+                    cIdx = query.IndexOf("code=", cIdx + 1);
                 }
 
                 // Otherwise the last non-empty path segment (e.g. /r/CODE).

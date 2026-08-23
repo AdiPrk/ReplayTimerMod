@@ -9,9 +9,6 @@ namespace ReplayTimerMod
     {
         public const float MAX_ROOM_TIME = 180f;
 
-        private const string MENU_TITLE = "Menu_Title";
-        private const string QUIT_TO_MENU = "Quit_To_Menu";
-
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("RoomTracker");
 
@@ -79,18 +76,16 @@ namespace ReplayTimerMod
         public static event Action<string>? OnRunCancelled;
 
         // ── Private state ────────────────────────────────────────────────────
+        private static bool _initialized = false;
         private static string _lastSceneName = "";
         private static bool _pendingGateTransition = false;
         private static bool _menuTraversalPending = false;
-        private static int _debugModHookRetryCooldown = 0;
         private static bool _wasLoadingSavestate = false;
 
         public static void Init()
         {
-            _lastSceneName = "";
-            RoomUsedDebugAbilities = false;
-            _wasLoadingSavestate = false;
-            _menuTraversalPending = false;
+            if (_initialized) return;
+            _initialized = true;
 
             GameHooks.OnPlayerDead += HandleInvalidation;
             GameHooks.OnGateTransitionBegin += HandleGateTransitionBegin;
@@ -105,7 +100,7 @@ namespace ReplayTimerMod
             // start a recording. On HK the mod only ticks while the hero
             // exists, so the menu scenes themselves are never observed by
             // Tick() - this flag bridges that gap.
-            if (destScene == MENU_TITLE || destScene == QUIT_TO_MENU)
+            if (destScene == KnownScenes.MenuTitle || destScene == KnownScenes.QuitToMenu)
             {
                 _pendingGateTransition = false;
                 _menuTraversalPending = true;
@@ -181,14 +176,14 @@ namespace ReplayTimerMod
             // An empty fromName means this is the first scene the mod has
             // ever observed - a save-load spawn, never a gate arrival.
             if (string.IsNullOrEmpty(fromName)
-                || fromName == MENU_TITLE || fromName == QUIT_TO_MENU)
+                || fromName == KnownScenes.MenuTitle || fromName == KnownScenes.QuitToMenu)
                 arrivedViaGate = false;
 
-            bool toMenu = toName == MENU_TITLE || toName == QUIT_TO_MENU;
+            bool toMenu = toName == KnownScenes.MenuTitle || toName == KnownScenes.QuitToMenu;
 
             if (IsRecording)
             {
-                if (arrivedViaGate && !isOverTime() && !toMenu)
+                if (arrivedViaGate && !IsOverTime() && !toMenu)
                 {
                     string exitedScene = CurrentScene;
                     string exitedFromScene = EntryFromScene;
@@ -203,13 +198,17 @@ namespace ReplayTimerMod
                 }
                 else
                 {
-                    if (isOverTime())
+                    if (IsOverTime())
                         Log.LogInfo($"[RoomTracker] Over time limit in {CurrentScene} - discarding");
                     else if (!arrivedViaGate)
                         Log.LogInfo($"[RoomTracker] Non-gate exit from {CurrentScene} - discarding");
 
                     IsRecording = false;
                     CurrentRoomTime = 0f;
+                    // The player IS leaving the room here, so the ghost must
+                    // stop - clear any stale keep-alive left over from an
+                    // earlier cheat-cancellation discard.
+                    KeepGhostPlaybackOnDiscard = false;
                     OnRecordingDiscarded?.Invoke();
                 }
             }
@@ -250,25 +249,16 @@ namespace ReplayTimerMod
             if (wasWarping)
                 QuickWarp.NotifyArrival();
 
-            bool isOverTime() => CurrentRoomTime > MAX_ROOM_TIME;
+            bool IsOverTime() => CurrentRoomTime > MAX_ROOM_TIME;
         }
 
         public static void Tick(bool shouldTick)
         {
             // Lazily hook into DebugMod, retrying periodically in case it loads
-            // after this mod. Once hooked this is a no-op.
+            // after this mod (TryHook throttles its own assembly scans). Once
+            // hooked this is a no-op.
             if (!DebugModBridge.IsAvailable)
-            {
-                if (_debugModHookRetryCooldown <= 0)
-                {
-                    DebugModBridge.TryHook();
-                    _debugModHookRetryCooldown = 60; // ~once per second at 60fps
-                }
-                else
-                {
-                    _debugModHookRetryCooldown--;
-                }
-            }
+                DebugModBridge.TryHook();
 
             // Poll for savestate-load start/finish every frame, regardless of
             // scene changes. This is the only mechanism that catches "set +

@@ -297,11 +297,25 @@ namespace ReplayTimerMod
         }
 
 #if SILKSONG_BUILD
+        // The current crest id -> bit mapping is memoized: all eight crest
+        // probes run every Poll, and each CrestBitFor call is a linear scan
+        // of the crest table. The crest changes rarely, so re-scan only when
+        // the id actually changes.
+        private static string? _lastCrestId;
+        private static int _lastCrestBit = -1;
+
         private static Func<bool> CrestProbe(int bit) => () =>
         {
             var pd = PlayerData.instance;
             if (pd == null) return false;
-            return CrestBitFor(pd.CurrentCrestID, out _) == bit;
+
+            string? crestId = pd.CurrentCrestID;
+            if (!string.Equals(crestId, _lastCrestId, StringComparison.Ordinal))
+            {
+                _lastCrestId = crestId;
+                _lastCrestBit = CrestBitFor(crestId, out _);
+            }
+            return _lastCrestBit == bit;
         };
 
         private static Func<bool> ToolProbe(ToolBitDef tool) => () =>

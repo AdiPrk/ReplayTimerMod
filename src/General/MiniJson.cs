@@ -5,6 +5,11 @@ using System.Text;
 
 namespace ReplayTimerMod
 {
+    /// <summary>
+    /// Hand-rolled JSON for DataStore's on-disk scene indexes (net35-safe).
+    /// Deliberately separate from ApiJson: local persistence and the network
+    /// wire format must be able to evolve independently.
+    /// </summary>
     internal static class MiniJson
     {
         // ── Public API ────────────────────────────────────────────────────────

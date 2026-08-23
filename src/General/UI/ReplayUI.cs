@@ -13,95 +13,98 @@ namespace ReplayTimerMod
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("ReplayUI");
 
-        private bool isSetup;
-        private bool expanded;
-        private bool rebuildPending;
-        private bool wasPaused;
-        private bool clearAllPending;
+        private bool _isSetup;
+        private bool _expanded;
+        private bool _rebuildPending;
+        private bool _wasPaused;
+        private bool _clearAllPending;
 
-        private string? selectedScene;
-        private string searchFilter = "";
-        private TabKind activeTab = TabKind.Runs;
-        private string? deleteConfirmId;
-        private string? routeClearConfirmKey; // pending route-Clear confirm
-        private bool sceneClearPending;       // pending sub-header Clear confirm
+        private string? _selectedScene;
+        private string _searchFilter = "";
+        private TabKind _activeTab = TabKind.Runs;
+        private string? _deleteConfirmId;
+        private string? _routeClearConfirmKey;
+        private bool _sceneClearPending;
 
-        private RoomTimerHUD? timerHud;
+        private RoomTimerHUD? _timerHud;
 
         // Panel structure (persistent, never rebuilt)
-        private GameObject canvasGO = null!;
-        private GameObject tabGO = null!;
-        private GameObject panelGO = null!;
+        private GameObject _canvasGO = null!;
+        private GameObject _tabGO = null!;
+        private GameObject _panelGO = null!;
 
         // Left panel
-        private Transform sceneListContent = null!;
-        private ScrollRect sceneListScroll = null!;
-        private Text? jumpCurrentLbl;
-        private Image? jumpCurrentBg;
-        private Text? jumpPreviousLbl;
-        private Image? jumpPreviousBg;
+        private Transform _sceneListContent = null!;
+        private ScrollRect _sceneListScroll = null!;
+        private Text? _jumpCurrentLbl;
+        private Image? _jumpCurrentBg;
+        private Text? _jumpPreviousLbl;
+        private Image? _jumpPreviousBg;
 
         // Right panel - tab bar
-        private readonly Dictionary<TabKind, ButtonRef> tabButtons =
+        private readonly Dictionary<TabKind, ButtonRef> _tabButtons =
             new Dictionary<TabKind, ButtonRef>();
 
         // Right panel - sub-header
-        private GameObject? rightSubHeader;
-        private Text? rightHeaderLbl;
-        private Text? pasteStatusLbl;
-        private GameObject? runsActionButtons;
-        private Text? sceneClearLbl;
-        private Image? sceneClearBg;
+        private GameObject? _rightSubHeader;
+        private Text? _rightHeaderLbl;
+        private Text? _pasteStatusLbl;
+        private GameObject? _runsActionButtons;
+        private Text? _sceneClearLbl;
+        private Image? _sceneClearBg;
 
         // Right panel - content area (cleared and rebuilt per tab/selection)
-        private Transform? rightContent;
+        private Transform? _rightContent;
 
-        // Lazily-resolved ScrollRect that owns rightContent
-        // (rightContent is Content under Viewport under the ScrollRect GO)
+        // Lazily-resolved ScrollRect that owns _rightContent
+        // (_rightContent is Content under Viewport under the ScrollRect GO)
         private ScrollRect? _rightScroll;
         private ScrollRect? RightScroll
         {
             get
             {
-                if (_rightScroll == null && rightContent != null)
-                    _rightScroll = rightContent.parent.parent.GetComponent<ScrollRect>();
+                if (_rightScroll == null && _rightContent != null)
+                    _rightScroll = _rightContent.parent.parent.GetComponent<ScrollRect>();
                 return _rightScroll;
             }
         }
 
         // Config tab references (only valid when config tab is active)
-        private Text? ghostToggleLbl;
-        private Image? ghostToggleBg;
-        private Text? trackingToggleLbl;
-        private Image? trackingToggleBg;
-        private Text? savePolicyLbl;
-        private Image? savePolicyBg;
-        private Text? maxSavedLbl;
-        private Text? timerToggleLbl;
-        private Image? timerToggleBg;
-        private Text? chainToggleLbl;
-        private Image? chainToggleBg;
-        private Text? skipRunsToggleLbl;
-        private Image? skipRunsToggleBg;
-        private Text? skipTimerToggleLbl;
-        private Image? skipTimerToggleBg;
-        private Image? cfgGhostColorFill;
-        private Text? cfgGhostAlphaLbl;
-        private Text? clearAllCfgLbl;
-        private Image? clearAllCfgBg;
-        private Text? exportAllCfgLbl;
-        private Image? exportAllCfgBg;
-        private Text? onlineToggleLbl;
-        private Image? onlineToggleBg;
-        private Text? warpToggleLbl;
-        private Image? warpToggleBg;
-        private Text? camFollowToggleLbl;
-        private Image? camFollowToggleBg;
-        private InputField? nameInput;
-        private Text? nameStatusLbl;
-        private Image? nameSaveBg;
-        private Text? nameSaveLbl;
-        private UnityEngine.Networking.UnityWebRequest? _nameRequest;
+        private Text? _ghostToggleLbl;
+        private Image? _ghostToggleBg;
+        private Text? _trackingToggleLbl;
+        private Image? _trackingToggleBg;
+        private Text? _savePolicyLbl;
+        private Image? _savePolicyBg;
+        private Text? _maxSavedLbl;
+        private Text? _timerToggleLbl;
+        private Image? _timerToggleBg;
+        private Text? _chainToggleLbl;
+        private Image? _chainToggleBg;
+        private Text? _skipRunsToggleLbl;
+        private Image? _skipRunsToggleBg;
+        private Text? _skipTimerToggleLbl;
+        private Image? _skipTimerToggleBg;
+        private Image? _cfgGhostColorFill;
+        private Text? _cfgGhostAlphaLbl;
+        private Text? _clearAllCfgLbl;
+        private Image? _clearAllCfgBg;
+        private Text? _copyAllCfgLbl;
+        private Image? _copyAllCfgBg;
+        private Text? _onlineToggleLbl;
+        private Image? _onlineToggleBg;
+        private Text? _warpToggleLbl;
+        private Image? _warpToggleBg;
+        private Text? _camFollowToggleLbl;
+        private Image? _camFollowToggleBg;
+        private InputField? _nameInput;
+        private Text? _nameStatusLbl;
+        private Image? _nameSaveBg;
+        private Text? _nameSaveLbl;
+        // Name-save transport (see ReplayUI.ConfigTab.OnNameSave): its own
+        // HttpService because networking hasn't started before a name exists.
+        private HttpService? _nameHttp;
+        private bool _nameSaveInFlight;
         private string _lastSavedName = "";
 
         /// <summary>
@@ -188,39 +191,39 @@ namespace ReplayTimerMod
             LW = UIStyle.LeftWidth;
             RW = PW - LW - 1;
 
-            canvasGO = new GameObject("ReplayModCanvas");
-            ScenePersistence.Apply(canvasGO);
-            var canvas = canvasGO.AddComponent<Canvas>();
+            _canvasGO = new GameObject("ReplayModCanvas");
+            ScenePersistence.Apply(_canvasGO);
+            var canvas = _canvasGO.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 32767;
-            canvasGO.AddComponent<CanvasScaler>().uiScaleMode =
+            _canvasGO.AddComponent<CanvasScaler>().uiScaleMode =
                 CanvasScaler.ScaleMode.ConstantPixelSize;
-            canvasGO.AddComponent<GraphicRaycaster>();
-            canvasGO.SetActive(false);
+            _canvasGO.AddComponent<GraphicRaycaster>();
+            _canvasGO.SetActive(false);
 
             BuildTab();
             BuildPanel();
 
-            isSetup = true;
+            _isSetup = true;
             Log.LogInfo("[ReplayUI] Setup complete");
         }
 
-        public void SetTimerHUD(RoomTimerHUD hud) => timerHud = hud;
+        public void SetTimerHUD(RoomTimerHUD hud) => _timerHud = hud;
 
         public void Tick()
         {
-            if (!isSetup) return;
+            if (!_isSetup) return;
 
             // The host game destroyed the canvas (HK 1221's additive scene
             // unload can do this despite DontDestroyOnLoad). Rebuild the
             // whole panel; Setup() recreates every GameObject reference and
-            // BuildTabBar clears/refills tabButtons.
-            if (canvasGO == null)
+            // BuildTabBar clears/refills _tabButtons.
+            if (_canvasGO == null)
             {
                 Log.LogWarning("[ReplayUI] Canvas was destroyed externally - rebuilding");
-                expanded = false;
-                wasPaused = false;
-                rebuildPending = false;
+                _expanded = false;
+                _wasPaused = false;
+                _rebuildPending = false;
                 _rightScroll = null;
                 _renderedLbScene = null;
                 _renderedLbVersion = -1;
@@ -229,28 +232,28 @@ namespace ReplayTimerMod
                 _lastContentScene = null;
                 ClearConfigRefs();
                 Setup();
-                if (canvasGO == null) return; // Setup always assigns
+                if (_canvasGO == null) return; // Setup always assigns
             }
 
             bool paused = GameUiState.IsPaused();
 
-            if (paused && !wasPaused)
+            if (paused && !_wasPaused)
             {
-                canvasGO.SetActive(true);
-                tabGO.SetActive(true);
-                wasPaused = true;
+                _canvasGO.SetActive(true);
+                _tabGO.SetActive(true);
+                _wasPaused = true;
 
                 // Scene list is only visible (and worth syncing) when expanded.
                 if (_networkClient != null)
-                    _networkClient.SetMenuOpen(expanded);
+                    _networkClient.SetMenuOpen(_expanded);
 
-                if (expanded)
+                if (_expanded)
                     RefreshCurrentView();
             }
 
-            if (!paused && wasPaused)
+            if (!paused && _wasPaused)
             {
-                canvasGO.SetActive(false);
+                _canvasGO.SetActive(false);
                 if (_networkClient != null)
                 {
                     _networkClient.StopLeaderboardPolling();
@@ -259,27 +262,26 @@ namespace ReplayTimerMod
                 ResetClearAllConfirm();
                 ClosePicker();
                 CloseFilterPopup();
-                wasPaused = false;
+                GhostSettings.Flush(); // write any throttled color/alpha change
+                _wasPaused = false;
                 return;
             }
 
             if (!paused) return;
 
-            panelGO.SetActive(expanded);
+            _panelGO.SetActive(_expanded);
 
-            if (expanded && rebuildPending)
+            if (_expanded && _rebuildPending)
             {
-                rebuildPending = false;
+                _rebuildPending = false;
                 RefreshCurrentView();
             }
 
             // Revert expired Saved/Retry download states back to idle (in place)
             TickGhostStateExpiry();
 
-            // Poll in-flight name-save request
             TickNameSave();
 
-            // Show/position/hide the shared hover tooltip
             TickTooltip();
 
             // Close the (non-modal) filter popup on outside clicks
@@ -292,11 +294,11 @@ namespace ReplayTimerMod
         /// </summary>
         public void RefreshConfigTab()
         {
-            if (activeTab == TabKind.Config)
+            if (_activeTab == TabKind.Config)
                 RefreshConfigValues();
         }
 
-        public void OnPBUpdated() => rebuildPending = true;
+        public void OnPBUpdated() => _rebuildPending = true;
 
         // ── Network event handlers ─────────────────────────────────────
 
@@ -309,12 +311,12 @@ namespace ReplayTimerMod
         /// </summary>
         private void HandleLeaderboardUpdated()
         {
-            if (!expanded) return;
-            if (activeTab != TabKind.Leaderboard) return;
-            if (selectedScene == null) return;
+            if (!_expanded) return;
+            if (_activeTab != TabKind.Leaderboard) return;
+            if (_selectedScene == null) return;
 
-            int version = _leaderboardCache.GetVersion(_gameTag, selectedScene);
-            if (selectedScene == _renderedLbScene && version == _renderedLbVersion)
+            int version = _leaderboardCache.GetVersion(_gameTag, _selectedScene);
+            if (_selectedScene == _renderedLbScene && version == _renderedLbVersion)
                 return; // nothing changed — don't touch the UI
 
             RebuildLeaderboardContentOnly();
@@ -327,7 +329,7 @@ namespace ReplayTimerMod
         /// </summary>
         private void HandleSceneIndexReady()
         {
-            if (!expanded) return;
+            if (!_expanded) return;
 
             if (_leaderboardCache.ServerScenesVersion == _renderedServerScenesVersion)
                 return;
@@ -350,16 +352,16 @@ namespace ReplayTimerMod
 
         private void TogglePanel()
         {
-            expanded = !expanded;
-            panelGO.SetActive(expanded);
-            deleteConfirmId = null;
-            routeClearConfirmKey = null;
+            _expanded = !_expanded;
+            _panelGO.SetActive(_expanded);
+            _deleteConfirmId = null;
+            _routeClearConfirmKey = null;
             ResetSceneClearConfirm();
             ClosePicker();
             CloseFilterPopup();
             if (_networkClient != null)
-                _networkClient.SetMenuOpen(expanded);
-            if (expanded)
+                _networkClient.SetMenuOpen(_expanded);
+            if (_expanded)
                 RefreshCurrentView();
             else
             {
@@ -371,10 +373,10 @@ namespace ReplayTimerMod
 
         private void SwitchTab(TabKind tab)
         {
-            if (activeTab == tab) return;
-            activeTab = tab;
-            deleteConfirmId = null;
-            routeClearConfirmKey = null;
+            if (_activeTab == tab) return;
+            _activeTab = tab;
+            _deleteConfirmId = null;
+            _routeClearConfirmKey = null;
             ClosePicker();
             CloseFilterPopup();
             UpdateTabBarVisuals();
@@ -384,9 +386,9 @@ namespace ReplayTimerMod
 
         private void UpdateTabBarVisuals()
         {
-            foreach (var kvp in tabButtons)
+            foreach (var kvp in _tabButtons)
             {
-                bool active = kvp.Key == activeTab;
+                bool active = kvp.Key == _activeTab;
                 kvp.Value.bg.color = active
                     ? UIStyle.BtnBg(UIStyle.Accent)
                     : Color.clear;
@@ -396,26 +398,26 @@ namespace ReplayTimerMod
 
         private void UpdateRightSubHeader()
         {
-            if (rightHeaderLbl == null) return;
+            if (_rightHeaderLbl == null) return;
 
-            switch (activeTab)
+            switch (_activeTab)
             {
                 case TabKind.Runs:
                 case TabKind.Leaderboard:
-                    rightHeaderLbl.text = selectedScene ?? "Select a room";
-                    rightHeaderLbl.color = selectedScene != null ? UIStyle.Text : UIStyle.Subtext;
+                    _rightHeaderLbl.text = _selectedScene ?? "Select a room";
+                    _rightHeaderLbl.color = _selectedScene != null ? UIStyle.Text : UIStyle.Subtext;
                     break;
                 case TabKind.Config:
-                    rightHeaderLbl.text = "Settings";
-                    rightHeaderLbl.color = UIStyle.Text;
+                    _rightHeaderLbl.text = "Settings";
+                    _rightHeaderLbl.color = UIStyle.Text;
                     break;
             }
 
-            if (pasteStatusLbl != null)
-                pasteStatusLbl.text = "";
+            if (_pasteStatusLbl != null)
+                _pasteStatusLbl.text = "";
 
-            if (runsActionButtons != null)
-                runsActionButtons.SetActive(activeTab == TabKind.Runs);
+            if (_runsActionButtons != null)
+                _runsActionButtons.SetActive(_activeTab == TabKind.Runs);
 
             // A pending scene-Clear confirm doesn't survive tab/scene changes
             ResetSceneClearConfirm();
@@ -425,14 +427,14 @@ namespace ReplayTimerMod
         /// confirm state back to idle.</summary>
         private void ResetSceneClearConfirm()
         {
-            sceneClearPending = false;
-            if (sceneClearLbl != null)
+            _sceneClearPending = false;
+            if (_sceneClearLbl != null)
             {
-                sceneClearLbl.text = "Clear";
-                sceneClearLbl.color = UIStyle.Red;
+                _sceneClearLbl.text = "Clear";
+                _sceneClearLbl.color = UIStyle.Red;
             }
-            if (sceneClearBg != null)
-                sceneClearBg.color = UIStyle.BtnBgStrong(UIStyle.Red);
+            if (_sceneClearBg != null)
+                _sceneClearBg.color = UIStyle.BtnBgStrong(UIStyle.Red);
         }
 
         private void RefreshCurrentView()
@@ -445,20 +447,22 @@ namespace ReplayTimerMod
 
         private void RebuildRightContent()
         {
-            if (rightContent == null) return;
+            if (_rightContent == null) return;
 
             // Preserve scroll position only when rebuilding the SAME view
             // (same tab + same scene). Tab/scene switches reset to top.
-            bool sameView = activeTab == _lastContentTab
-                && selectedScene == _lastContentScene;
-            float keepScroll = 1f; // 1 = top
+            // Pixel offset, not normalized fraction - same-view rebuilds can
+            // change the content height (snapshot deleted, confirm row armed)
+            // and the same fraction of a different height drifts.
+            bool sameView = _activeTab == _lastContentTab
+                && _selectedScene == _lastContentScene;
+            float keepOffset = 0f; // pixels from the top
             var scroll = RightScroll;
             if (sameView && scroll != null)
-                keepScroll = scroll.verticalNormalizedPosition;
+                keepOffset = ScrollOffsetFromTop(scroll);
 
-            ClearContentDetached(rightContent);
+            ClearContentDetached(_rightContent);
 
-            // Clear config tab references since they'll be stale
             ClearConfigRefs();
 
             // Hidden by default; the Runs/Leaderboard builders re-show it
@@ -469,13 +473,13 @@ namespace ReplayTimerMod
             if (_networkClient != null)
                 _networkClient.StopLeaderboardPolling();
 
-            switch (activeTab)
+            switch (_activeTab)
             {
                 case TabKind.Runs:
-                    if (selectedScene != null)
-                        BuildRunsContent(selectedScene);
+                    if (_selectedScene != null)
+                        BuildRunsContent(_selectedScene);
                     else
-                        AddCenteredMessage(rightContent, "Select a room to view runs.");
+                        AddCenteredMessage(_rightContent, "Select a room to view runs.");
                     break;
 
                 case TabKind.Leaderboard:
@@ -484,11 +488,11 @@ namespace ReplayTimerMod
                     // is already populated by the scene index so first paint
                     // is instant.
                     if (GhostSettings.OnlineEnabled
-                        && selectedScene != null
+                        && _selectedScene != null
                         && _networkClient != null
                         && _networkClient.IsStarted)
                     {
-                        _networkClient.StartLeaderboardPolling(selectedScene);
+                        _networkClient.StartLeaderboardPolling(_selectedScene);
                     }
                     break;
 
@@ -498,32 +502,36 @@ namespace ReplayTimerMod
                     break;
             }
 
-            ForceLayout(rightContent);
+            ForceLayout(_rightContent);
 
             if (scroll != null)
-                scroll.verticalNormalizedPosition =
-                    sameView ? Mathf.Clamp01(keepScroll) : 1f;
+            {
+                if (sameView)
+                    RestoreScrollOffsetFromTop(scroll, keepOffset);
+                else
+                    scroll.verticalNormalizedPosition = 1f; // top
+            }
 
-            _lastContentTab = activeTab;
-            _lastContentScene = selectedScene;
+            _lastContentTab = _activeTab;
+            _lastContentScene = _selectedScene;
         }
 
         private void SelectScene(string scene)
         {
-            selectedScene = scene;
-            deleteConfirmId = null;
-            routeClearConfirmKey = null;
+            _selectedScene = scene;
+            _deleteConfirmId = null;
+            _routeClearConfirmKey = null;
             ClosePicker();
             CloseFilterPopup();
 
             // If this room has no local runs but exists on the server,
             // the Runs tab would be empty — jump straight to the leaderboard.
-            if (activeTab == TabKind.Runs
+            if (_activeTab == TabKind.Runs
                 && GhostSettings.OnlineEnabled
                 && !PBManager.AllPBs().Any(p => p.Key.SceneName == scene)
-                && _leaderboardCache.GetServerScenes().Contains(scene))
+                && _leaderboardCache.HasServerScene(scene))
             {
-                activeTab = TabKind.Leaderboard;
+                _activeTab = TabKind.Leaderboard;
             }
 
             RebuildSceneList();
@@ -534,14 +542,14 @@ namespace ReplayTimerMod
 
         private void ClearSelectedScene()
         {
-            selectedScene = null;
+            _selectedScene = null;
             CloseFilterPopup(); // its header row is about to disappear
             UpdateRightSubHeader();
-            if (rightContent != null)
+            if (_rightContent != null)
             {
-                ClearContentDetached(rightContent);
-                AddCenteredMessage(rightContent, "Select a room to view runs.");
-                ForceLayout(rightContent);
+                ClearContentDetached(_rightContent);
+                AddCenteredMessage(_rightContent, "Select a room to view runs.");
+                ForceLayout(_rightContent);
             }
         }
 

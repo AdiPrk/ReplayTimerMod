@@ -18,7 +18,7 @@ namespace ReplayTimerMod
     //
     //   * Chained mode (GhostSettings.ChainRoomTimers == true):
     //       When the next room starts, the just-finished card stays in the left
-    //       slot and a new running card drops in to its right. After ROLL_DELAY
+    //       slot and a new running card drops in to its right. After RollDelay
     //       seconds OR the next transition (whichever comes first) the left card
     //       slides off to the left and the right card slides into the left slot,
     //       freeing the right slot for the room after that. Rolls forever,
@@ -32,12 +32,12 @@ namespace ReplayTimerMod
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("RoomTimerHUD");
 
-        private const int MARGIN_X = 8;
-        private const int MARGIN_Y = 8;
+        private const int MarginX = 8;
+        private const int MarginY = 8;
 
         // How long both cards stay side-by-side before the older one rolls off,
         // when the next room hasn't already triggered the roll by transitioning.
-        private const float ROLL_DELAY = 2.5f;
+        private const float RollDelay = 2.5f;
 
         // ── Per-room card ────────────────────────────────────────────────────
         private enum CardState { Running, Finished }
@@ -105,7 +105,7 @@ namespace ReplayTimerMod
 
         private bool _setup = false;
 
-        // ── Cancellation banner (unchanged behaviour) ────────────────────────
+        // ── Cancellation banner ──────────────────────────────────────────────
         private enum BannerState { Hidden, SlidingIn, Visible, SlidingOut }
         private BannerState _bannerState = BannerState.Hidden;
         private float _bannerHoldTimer = 0f;
@@ -115,7 +115,7 @@ namespace ReplayTimerMod
 
         private const float BannerSlideSpeed  = 1400f;
         private const float BannerHoldSeconds = 4.6f;
-        private const int   BANNER_GAP_X = 16;
+        private const int   BannerGapX = 16;
 
         private GameObject?    _bannerGO;
         private RectTransform? _bannerRt;
@@ -130,12 +130,14 @@ namespace ReplayTimerMod
 
         public void Setup()
         {
+            if (_setup) return;
+
             BuildCanvas();
 
             RoomTracker.OnRoomEnter          += HandleRoomEnter;
             RoomTracker.OnRoomExit           += HandleRoomExit;
             RoomTracker.OnRecordingDiscarded += HandleDiscarded;
-            RoomTracker.OnRunCancelled        += HandleRunCancelled;
+            RoomTracker.OnRunCancelled       += HandleRunCancelled;
 
             _setup = true;
             Log.LogInfo("[RoomTimerHUD] Setup complete");
@@ -207,9 +209,8 @@ namespace ReplayTimerMod
                 AnimateCards();
 
                 if (_live != null && _live.liveDisplay)
-                    RefreshRunning(_live);
+                    RefreshRunningTimer(_live);
 
-                // Ready indicator only when nothing is on screen.
                 SetReadyVisible(_cards.Count == 0);
                 SetCardsVisible(true);
             }
@@ -306,7 +307,7 @@ namespace ReplayTimerMod
             _live = incoming;
 
             _rollPending = true;
-            _rollTimer   = ROLL_DELAY;
+            _rollTimer   = RollDelay;
         }
 
         private void HandleRoomExit(string sceneName, string entryFromScene,
@@ -551,12 +552,23 @@ namespace ReplayTimerMod
         }
 
         // ── Card visuals ───────────────────────────────────────────────────────
+
+        // Called once when a card (re)enters the running state; the per-frame
+        // path below only touches the timer text.
         private void RefreshRunning(TimerCard card)
         {
-            card.timer.text  = TimeUtil.Format(RoomTracker.CurrentRoomTime);
             card.timer.color = UIStyle.Text;
             card.delta.text  = "";
             RefreshPbRow(card, card.entryPb, highlightGold: false);
+            RefreshRunningTimer(card);
+        }
+
+        // Per-frame update while the card is live. Only the timer string
+        // changes frame to frame; rewriting the color/delta/PB row every frame
+        // would re-format strings and dirty the uGUI layout for nothing.
+        private void RefreshRunningTimer(TimerCard card)
+        {
+            card.timer.text = TimeUtil.Format(RoomTracker.CurrentRoomTime);
         }
 
         private void RefreshFinished(TimerCard card)
@@ -738,7 +750,7 @@ namespace ReplayTimerMod
             _bannerRt.anchoredPosition = new Vector2(_bannerRt.anchoredPosition.x, _bannerY);
         }
 
-        private float ShownBannerY()  => -UIStyle.H(MARGIN_Y);
+        private float ShownBannerY()  => -UIStyle.H(MarginY);
         private float HiddenBannerY() => _bannerHeight + UIStyle.H(20);
 
         // ── Canvas + persistent UI ────────────────────────────────────────────────
@@ -782,8 +794,8 @@ namespace ReplayTimerMod
             _cardW = _timerW + _colGap + _deltaW;
             _cardH = _timerRowH + _rowGap + _pbRowH + _rowGap + _pbRowH;
 
-            int mX = UIStyle.W(MARGIN_X);
-            _marginY = UIStyle.H(MARGIN_Y);
+            int mX = UIStyle.W(MarginX);
+            _marginY = UIStyle.H(MarginY);
 
             int gapX = UIStyle.W(18);
             _slot0X = mX;
@@ -798,7 +810,7 @@ namespace ReplayTimerMod
 
         private void BuildReadyIndicator(Transform canvasRoot)
         {
-            int mX = UIStyle.W(MARGIN_X);
+            int mX = UIStyle.W(MarginX);
 
             _readyGO = new GameObject("ReadyIndicator");
             _readyGO.transform.SetParent(canvasRoot, false);
@@ -824,7 +836,7 @@ namespace ReplayTimerMod
 
             // To the right of where the second (right-slot) card sits, so it
             // never overlaps either card.
-            int bannerX = _slot1X + _cardW + UIStyle.W(BANNER_GAP_X);
+            int bannerX = _slot1X + _cardW + UIStyle.W(BannerGapX);
 
             _bannerGO = new GameObject("RunCancelledBanner");
             _bannerGO.transform.SetParent(canvasRoot, false);

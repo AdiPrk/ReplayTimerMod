@@ -243,5 +243,66 @@ namespace ReplayTimerMod.Tests
                 Assert.Equal(0, require & exclude);
             }
         }
+
+        // ── CountCollapsed (the filter footer's unfiltered total) ──────────
+
+        [Fact]
+        public void CountCollapsed_MatchesUnfilteredBuildCount()
+        {
+            var route = SampleRoute();
+            Assert.Equal(RouteView.Build(route, 0, 0, out _, out _).Count,
+                RouteView.CountCollapsed(route));
+        }
+
+        [Fact]
+        public void CountCollapsed_EmptyRouteIsZero()
+        {
+            Assert.Equal(0, RouteView.CountCollapsed(new RouteLeaderboard()));
+        }
+
+        // ── Crest single-select rules ──────────────────────────────────────
+
+        [Fact]
+        public void SelectCrestBit_ReplacesOtherCrest_TogglesOff_ClearsOnAny()
+        {
+            const int crests = 0b1110; // three crest bits
+            int require = 0b0001 | 0b0010; // one ability bit + one crest bit
+
+            // Selecting a different crest replaces the current one.
+            int r = RouteView.SelectCrestBit(require, crests, 0b0100);
+            Assert.Equal(0b0001 | 0b0100, r);
+
+            // Re-selecting the current crest clears it.
+            r = RouteView.SelectCrestBit(r, crests, 0b0100);
+            Assert.Equal(0b0001, r);
+
+            // "Any crest" (bitMask 0) clears whatever crest is selected.
+            r = RouteView.SelectCrestBit(0b0001 | 0b1000, crests, 0);
+            Assert.Equal(0b0001, r);
+        }
+
+        [Fact]
+        public void SanitizeCrestBits_DropsExcludes_AndMultiCrestRequire()
+        {
+            const int crests = 0b1110;
+
+            // Crest bits never live in the exclude mask.
+            int require = 0b0010, exclude = 0b0100 | 0b0001;
+            RouteView.SanitizeCrestBits(crests, ref require, ref exclude);
+            Assert.Equal(0b0010, require);
+            Assert.Equal(0b0001, exclude);
+
+            // Multiple required crest bits (stale state) clear together;
+            // ability bits survive.
+            require = 0b0110 | 0b0001;
+            exclude = 0;
+            RouteView.SanitizeCrestBits(crests, ref require, ref exclude);
+            Assert.Equal(0b0001, require);
+
+            // A single required crest is valid and untouched.
+            require = 0b0100 | 0b0001;
+            RouteView.SanitizeCrestBits(crests, ref require, ref exclude);
+            Assert.Equal(0b0100 | 0b0001, require);
+        }
     }
 }

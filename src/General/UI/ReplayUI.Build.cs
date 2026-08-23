@@ -7,27 +7,27 @@ namespace ReplayTimerMod
     {
         private void BuildTab()
         {
-            tabGO = MakeGO("ReplayTab", canvasGO!.transform);
-            Img(tabGO, UIStyle.Surface);
-            Btn(tabGO, TogglePanel);
+            _tabGO = MakeGO("ReplayTab", _canvasGO!.transform);
+            Img(_tabGO, UIStyle.Surface);
+            Btn(_tabGO, TogglePanel);
 
-            var rt = tabGO.GetComponent<RectTransform>();
+            var rt = _tabGO.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = Vector2.zero;
             rt.pivot = Vector2.zero;
             rt.anchoredPosition = new Vector2(M, M);
             rt.sizeDelta = new Vector2(UIStyle.TabBtnWidth, UIStyle.TabBtnHeight);
 
-            MakeLbl(tabGO.transform, "Replays", UIStyle.FontSizeSm,
+            MakeLbl(_tabGO.transform, "Replays", UIStyle.FontSizeSm,
                 UIStyle.Text, TextAnchor.MiddleCenter, fill: true);
-            AddButtonHover(tabGO);
+            AddButtonHover(_tabGO);
         }
 
         private void BuildPanel()
         {
-            panelGO = MakeGO("ReplayPanel", canvasGO!.transform);
-            Img(panelGO, UIStyle.Base);
+            _panelGO = MakeGO("ReplayPanel", _canvasGO!.transform);
+            Img(_panelGO, UIStyle.Base);
 
-            var rt = panelGO.GetComponent<RectTransform>();
+            var rt = _panelGO.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = Vector2.zero;
             rt.pivot = Vector2.zero;
             rt.anchoredPosition = new Vector2(M, M + UIStyle.TabBtnHeight + M);
@@ -40,7 +40,7 @@ namespace ReplayTimerMod
             int FOOT = UIStyle.FooterHeight;
 
             BuildPanelHeader(HDR);
-            HLine(panelGO.transform, 0, HDR, PW);
+            HLine(_panelGO.transform, 0, HDR, PW);
 
             int bodyY = HDR + 1;
 
@@ -51,17 +51,16 @@ namespace ReplayTimerMod
             int sceneListH = footerY - 1 - sceneListY;
 
             BuildSearchBar(searchY, SRCH);
-            HLine(panelGO.transform, 0, sceneListY - 1, LW);
+            HLine(_panelGO.transform, 0, sceneListY - 1, LW);
 
-            sceneListContent = BuildScrollArea(panelGO.transform, "SceneListScroll",
+            _sceneListContent = BuildScrollArea(_panelGO.transform, "SceneListScroll",
                 0, sceneListY, LW, sceneListH);
-            sceneListScroll = sceneListContent.parent.parent.GetComponent<ScrollRect>();
+            _sceneListScroll = _sceneListContent.parent.parent.GetComponent<ScrollRect>();
 
-            HLine(panelGO.transform, 0, footerY - 1, LW);
+            HLine(_panelGO.transform, 0, footerY - 1, LW);
             BuildLeftFooter(footerY, FOOT);
 
-            // Vertical divider
-            VLine(panelGO.transform, LW, bodyY, PH - bodyY);
+            VLine(_panelGO.transform, LW, bodyY, PH - bodyY);
 
             // Right panel
             int tabBarY = bodyY;
@@ -70,17 +69,17 @@ namespace ReplayTimerMod
             int rightContentH = PH - rightContentY;
 
             BuildTabBar(tabBarY, TABH);
-            HLine(panelGO.transform, LW + 1, tabBarY + TABH, RW);
+            HLine(_panelGO.transform, LW + 1, tabBarY + TABH, RW);
             BuildRightSubHeader(rightSubY, SUBH);
-            HLine(panelGO.transform, LW + 1, rightContentY - 1, RW);
+            HLine(_panelGO.transform, LW + 1, rightContentY - 1, RW);
 
-            rightContent = BuildScrollArea(panelGO.transform, "RightContentScroll",
+            _rightContent = BuildScrollArea(_panelGO.transform, "RightContentScroll",
                 LW + 1, rightContentY, RW, rightContentH);
         }
 
         private void BuildPanelHeader(int height)
         {
-            var hdr = MakeGO("Header", panelGO!.transform);
+            var hdr = MakeGO("Header", _panelGO!.transform);
             Img(hdr, UIStyle.Surface);
             Rect(hdr, 0, 0, PW, height);
 
@@ -101,19 +100,19 @@ namespace ReplayTimerMod
 
         private void BuildSearchBar(int y, int h)
         {
-            MakeSearchInput(panelGO!.transform, "Filter rooms...",
+            MakeSearchInput(_panelGO!.transform, "Filter rooms...",
                 0, y, LW, h, OnSearchChanged);
         }
 
         private void OnSearchChanged(string value)
         {
-            searchFilter = value ?? "";
+            _searchFilter = value ?? "";
             RebuildSceneList();
         }
 
         private void BuildLeftFooter(int y, int h)
         {
-            var footer = MakeGO("LeftFooter", panelGO!.transform);
+            var footer = MakeGO("LeftFooter", _panelGO!.transform);
             Img(footer, UIStyle.Surface);
             Rect(footer, 0, y, LW, h);
 
@@ -125,35 +124,35 @@ namespace ReplayTimerMod
             var curRef = MakeButton(footer.transform, "JumpCurrent", "Current",
                 UIStyle.FontSizeBtn, UIStyle.Gold, UIStyle.BtnBg(UIStyle.Gold),
                 M, btnY, btnW, btnH, OnJumpToCurrentClicked);
-            jumpCurrentBg = curRef.bg;
-            jumpCurrentLbl = curRef.label;
+            _jumpCurrentBg = curRef.bg;
+            _jumpCurrentLbl = curRef.label;
 
             var prevRef = MakeButton(footer.transform, "JumpPrevious", "Previous",
                 UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
                 M + btnW + gap, btnY, btnW, btnH, OnJumpToLastClicked);
-            jumpPreviousBg = prevRef.bg;
-            jumpPreviousLbl = prevRef.label;
+            _jumpPreviousBg = prevRef.bg;
+            _jumpPreviousLbl = prevRef.label;
         }
 
         private void BuildTabBar(int y, int h)
         {
-            var bar = MakeGO("TabBar", panelGO!.transform);
+            var bar = MakeGO("TabBar", _panelGO!.transform);
             Img(bar, UIStyle.Surface);
             Rect(bar, LW + 1, y, RW, h);
 
             int btnW = UIStyle.W(80);
             int x = 0;
 
-            tabButtons.Clear();
-            tabButtons[TabKind.Runs] = AddTabButton(bar.transform, "Runs", x, h, btnW,
+            _tabButtons.Clear();
+            _tabButtons[TabKind.Runs] = AddTabButton(bar.transform, "Runs", x, h, btnW,
                 () => SwitchTab(TabKind.Runs));
             x += btnW;
 
-            tabButtons[TabKind.Leaderboard] = AddTabButton(bar.transform, "Leaderboard", x, h, UIStyle.W(96),
+            _tabButtons[TabKind.Leaderboard] = AddTabButton(bar.transform, "Leaderboard", x, h, UIStyle.W(96),
                 () => SwitchTab(TabKind.Leaderboard));
             x += UIStyle.W(96);
 
-            tabButtons[TabKind.Config] = AddTabButton(bar.transform, "Config", x, h, btnW,
+            _tabButtons[TabKind.Config] = AddTabButton(bar.transform, "Config", x, h, btnW,
                 () => SwitchTab(TabKind.Config));
         }
 
@@ -179,16 +178,16 @@ namespace ReplayTimerMod
 
         private void BuildRightSubHeader(int y, int h)
         {
-            var hdr = MakeGO("RightSubHeader", panelGO!.transform);
+            var hdr = MakeGO("RightSubHeader", _panelGO!.transform);
             Img(hdr, UIStyle.Surface);
             Rect(hdr, LW + 1, y, RW, h);
-            rightSubHeader = hdr;
+            _rightSubHeader = hdr;
 
             int btnH = UIStyle.H(20);
             int btnY = (h - btnH) / 2;
 
-            runsActionButtons = MakeGO("RunsActions", hdr.transform);
-            Fill(runsActionButtons);
+            _runsActionButtons = MakeGO("RunsActions", hdr.transform);
+            Fill(_runsActionButtons);
 
             // Right-packed action cluster, each button sized to its text
             // (same fit-the-content idiom as the filter chips). Clear is
@@ -204,32 +203,31 @@ namespace ReplayTimerMod
                 MeasureTextWidth("Export", UIStyle.FontSizeBtn)) + padX * 2;
 
             int clearX = RW - clearW - M;
-            var clearRef = MakeButton(runsActionButtons.transform, "ClearScene", "Clear",
+            var clearRef = MakeButton(_runsActionButtons.transform, "ClearScene", "Clear",
                 UIStyle.FontSizeBtn, UIStyle.Red, UIStyle.BtnBgStrong(UIStyle.Red),
                 clearX, btnY, clearW, btnH, OnClearSceneClicked);
-            sceneClearLbl = clearRef.label;
-            sceneClearBg = clearRef.bg;
+            _sceneClearLbl = clearRef.label;
+            _sceneClearBg = clearRef.bg;
 
             int pasteX = clearX - M - pasteW;
-            MakeButton(runsActionButtons.transform, "Paste", "Paste",
+            MakeButton(_runsActionButtons.transform, "Paste", "Paste",
                 UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
                 pasteX, btnY, pasteW, btnH, OnPasteClicked);
 
             int expX = pasteX - M - expW;
-            MakeButton(runsActionButtons.transform, "ExportScene", "Export",
+            MakeButton(_runsActionButtons.transform, "ExportScene", "Export",
                 UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
                 expX, btnY, expW, btnH, OnExportSceneClicked);
 
             // The Filters toggle (built on demand by ShowFilterToggle) packs
             // against the left of the cluster on the Runs tab.
-            filterRunsRightEdge = expX - M;
+            _filterRunsRightEdge = expX - M;
 
-            int statusW = UIStyle.W(100);
-            pasteStatusLbl = MakeLbl(runsActionButtons.transform, "",
+            _pasteStatusLbl = MakeLbl(_runsActionButtons.transform, "",
                 UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleRight,
-                x: filterRunsRightEdge - statusW, w: statusW, h: h);
+                x: _filterRunsRightEdge - PasteStatusWidth, w: PasteStatusWidth, h: h);
 
-            rightHeaderLbl = MakeLbl(hdr.transform, "Select a room",
+            _rightHeaderLbl = MakeLbl(hdr.transform, "Select a room",
                 UIStyle.FontSizeSm, UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: M, w: RW / 2, h: h);
         }

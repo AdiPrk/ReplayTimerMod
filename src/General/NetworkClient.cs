@@ -6,10 +6,9 @@ using UnityEngine;
 namespace ReplayTimerMod
 {
     /// <summary>
-    /// Central networking orchestrator.
-    ///
-    /// Redesigned for efficiency + responsiveness:
-    ///   - Combined /init endpoint (one round trip on startup)
+    /// Central networking orchestrator:
+    ///   - Combined /init endpoint (one round trip on startup, retried with
+    ///     backoff until the config is known)
     ///   - Lightweight /scenes polling with version (16 bytes when unchanged)
     ///   - On-demand per-room /leaderboard with version (skip query when unchanged)
     ///   - Prefetch on room enter (data ready before menu opens)
@@ -19,8 +18,7 @@ namespace ReplayTimerMod
     ///   - Adaptive polling intervals
     ///
     /// Scene-index lifecycle is surfaced to ReplayUI via OnSceneIndexReady /
-    /// OnSceneIndexFailed plus the CurrentSceneIndexStatus / LastSceneIndexError /
-    /// SceneIndexFetched queries.
+    /// OnSceneIndexFailed plus the CurrentSceneIndexStatus query.
     /// </summary>
     public sealed class NetworkClient
     {
@@ -68,9 +66,18 @@ namespace ReplayTimerMod
 
         // ── Config ─────────────────────────────────────────────────────────
 
-        private ConfigResponse? _serverConfig;
         private bool _configFetched;
         private bool _maintenanceMode;
+
+        // /init retry: without it a transient startup failure would leave the
+        // config (maintenance flag!) unknown for the whole session — /scenes
+        // polling recovers the scene index, but nothing else re-reads config.
+        private bool _initInFlight;
+        private float _initRetryTimer;
+        private float _initRetryDelay = InitRetryBaseDelay;
+
+        private const float InitRetryBaseDelay = 10f;
+        private const float InitRetryMaxDelay = 120f;
 
         // ── Scene index (/scenes) ──────────────────────────────────────────
 
@@ -80,12 +87,8 @@ namespace ReplayTimerMod
         private float _sceneIndexTimer;
         private bool _sceneIndexInFlight;
         private SceneIndexStatus _sceneIndexStatus = SceneIndexStatus.NotStarted;
-        private string? _sceneIndexError;
 
-        // Scene-index status queries (read by the panel's scene list)
         public SceneIndexStatus CurrentSceneIndexStatus => _sceneIndexStatus;
-        public string? LastSceneIndexError => _sceneIndexError;
-        public bool SceneIndexFetched => _sceneIndexStatus == SceneIndexStatus.Loaded;
 
         // ── Room leaderboard polling ───────────────────────────────────────
 
@@ -148,10 +151,11 @@ namespace ReplayTimerMod
             _uploadWorker.OnUploadSuccess += HandleUploadSuccess;
             _uploadWorker.OnDisplayNameReceived += HandleDisplayNameReceived;
 
-            // Single startup request: GET /init (config + scene index).
+            _initRetryTimer = 0f;
+            _initRetryDelay = InitRetryBaseDelay;
             FetchInit();
 
-            Log.LogInfo("[NetworkClient] Started (redesigned networking)");
+            Log.LogInfo("[NetworkClient] Started");
         }
 
         public void Stop()
@@ -173,7 +177,13 @@ namespace ReplayTimerMod
                 _http = null;
             }
 
+            // CancelAll disposes in-flight requests WITHOUT firing callbacks,
+            // so every in-flight flag must be cleared here or the next Start
+            // would wait forever on a completion that never comes.
             _roomFetchInFlight.Clear();
+            _sceneIndexInFlight = false;
+            _initInFlight = false;
+
             _started = false;
             Log.LogInfo("[NetworkClient] Stopped");
         }
@@ -187,6 +197,7 @@ namespace ReplayTimerMod
             if (_uploadWorker != null)
                 _uploadWorker.Tick();
 
+            TickInitRetry();
             TickSceneIndex();
             TickRoomPoll();
         }
@@ -248,7 +259,6 @@ namespace ReplayTimerMod
             _consecutiveNoChange = 0;
             _lastPollWasChange = false;
 
-            // If we don't have data for this room, trigger an immediate fetch.
             if (_leaderboardCache != null
                 && !_leaderboardCache.HasRoomData(_gameTag, scene))
             {
@@ -260,8 +270,6 @@ namespace ReplayTimerMod
         {
             _pollScene = null;
         }
-
-        public bool IsLeaderboardPolling => _pollScene != null;
 
         /// <summary>
         /// Notify NetworkClient whether the replay panel is open. The scene
@@ -275,7 +283,7 @@ namespace ReplayTimerMod
             if (_menuOpen == open) return;
             _menuOpen = open;
             if (open)
-                _sceneIndexTimer = PollNow; // refresh scene index on next tick
+                _sceneIndexTimer = PollNow;
         }
 
         /// <summary>
@@ -287,7 +295,6 @@ namespace ReplayTimerMod
             if (!_started || _http == null) return;
             if (_leaderboardCache == null) return;
 
-            // Skip if data is fresh enough.
             if (_leaderboardCache.IsRoomFresh(_gameTag, scene, RoomFreshnessThreshold))
                 return;
 
@@ -298,32 +305,32 @@ namespace ReplayTimerMod
 
         private void FetchInit()
         {
-            if (_http == null) return;
+            if (_http == null || _initInFlight) return;
 
             string url = _apiBaseUrl + "/init?game="
                 + Uri.EscapeDataString(_gameTag);
 
+            _initInFlight = true;
             _sceneIndexStatus = SceneIndexStatus.Loading;
 
             _http.Get(url, InitTimeoutSec, (success, status, body) =>
             {
+                _initInFlight = false;
+
                 if (success)
                 {
                     _health.RecordSuccess();
                     var init = ApiJson.ParseInitResponse(body);
 
-                    // Apply config.
-                    _serverConfig = init.Config;
                     _configFetched = true;
                     _maintenanceMode = init.Config.Maintenance;
 
                     if (_maintenanceMode)
-                        Log.LogInfo("[NetworkClient] Maintenance mode — uploads paused");
+                        Log.LogInfo("[NetworkClient] Maintenance mode - uploads paused");
                     if (!string.IsNullOrEmpty(init.Config.Announcement))
                         Log.LogInfo("[NetworkClient] Announcement: "
                             + init.Config.Announcement);
 
-                    // Apply scene index.
                     if (_leaderboardCache != null)
                     {
                         _leaderboardCache.UpdateSceneIndex(
@@ -331,7 +338,6 @@ namespace ReplayTimerMod
                     }
 
                     _sceneIndexStatus = SceneIndexStatus.Loaded;
-                    _sceneIndexError = null;
 
                     Log.LogInfo("[NetworkClient] Init loaded: "
                         + init.Scenes.Count + " scenes");
@@ -343,12 +349,23 @@ namespace ReplayTimerMod
                 {
                     _health.RecordFailure();
                     _sceneIndexStatus = SceneIndexStatus.Failed;
-                    _sceneIndexError = body;
 
                     Log.LogWarning("[NetworkClient] Init failed: " + body);
                     OnSceneIndexFailed?.Invoke();
                 }
             }, _initHeaders);
+        }
+
+        private void TickInitRetry()
+        {
+            if (_configFetched || _initInFlight) return;
+
+            _initRetryTimer += Time.unscaledDeltaTime;
+            if (_initRetryTimer < _initRetryDelay) return;
+
+            _initRetryTimer = 0f;
+            _initRetryDelay = Mathf.Min(_initRetryDelay * 2f, InitRetryMaxDelay);
+            FetchInit();
         }
 
         // ── Scene index polling: GET /scenes ───────────────────────────────
@@ -394,7 +411,6 @@ namespace ReplayTimerMod
                             resp.Version, resp.Scenes);
 
                         _sceneIndexStatus = SceneIndexStatus.Loaded;
-                        _sceneIndexError = null;
 
                         OnSceneIndexReady?.Invoke();
                         OnLeaderboardUpdated?.Invoke();
@@ -414,7 +430,11 @@ namespace ReplayTimerMod
         {
             if (_http == null || _leaderboardCache == null) return;
 
-            // Deduplication: skip if already in-flight for this scene.
+            // Honor the health gate here too: this is also reached directly
+            // from PrefetchRoom (every room enter) and StartLeaderboardPolling,
+            // not just from the gated TickRoomPoll.
+            if (!_health.ShouldAttemptPolling) return;
+
             if (_roomFetchInFlight.Contains(scene)) return;
             _roomFetchInFlight.Add(scene);
 
@@ -435,18 +455,26 @@ namespace ReplayTimerMod
                     _health.RecordSuccess();
                     var resp = ApiJson.ParseVersionedLeaderboardResponse(body);
 
+                    // The adaptive counters pace the poll of the room the UI
+                    // is VIEWING; a background prefetch of some other scene
+                    // must not reset them.
+                    bool isPolledScene = scene == _pollScene;
+
                     if (resp.Changed && _leaderboardCache != null)
                     {
                         bool contentChanged = _leaderboardCache.UpdateRoom(
                             _gameTag, scene, resp.Version, resp.Data);
 
-                        _lastPollWasChange = true;
-                        _consecutiveNoChange = 0;
+                        if (isPolledScene)
+                        {
+                            _lastPollWasChange = true;
+                            _consecutiveNoChange = 0;
+                        }
 
                         if (contentChanged)
                             OnLeaderboardUpdated?.Invoke();
                     }
-                    else
+                    else if (isPolledScene)
                     {
                         // 304 equivalent: version matched, data unchanged.
                         _lastPollWasChange = false;
@@ -456,7 +484,7 @@ namespace ReplayTimerMod
                 else
                 {
                     _health.RecordFailure();
-                    Log.LogInfo("[NetworkClient] Room fetch failed for "
+                    Log.LogWarning("[NetworkClient] Room fetch failed for "
                         + scene + ": " + body);
                 }
             }, _headers);
@@ -503,7 +531,7 @@ namespace ReplayTimerMod
                 else
                 {
                     _health.RecordFailure();
-                    Log.LogInfo("[NetworkClient] Replay download failed: " + error);
+                    Log.LogWarning("[NetworkClient] Replay download failed: " + error);
                     onComplete(null);
                 }
             }, _headers);
@@ -532,7 +560,7 @@ namespace ReplayTimerMod
                     else
                     {
                         _health.RecordFailure();
-                        Log.LogInfo("[NetworkClient] Share (run) failed: " + body);
+                        Log.LogWarning("[NetworkClient] Share (run) failed: " + body);
                         onComplete(null);
                     }
                 }, _headers);
@@ -568,7 +596,7 @@ namespace ReplayTimerMod
                     else
                     {
                         _health.RecordFailure();
-                        Log.LogInfo("[NetworkClient] Share (data) failed: " + resp);
+                        Log.LogWarning("[NetworkClient] Share (data) failed: " + resp);
                         onComplete(null);
                     }
                 }, _headers);
@@ -594,7 +622,7 @@ namespace ReplayTimerMod
                 else
                 {
                     _health.RecordFailure();
-                    Log.LogInfo("[NetworkClient] Resolve share failed: " + error);
+                    Log.LogWarning("[NetworkClient] Resolve share failed: " + error);
                     onComplete(null);
                 }
             }, _headers);
@@ -688,10 +716,5 @@ namespace ReplayTimerMod
         // ── Public state queries ───────────────────────────────────────────
 
         public bool IsStarted => _started;
-        public bool IsMaintenanceMode => _maintenanceMode;
-        public bool HasServerConfig => _configFetched;
-        public string GameTag => _gameTag;
-        public string ApiBaseUrl => _apiBaseUrl;
-        public string? ServerAnnouncement => _serverConfig?.Announcement;
     }
 }

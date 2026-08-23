@@ -13,7 +13,10 @@ namespace ReplayTimerMod
         internal static byte[] CompressData(byte[] data)
         {
             using var ms = new MemoryStream();
-            using (var ds = new DeflaterOutputStream(ms, new Deflater(Deflater.DEFAULT_COMPRESSION, true)))
+            // BEST_COMPRESSION to match the Silksong build's
+            // CompressionLevel.Optimal — identical runs should compress
+            // comparably on every platform.
+            using (var ds = new DeflaterOutputStream(ms, new Deflater(Deflater.BEST_COMPRESSION, true)))
             {
                 ds.Write(data, 0, data.Length);
                 ds.Finish();
@@ -26,7 +29,7 @@ namespace ReplayTimerMod
             using var ms = new MemoryStream(data);
             using var inf = new InflaterInputStream(ms, new Inflater(true));
             using var output = new MemoryStream();
-            var buf = new byte[4096];
+            var buf = new byte[8192];
             int n;
             while ((n = inf.Read(buf, 0, buf.Length)) > 0)
             {

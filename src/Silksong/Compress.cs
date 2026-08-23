@@ -9,7 +9,7 @@ namespace ReplayTimerMod
         // Inflate ceiling — guards against a decompression bomb in shared replays.
         private const long MaxDecompressedBytes = 64L * 1024 * 1024;
 
-       internal static byte[] CompressData(byte[] data)
+        internal static byte[] CompressData(byte[] data)
         {
             using var ms = new MemoryStream();
             using (var df = new DeflateStream(ms, CompressionLevel.Optimal))

@@ -128,6 +128,10 @@ namespace ReplayTimerMod
             // Iterate backwards so removals don't shift indices.
             for (int i = _active.Count - 1; i >= 0; i--)
             {
+                // A callback below may re-enter and call CancelAll(), clearing
+                // the list mid-iteration; re-check before indexing.
+                if (i >= _active.Count) continue;
+
                 var p = _active[i];
 
 #if V1221
@@ -165,16 +169,18 @@ namespace ReplayTimerMod
                 }
                 catch (Exception ex)
                 {
-                    Log.LogError("[HttpService] Callback threw: " + ex.Message);
+                    // ToString keeps the stack — this catch-all is the only
+                    // diagnostic surface for parse errors in callbacks.
+                    Log.LogError("[HttpService] Callback threw: " + ex);
                 }
 
-                // Dispose handlers and the request itself.
                 p.Request.Dispose();
             }
         }
 
         /// <summary>
-        /// Abort and dispose every in-flight request. Call on shutdown.
+        /// Abort and dispose every in-flight request WITHOUT firing callbacks.
+        /// Call on shutdown; callers must reset their own in-flight flags.
         /// </summary>
         public void CancelAll()
         {
@@ -185,8 +191,6 @@ namespace ReplayTimerMod
             }
             _active.Clear();
         }
-
-        public int ActiveCount => _active.Count;
 
         // ── Internals ───────────────────────────────────────────────────────
 

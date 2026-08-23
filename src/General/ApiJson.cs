@@ -82,7 +82,7 @@ namespace ReplayTimerMod
             LeaderboardData result)
         {
             if (i >= json.Length || json[i] != '[') return;
-            i++; // skip '['
+            i++;
 
             while (i < json.Length)
             {
@@ -102,7 +102,7 @@ namespace ReplayTimerMod
         private static RouteLeaderboard ParseRoute(string json, ref int i)
         {
             var route = new RouteLeaderboard();
-            i++; // skip '{'
+            i++;
 
             while (i < json.Length)
             {
@@ -114,7 +114,7 @@ namespace ReplayTimerMod
                 string key = ReadString(json, ref i);
                 SkipWs(json, ref i);
                 if (i >= json.Length || json[i] != ':') break;
-                i++; // skip ':'
+                i++;
                 SkipWs(json, ref i);
 
                 switch (key)
@@ -158,7 +158,7 @@ namespace ReplayTimerMod
         {
             var entries = new List<LeaderboardEntry>();
             if (i >= json.Length || json[i] != '[') return entries;
-            i++; // skip '['
+            i++;
 
             while (i < json.Length)
             {
@@ -177,7 +177,7 @@ namespace ReplayTimerMod
         {
             if (i >= json.Length || json[i] != '{') return null;
             var entry = new LeaderboardEntry();
-            i++; // skip '{'
+            i++;
 
             while (i < json.Length)
             {
@@ -189,7 +189,7 @@ namespace ReplayTimerMod
                 string key = ReadString(json, ref i);
                 SkipWs(json, ref i);
                 if (i >= json.Length || json[i] != ':') break;
-                i++; // skip ':'
+                i++;
                 SkipWs(json, ref i);
 
                 switch (key)
@@ -233,6 +233,52 @@ namespace ReplayTimerMod
             AppendKV(sb, "run_id", runId, first: true);
             sb.Append('}');
             return sb.ToString();
+        }
+
+        public static string SerializeSetName(string displayName)
+        {
+            var sb = new StringBuilder(64);
+            sb.Append('{');
+            AppendKV(sb, "display_name", displayName, first: true);
+            sb.Append('}');
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Returns the string value of a top-level key in a JSON object, or
+        /// null if absent/not a string. Scans forward to the first '{' so it
+        /// also works on error strings that embed a JSON body (see
+        /// HttpService.GetErrorString's "err | {json}" format).
+        /// </summary>
+        public static string? ParseTopLevelString(string text, string key)
+        {
+            if (string.IsNullOrEmpty(text)) return null;
+
+            int i = text.IndexOf('{');
+            if (i < 0) return null;
+            i++;
+
+            while (i < text.Length)
+            {
+                SkipWs(text, ref i);
+                if (i >= text.Length || text[i] == '}') break;
+                if (text[i] == ',') { i++; continue; }
+
+                string k = ReadString(text, ref i);
+                SkipWs(text, ref i);
+                if (i >= text.Length || text[i] != ':') break;
+                i++;
+                SkipWs(text, ref i);
+
+                if (k == key)
+                    return i < text.Length && text[i] == '"'
+                        ? ReadString(text, ref i)
+                        : null;
+
+                SkipValue(text, ref i);
+            }
+
+            return null;
         }
 
         public static string SerializeShareByData(string game, string sceneName,
@@ -369,69 +415,13 @@ namespace ReplayTimerMod
 
         // ── Low-level parsing helpers ──────────────────────────────────────
 
+        // String reading and whitespace skipping live in JsonText (shared
+        // with the other hand-rolled readers).
         private static string ReadString(string json, ref int i)
-        {
-            if (i >= json.Length || json[i] != '"')
-                return "";
-            i++; // skip opening quote
+            => JsonText.ReadString(json, ref i);
 
-            // Fast path: the vast majority of fields (scene names, run ids,
-            // most display names) contain no escape sequences, so scan to the
-            // closing quote and slice once — no StringBuilder, no per-char
-            // copy. Only fall back to the escape-aware path when a '\' appears.
-            int start = i;
-            while (i < json.Length)
-            {
-                char c = json[i];
-                if (c == '"')
-                {
-                    string s = json.Substring(start, i - start);
-                    i++; // skip closing quote
-                    return s;
-                }
-                if (c == '\\') break; // contains an escape — slow path below
-                i++;
-            }
-            if (i >= json.Length)
-                return json.Substring(start, i - start); // unterminated
-
-            // Slow path: seed the builder with the prefix already scanned, then
-            // decode escapes for the remainder.
-            var sb = new StringBuilder(json, start, i - start, (i - start) + 16);
-            while (i < json.Length)
-            {
-                char c = json[i];
-                if (c == '"') { i++; break; }
-                if (c == '\\' && i + 1 < json.Length)
-                {
-                    i++;
-                    switch (json[i])
-                    {
-                        case '"':  sb.Append('"');  break;
-                        case '\\': sb.Append('\\'); break;
-                        case '/':  sb.Append('/');  break;
-                        case 'n':  sb.Append('\n'); break;
-                        case 'r':  sb.Append('\r'); break;
-                        case 't':  sb.Append('\t'); break;
-                        case 'u':
-                            if (i + 4 < json.Length)
-                            {
-                                string hex = json.Substring(i + 1, 4);
-                                sb.Append((char)Convert.ToInt32(hex, 16));
-                                i += 4;
-                            }
-                            break;
-                        default: sb.Append(json[i]); break;
-                    }
-                }
-                else
-                {
-                    sb.Append(c);
-                }
-                i++;
-            }
-            return sb.ToString();
-        }
+        private static void SkipWs(string json, ref int i)
+            => JsonText.SkipWs(json, ref i);
 
         private static int ReadJsonInt(string json, ref int i)
         {
@@ -495,13 +485,6 @@ namespace ReplayTimerMod
             }
         }
 
-        private static void SkipWs(string json, ref int i)
-        {
-            while (i < json.Length && (json[i] == ' ' || json[i] == '\t'
-                || json[i] == '\n' || json[i] == '\r'))
-                i++;
-        }
-
         private static void SkipNested(string json, ref int i)
         {
             char open = json[i];
@@ -534,7 +517,7 @@ namespace ReplayTimerMod
                 CultureInfo.InvariantCulture, out int result) ? result : fallback;
         }
 
-        // ── New parsers for redesigned networking ──────────────────────────
+        // ── Endpoint response parsers ───────────────────────────────────────
 
         /// <summary>
         /// Parses GET /init response:
@@ -639,8 +622,7 @@ namespace ReplayTimerMod
                         if (i < json.Length && json[i] == '[')
                         {
                             r.Changed = true;
-                            r.Scenes = ParseSceneArray(json, i);
-                            SkipNested(json, ref i);
+                            r.Scenes = ParseSceneArray(json, ref i);
                         }
                         else SkipValue(json, ref i);
                         break;
@@ -654,15 +636,18 @@ namespace ReplayTimerMod
             return r;
         }
 
-        private static List<SceneInfo> ParseSceneArray(string json, int arrStart)
+        // Single pass, ref-int style (same as ParseRouteArray) — the caller's
+        // cursor lands just past the closing ']'.
+        private static List<SceneInfo> ParseSceneArray(string json, ref int i)
         {
             var result = new List<SceneInfo>();
-            int i = arrStart + 1;
+            i++;
 
             while (i < json.Length)
             {
                 SkipWs(json, ref i);
-                if (i >= json.Length || json[i] == ']') break;
+                if (i >= json.Length) break;
+                if (json[i] == ']') { i++; break; }
                 if (json[i] == ',') { i++; continue; }
                 if (json[i] != '{') break;
 
@@ -678,7 +663,7 @@ namespace ReplayTimerMod
         {
             if (i >= json.Length || json[i] != '{') return null;
             var info = new SceneInfo();
-            i++; // skip '{'
+            i++;
 
             while (i < json.Length)
             {
@@ -690,7 +675,7 @@ namespace ReplayTimerMod
                 string key = ReadString(json, ref i);
                 SkipWs(json, ref i);
                 if (i >= json.Length || json[i] != ':') break;
-                i++; // skip ':'
+                i++;
                 SkipWs(json, ref i);
 
                 switch (key)

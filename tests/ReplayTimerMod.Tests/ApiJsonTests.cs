@@ -289,7 +289,7 @@ namespace ReplayTimerMod.Tests
         [InlineData("[]")]
         [InlineData("{\"v\":")]
         [InlineData("{\"routes\":\"nope\"}")]
-        public void Parsers_ToleratateMalformedInput(string json)
+        public void Parsers_TolerateMalformedInput(string json)
         {
             // Must not throw — resilience over strictness on the client.
             ApiJson.ParseUploadResponse(json);

@@ -41,14 +41,14 @@ namespace ReplayTimerMod
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("CameraFollow");
 
-        private static FieldInfo? heroTransformField;
-        private static bool fieldLookupDone;
-        private static Transform? currentTarget;
+        private static FieldInfo? _heroTransformField;
+        private static bool _fieldLookupDone;
+        private static Transform? _currentTarget;
 
         // Lock areas of the current room, gathered once per engage.
-        private static readonly List<CameraLockArea> zones = new List<CameraLockArea>();
-        private static readonly List<Collider2D> zoneColliders = new List<Collider2D>();
-        private static CameraLockArea? currentZone;
+        private static readonly List<CameraLockArea> _zones = new List<CameraLockArea>();
+        private static readonly List<Collider2D> _zoneColliders = new List<Collider2D>();
+        private static CameraLockArea? _currentZone;
 
         /// <summary>
         /// Sets (or clears, with null) the transform the camera follows;
@@ -61,13 +61,13 @@ namespace ReplayTimerMod
         /// </summary>
         public static void SetTarget(Transform? target, bool facingRight = true)
         {
-            if (target == null && currentTarget == null)
+            if (target == null && _currentTarget == null)
                 return;
 
             var field = HeroTransformField();
             if (field == null)
             {
-                currentTarget = null;
+                _currentTarget = null;
                 return;
             }
 
@@ -78,7 +78,7 @@ namespace ReplayTimerMod
                 // Scene tear-down; the next scene's SceneInit re-points the
                 // camera at the hero on its own.
                 ClearZones();
-                currentTarget = null;
+                _currentTarget = null;
                 return;
             }
 
@@ -86,7 +86,7 @@ namespace ReplayTimerMod
 
             if (target != null)
             {
-                if (currentTarget == null)
+                if (_currentTarget == null)
                 {
                     Log.LogInfo($"[CameraFollow] Following '{target.name}'");
                     GatherZones();
@@ -95,7 +95,7 @@ namespace ReplayTimerMod
                 field.SetValue(camTarget, target);
                 ApplyGhostLockZone(camTarget, ctrl, target.position);
                 ApplyGhostLookAhead(camTarget, facingRight);
-                currentTarget = target;
+                _currentTarget = target;
                 return;
             }
 
@@ -126,7 +126,7 @@ namespace ReplayTimerMod
 
             ClearZones();
             Log.LogInfo("[CameraFollow] Released - camera back on the player");
-            currentTarget = null;
+            _currentTarget = null;
         }
 
         /// <summary>
@@ -145,7 +145,7 @@ namespace ReplayTimerMod
                 return;
 
             var zone = FindZoneAt(ghostPos);
-            currentZone = zone;
+            _currentZone = zone;
 
             if (zone == null)
             {
@@ -207,16 +207,16 @@ namespace ReplayTimerMod
             CameraLockArea? best = null;
             bool currentStillHolds = false;
 
-            for (int i = 0; i < zones.Count; i++)
+            for (int i = 0; i < _zones.Count; i++)
             {
-                var zone = zones[i];
-                var col = zoneColliders[i];
+                var zone = _zones[i];
+                var col = _zoneColliders[i];
                 if (zone == null || col == null || !zone.isActiveAndEnabled)
                     continue;
                 if (!col.OverlapPoint(point))
                     continue;
 
-                if (zone == currentZone)
+                if (zone == _currentZone)
                     currentStillHolds = true;
                 if (best == null || HigherPriority(zone, best))
                     best = zone;
@@ -224,9 +224,9 @@ namespace ReplayTimerMod
 
             // Hysteresis: stay in the zone we're in unless a strictly
             // higher-priority one also contains the ghost.
-            if (currentStillHolds && best != null && currentZone != null
-                && !HigherPriority(best, currentZone))
-                return currentZone;
+            if (currentStillHolds && best != null && _currentZone != null
+                && !HigherPriority(best, _currentZone))
+                return _currentZone;
 
             return best;
         }
@@ -254,36 +254,36 @@ namespace ReplayTimerMod
                 var col = zone.GetComponent<Collider2D>();
                 if (col == null)
                     continue;
-                zones.Add(zone);
-                zoneColliders.Add(col);
+                _zones.Add(zone);
+                _zoneColliders.Add(col);
             }
-            Log.LogInfo($"[CameraFollow] {zones.Count} lock zone(s) in room");
+            Log.LogInfo($"[CameraFollow] {_zones.Count} lock zone(s) in room");
         }
 
         private static void ClearZones()
         {
-            zones.Clear();
-            zoneColliders.Clear();
-            currentZone = null;
+            _zones.Clear();
+            _zoneColliders.Clear();
+            _currentZone = null;
         }
 
         private static FieldInfo? HeroTransformField()
         {
-            if (fieldLookupDone)
-                return heroTransformField;
+            if (_fieldLookupDone)
+                return _heroTransformField;
 
-            fieldLookupDone = true;
-            heroTransformField = typeof(CameraTarget).GetField("heroTransform",
+            _fieldLookupDone = true;
+            _heroTransformField = typeof(CameraTarget).GetField("heroTransform",
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            if (heroTransformField == null)
+            if (_heroTransformField == null)
                 Log.LogWarning("[CameraFollow] CameraTarget.heroTransform not found - camera follow unavailable");
-            else if (heroTransformField.FieldType != typeof(Transform))
+            else if (_heroTransformField.FieldType != typeof(Transform))
             {
                 Log.LogWarning("[CameraFollow] CameraTarget.heroTransform has unexpected type - camera follow unavailable");
-                heroTransformField = null;
+                _heroTransformField = null;
             }
 
-            return heroTransformField;
+            return _heroTransformField;
         }
     }
 }

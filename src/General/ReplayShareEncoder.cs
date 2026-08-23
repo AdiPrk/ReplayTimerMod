@@ -74,7 +74,7 @@ namespace ReplayTimerMod
             byte[] binary = WriteBinary(room);
             byte[] compressed = Compress.CompressData(binary);
             string result = Convert.ToBase64String(compressed);
-            Log.LogInfo($"[RTM3] {room.Key}: {room.FrameCount} frames -> " +
+            Log.LogInfo($"[ShareEncoder] RTM3 {room.Key}: {room.FrameCount} frames -> " +
                         $"binary={binary.Length}B deflate={compressed.Length}B str={result.Length}ch");
             return result;
         }
@@ -119,8 +119,10 @@ namespace ReplayTimerMod
             byte[] yStream = FrameCodec.Encode2ndOrder(room.Frames, getX: false);
             int facingBytes = (n + 7) / 8;
 
-            // Build deduplicated clip table.
+            // Build deduplicated clip table (dictionary lookup beside the
+            // ordered list — IndexOf per frame would be O(frames x clips)).
             var clipTable = new List<string>();
+            var clipLookup = new Dictionary<string, int>();
             var clipIndex = new byte[n];
             var animFrames = new byte[n];
             bool hasAnim = false;
@@ -135,8 +137,7 @@ namespace ReplayTimerMod
                 else
                 {
                     hasAnim = true;
-                    int idx = clipTable.IndexOf(clip);
-                    if (idx < 0)
+                    if (!clipLookup.TryGetValue(clip, out int idx))
                     {
                         // Valid indexes are 0-254 (0xFF = "no clip"), so the
                         // table caps at 255 names. Beyond that, overflow clips
@@ -152,6 +153,7 @@ namespace ReplayTimerMod
                         {
                             idx = 254;
                         }
+                        clipLookup[clip] = idx;
                     }
                     clipIndex[i] = (byte)Math.Min(idx, 254); // 0xFF reserved
                 }
@@ -348,7 +350,7 @@ namespace ReplayTimerMod
                 }
             }
             string result = Convert.ToBase64String(Compress.CompressData(ms.ToArray()));
-            Log.LogInfo($"[RTMC1] Encoded {list.Count} rooms -> {result.Length} chars");
+            Log.LogInfo($"[ShareEncoder] RTMC1 encoded {list.Count} rooms -> {result.Length} chars");
             return result;
         }
 
@@ -360,7 +362,7 @@ namespace ReplayTimerMod
             }
             catch (Exception ex)
             {
-                Log.LogError($"[RTMC1] Decode failed: {ex.Message}");
+                Log.LogError($"[ShareEncoder] RTMC1 decode failed: {ex.Message}");
                 return null;
             }
         }
@@ -392,7 +394,7 @@ namespace ReplayTimerMod
                 rooms.Add(ReadBinary(blob));
             }
 
-            Log.LogInfo($"[RTMC1] Decoded {rooms.Count} rooms");
+            Log.LogInfo($"[ShareEncoder] RTMC1 decoded {rooms.Count} rooms");
             return rooms;
         }
 

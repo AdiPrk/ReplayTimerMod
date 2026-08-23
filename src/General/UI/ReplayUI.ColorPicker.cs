@@ -62,49 +62,49 @@ namespace ReplayTimerMod
 
         private const float DefaultGhostAlpha = 0.4f; // GhostSettings default
 
-        private GameObject? pickerGO;
-        private GameObject? pickerScrim;
-        private Text? pickerContextLbl;
-        private Text? pickerAlphaValueLbl;
-        private Image? pickerPreviewFill;
-        private RawImage? pickerSVImg;
-        private RawImage? pickerAlphaImg;
-        private RectTransform? pickerSVRect;
-        private RectTransform? pickerHueRect;
-        private RectTransform? pickerAlphaRect;
-        private RectTransform? pickerSVHandle;
-        private RectTransform? pickerHueHandle;
-        private RectTransform? pickerAlphaHandle;
-        private GameObject? pickerActionGO;
-        private Text? pickerActionLbl;
-        private Texture2D? pickerSVTex;
-        private Texture2D? pickerHueTex;
-        private Texture2D? pickerAlphaTex;
+        private GameObject? _pickerGO;
+        private GameObject? _pickerScrim;
+        private Text? _pickerContextLbl;
+        private Text? _pickerAlphaValueLbl;
+        private Image? _pickerPreviewFill;
+        private RawImage? _pickerSVImg;
+        private RawImage? _pickerAlphaImg;
+        private RectTransform? _pickerSVRect;
+        private RectTransform? _pickerHueRect;
+        private RectTransform? _pickerAlphaRect;
+        private RectTransform? _pickerSVHandle;
+        private RectTransform? _pickerHueHandle;
+        private RectTransform? _pickerAlphaHandle;
+        private GameObject? _pickerActionGO;
+        private Text? _pickerActionLbl;
+        private Texture2D? _pickerSVTex;
+        private Texture2D? _pickerHueTex;
+        private Texture2D? _pickerAlphaTex;
 
         // The footer action ("Use global color" / "Reset to default") is
         // hidden when it doesn't apply; the panel shrinks with it so there's
         // never a dead gap at the bottom.
-        private int pickerWidth;
+        private int _pickerWidth;
         private int pickerHeight;        // current (matches action visibility)
-        private int pickerHeightFull;    // with footer action
-        private int pickerHeightCompact; // without footer action
+        private int _pickerHeightFull;    // with footer action
+        private int _pickerHeightCompact; // without footer action
 
         // Working color (HSV + alpha) and edit target
-        private float pickerHue, pickerSat, pickerVal, pickerA;
-        private bool pickerIsGlobal;
-        private RoomKey pickerKey;
-        private string? pickerSnapshotId;
+        private float _pickerHue, _pickerSat, _pickerVal, _pickerA;
+        private bool _pickerIsGlobal;
+        private RoomKey _pickerKey;
+        private string? _pickerSnapshotId;
 
         // ── Opening / closing ──────────────────────────────────────────────
 
         private void OpenGlobalColorPicker(GameObject anchor)
         {
             EnsurePicker();
-            pickerIsGlobal = true;
-            pickerSnapshotId = null;
+            _pickerIsGlobal = true;
+            _pickerSnapshotId = null;
 
-            if (pickerContextLbl != null)
-                pickerContextLbl.text = "Global ghost color";
+            if (_pickerContextLbl != null)
+                _pickerContextLbl.text = "Global ghost color";
             SetPickerAction("Reset to default");
 
             LoadPickerColor(GhostSettings.GhostColor);
@@ -112,15 +112,15 @@ namespace ReplayTimerMod
         }
 
         private void OpenSnapshotColorPicker(GameObject anchor,
-            RoomKey key, string snapshotId, int index)
+            RoomKey key, string snapshotId)
         {
             var snapshot = PBManager.GetSnapshot(key, snapshotId);
             if (snapshot == null) return;
 
             EnsurePicker();
-            pickerIsGlobal = false;
-            pickerKey = key;
-            pickerSnapshotId = snapshotId;
+            _pickerIsGlobal = false;
+            _pickerKey = key;
+            _pickerSnapshotId = snapshotId;
 
             UpdatePickerContext(snapshot.HasVisualOverride);
 
@@ -132,20 +132,21 @@ namespace ReplayTimerMod
         /// into panel close, tab switches, scene selection, and unpause.</summary>
         private void ClosePicker()
         {
-            if (pickerScrim != null) pickerScrim.SetActive(false);
-            if (pickerGO != null) pickerGO.SetActive(false);
-            pickerSnapshotId = null;
+            if (_pickerScrim != null) _pickerScrim.SetActive(false);
+            if (_pickerGO != null) _pickerGO.SetActive(false);
+            _pickerSnapshotId = null;
+            GhostSettings.Flush(); // slider drags save throttled; commit now
         }
 
         private void ShowPicker(GameObject anchor)
         {
-            if (pickerGO == null || pickerScrim == null) return;
+            if (_pickerGO == null || _pickerScrim == null) return;
 
             // Keep both on top of everything else on the canvas
-            pickerScrim.transform.SetAsLastSibling();
-            pickerGO.transform.SetAsLastSibling();
-            pickerScrim.SetActive(true);
-            pickerGO.SetActive(true);
+            _pickerScrim.transform.SetAsLastSibling();
+            _pickerGO.transform.SetAsLastSibling();
+            _pickerScrim.SetActive(true);
+            _pickerGO.SetActive(true);
 
             // Anchor beside the clicked swatch, clamped on-screen. The canvas
             // is ScreenSpaceOverlay + ConstantPixelSize, so a transform's
@@ -155,9 +156,9 @@ namespace ReplayTimerMod
             Vector3 p = art.position; // pivot (top-left) in screen px
             float x = p.x + art.rect.width + UIStyle.W(10);
             float yTop = p.y + UIStyle.H(6);
-            x = Mathf.Clamp(x, 4, Screen.width - pickerWidth - 4);
+            x = Mathf.Clamp(x, 4, Screen.width - _pickerWidth - 4);
             yTop = Mathf.Clamp(yTop, pickerHeight + 4, Screen.height - 4);
-            pickerGO.GetComponent<RectTransform>().anchoredPosition =
+            _pickerGO.GetComponent<RectTransform>().anchoredPosition =
                 new Vector2(x, yTop);
         }
 
@@ -165,23 +166,23 @@ namespace ReplayTimerMod
 
         private void LoadPickerColor(Color c)
         {
-            Color.RGBToHSV(c, out pickerHue, out pickerSat, out pickerVal);
-            pickerA = c.a;
+            Color.RGBToHSV(c, out _pickerHue, out _pickerSat, out _pickerVal);
+            _pickerA = c.a;
             RegenSVTexture();
             UpdatePickerVisuals();
         }
 
         private Color PickerColor()
         {
-            Color c = Color.HSVToRGB(pickerHue, pickerSat, pickerVal);
-            c.a = pickerA;
+            Color c = Color.HSVToRGB(_pickerHue, _pickerSat, _pickerVal);
+            c.a = _pickerA;
             return c;
         }
 
         private void UpdatePickerContext(bool hasOverride)
         {
-            if (pickerContextLbl != null)
-                pickerContextLbl.text = hasOverride
+            if (_pickerContextLbl != null)
+                _pickerContextLbl.text = hasOverride
                     ? "Custom for this run"
                     : "Following global color";
             // "Use global color" only makes sense once an override exists
@@ -192,19 +193,19 @@ namespace ReplayTimerMod
         /// panel so a hidden action never leaves an empty gap.</summary>
         private void SetPickerAction(string? label)
         {
-            if (pickerGO == null || pickerActionGO == null) return;
+            if (_pickerGO == null || _pickerActionGO == null) return;
 
-            pickerActionGO.SetActive(label != null);
-            if (label != null && pickerActionLbl != null)
-                pickerActionLbl.text = label;
+            _pickerActionGO.SetActive(label != null);
+            if (label != null && _pickerActionLbl != null)
+                _pickerActionLbl.text = label;
 
-            pickerHeight = label != null ? pickerHeightFull : pickerHeightCompact;
-            var rt = pickerGO.GetComponent<RectTransform>();
-            rt.sizeDelta = new Vector2(pickerWidth, pickerHeight);
+            pickerHeight = label != null ? _pickerHeightFull : _pickerHeightCompact;
+            var rt = _pickerGO.GetComponent<RectTransform>();
+            rt.sizeDelta = new Vector2(_pickerWidth, pickerHeight);
 
             // If the panel grew while open (override created near the bottom
             // of the screen), keep its bottom edge on-screen.
-            if (pickerGO.activeSelf)
+            if (_pickerGO.activeSelf)
             {
                 Vector2 pos = rt.anchoredPosition;
                 pos.y = Mathf.Max(pos.y, pickerHeight + 4);
@@ -216,27 +217,27 @@ namespace ReplayTimerMod
 
         private void OnPickerSV(float nx, float ny)
         {
-            pickerSat = nx;
-            pickerVal = ny;
+            _pickerSat = nx;
+            _pickerVal = ny;
             UpdatePickerVisuals();
         }
 
         private void OnPickerHue(float nx, float _)
         {
-            pickerHue = Mathf.Min(nx, 0.999f); // hue 1.0 aliases back to 0
+            _pickerHue = Mathf.Min(nx, 0.999f); // hue 1.0 aliases back to 0
             RegenSVTexture();
             UpdatePickerVisuals();
         }
 
         private void OnPickerAlpha(float nx, float _)
         {
-            pickerA = Mathf.Round(nx * 100f) / 100f;
+            _pickerA = Mathf.Round(nx * 100f) / 100f;
             UpdatePickerVisuals();
         }
 
         private void OnPickerPreset(Color rgb)
         {
-            Color.RGBToHSV(rgb, out pickerHue, out pickerSat, out pickerVal);
+            Color.RGBToHSV(rgb, out _pickerHue, out _pickerSat, out _pickerVal);
             RegenSVTexture();
             UpdatePickerVisuals();
             CommitPickerColor();
@@ -244,15 +245,15 @@ namespace ReplayTimerMod
 
         private void OnPickerAction()
         {
-            if (pickerIsGlobal)
+            if (_pickerIsGlobal)
             {
                 LoadPickerColor(new Color(1f, 1f, 1f, DefaultGhostAlpha));
                 CommitPickerColor();
             }
-            else if (pickerSnapshotId != null)
+            else if (_pickerSnapshotId != null)
             {
                 // Drop the override; the run follows the global color again
-                PBManager.UpdateSnapshotVisuals(pickerKey, pickerSnapshotId,
+                PBManager.UpdateSnapshotVisuals(_pickerKey, _pickerSnapshotId,
                     false, GhostSettings.GhostColor);
                 LoadPickerColor(GhostSettings.GhostColor);
                 UpdatePickerContext(false);
@@ -265,13 +266,13 @@ namespace ReplayTimerMod
         private void CommitPickerColor()
         {
             Color c = PickerColor();
-            if (pickerIsGlobal)
+            if (_pickerIsGlobal)
             {
                 GhostSettings.GhostColor = c;
             }
-            else if (pickerSnapshotId != null)
+            else if (_pickerSnapshotId != null)
             {
-                PBManager.UpdateSnapshotVisuals(pickerKey, pickerSnapshotId,
+                PBManager.UpdateSnapshotVisuals(_pickerKey, _pickerSnapshotId,
                     true, c);
                 UpdatePickerContext(true);
             }
@@ -281,12 +282,12 @@ namespace ReplayTimerMod
         private void RefreshAfterPickerCommit()
         {
             UpdatePickerVisuals();
-            if (pickerIsGlobal)
+            if (_pickerIsGlobal)
             {
                 RefreshGhostColorChip();
             }
-            else if (activeTab == TabKind.Runs
-                && selectedScene == pickerKey.SceneName)
+            else if (_activeTab == TabKind.Runs
+                && _selectedScene == _pickerKey.SceneName)
             {
                 // Update the row swatch (the picker itself survives rebuilds:
                 // it lives on the canvas root, not in the content area)
@@ -299,42 +300,42 @@ namespace ReplayTimerMod
         private void RefreshGhostColorChip()
         {
             Color g = GhostSettings.GhostColor;
-            if (cfgGhostColorFill != null)
-                cfgGhostColorFill.color = new Color(g.r, g.g, g.b, 1f);
-            if (cfgGhostAlphaLbl != null)
-                cfgGhostAlphaLbl.text = "alpha " + g.a.ToString("0.00");
+            if (_cfgGhostColorFill != null)
+                _cfgGhostColorFill.color = new Color(g.r, g.g, g.b, 1f);
+            if (_cfgGhostAlphaLbl != null)
+                _cfgGhostAlphaLbl.text = "alpha " + g.a.ToString("0.00");
         }
 
         // ── Visual sync ────────────────────────────────────────────────────
 
         private void UpdatePickerVisuals()
         {
-            Color rgb = Color.HSVToRGB(pickerHue, pickerSat, pickerVal);
+            Color rgb = Color.HSVToRGB(_pickerHue, _pickerSat, _pickerVal);
 
-            if (pickerSVHandle != null && pickerSVRect != null)
-                pickerSVHandle.anchoredPosition = new Vector2(
-                    pickerSat * pickerSVRect.rect.width,
-                    pickerVal * pickerSVRect.rect.height);
+            if (_pickerSVHandle != null && _pickerSVRect != null)
+                _pickerSVHandle.anchoredPosition = new Vector2(
+                    _pickerSat * _pickerSVRect.rect.width,
+                    _pickerVal * _pickerSVRect.rect.height);
 
-            if (pickerHueHandle != null && pickerHueRect != null)
-                pickerHueHandle.anchoredPosition = new Vector2(
-                    pickerHue * pickerHueRect.rect.width,
-                    pickerHueRect.rect.height / 2f);
+            if (_pickerHueHandle != null && _pickerHueRect != null)
+                _pickerHueHandle.anchoredPosition = new Vector2(
+                    _pickerHue * _pickerHueRect.rect.width,
+                    _pickerHueRect.rect.height / 2f);
 
-            if (pickerAlphaHandle != null && pickerAlphaRect != null)
-                pickerAlphaHandle.anchoredPosition = new Vector2(
-                    pickerA * pickerAlphaRect.rect.width,
-                    pickerAlphaRect.rect.height / 2f);
+            if (_pickerAlphaHandle != null && _pickerAlphaRect != null)
+                _pickerAlphaHandle.anchoredPosition = new Vector2(
+                    _pickerA * _pickerAlphaRect.rect.width,
+                    _pickerAlphaRect.rect.height / 2f);
 
             // Alpha bar gradient is a white alpha ramp tinted by the color
-            if (pickerAlphaImg != null)
-                pickerAlphaImg.color = new Color(rgb.r, rgb.g, rgb.b, 1f);
+            if (_pickerAlphaImg != null)
+                _pickerAlphaImg.color = new Color(rgb.r, rgb.g, rgb.b, 1f);
 
-            if (pickerPreviewFill != null)
-                pickerPreviewFill.color = new Color(rgb.r, rgb.g, rgb.b, 1f);
+            if (_pickerPreviewFill != null)
+                _pickerPreviewFill.color = new Color(rgb.r, rgb.g, rgb.b, 1f);
 
-            if (pickerAlphaValueLbl != null)
-                pickerAlphaValueLbl.text = pickerA.ToString("0.00");
+            if (_pickerAlphaValueLbl != null)
+                _pickerAlphaValueLbl.text = _pickerA.ToString("0.00");
         }
 
         // ── Textures ───────────────────────────────────────────────────────
@@ -343,88 +344,88 @@ namespace ReplayTimerMod
 
         private void RegenSVTexture()
         {
-            if (pickerSVTex == null)
+            if (_pickerSVTex == null)
             {
-                pickerSVTex = new Texture2D(SVTexSize, SVTexSize,
+                _pickerSVTex = new Texture2D(SVTexSize, SVTexSize,
                     TextureFormat.RGBA32, false);
-                pickerSVTex.wrapMode = TextureWrapMode.Clamp;
-                if (pickerSVImg != null) pickerSVImg.texture = pickerSVTex;
+                _pickerSVTex.wrapMode = TextureWrapMode.Clamp;
+                if (_pickerSVImg != null) _pickerSVImg.texture = _pickerSVTex;
             }
             var px = new Color[SVTexSize * SVTexSize];
             for (int y = 0; y < SVTexSize; y++)
             {
                 float v = y / (float)(SVTexSize - 1);
                 for (int x = 0; x < SVTexSize; x++)
-                    px[y * SVTexSize + x] = Color.HSVToRGB(pickerHue,
+                    px[y * SVTexSize + x] = Color.HSVToRGB(_pickerHue,
                         x / (float)(SVTexSize - 1), v);
             }
-            pickerSVTex.SetPixels(px);
-            pickerSVTex.Apply();
+            _pickerSVTex.SetPixels(px);
+            _pickerSVTex.Apply();
         }
 
         private Texture2D EnsureHueTexture()
         {
-            if (pickerHueTex == null)
+            if (_pickerHueTex == null)
             {
                 const int n = 128;
-                pickerHueTex = new Texture2D(n, 1, TextureFormat.RGBA32, false);
-                pickerHueTex.wrapMode = TextureWrapMode.Clamp;
+                _pickerHueTex = new Texture2D(n, 1, TextureFormat.RGBA32, false);
+                _pickerHueTex.wrapMode = TextureWrapMode.Clamp;
                 var px = new Color[n];
                 for (int x = 0; x < n; x++)
                     px[x] = Color.HSVToRGB(x / (float)(n - 1), 1f, 1f);
-                pickerHueTex.SetPixels(px);
-                pickerHueTex.Apply();
+                _pickerHueTex.SetPixels(px);
+                _pickerHueTex.Apply();
             }
-            return pickerHueTex;
+            return _pickerHueTex;
         }
 
         private Texture2D EnsureAlphaTexture()
         {
-            if (pickerAlphaTex == null)
+            if (_pickerAlphaTex == null)
             {
                 const int n = 64;
-                pickerAlphaTex = new Texture2D(n, 1, TextureFormat.RGBA32, false);
-                pickerAlphaTex.wrapMode = TextureWrapMode.Clamp;
+                _pickerAlphaTex = new Texture2D(n, 1, TextureFormat.RGBA32, false);
+                _pickerAlphaTex.wrapMode = TextureWrapMode.Clamp;
                 var px = new Color[n];
                 for (int x = 0; x < n; x++)
                     px[x] = new Color(1f, 1f, 1f, x / (float)(n - 1));
-                pickerAlphaTex.SetPixels(px);
-                pickerAlphaTex.Apply();
+                _pickerAlphaTex.SetPixels(px);
+                _pickerAlphaTex.Apply();
             }
-            return pickerAlphaTex;
+            return _pickerAlphaTex;
         }
 
         // ── Construction ───────────────────────────────────────────────────
 
         private void EnsurePicker()
         {
-            if (pickerGO != null) return;
-            if (canvasGO == null) return;
+            if (_pickerGO != null) return;
+            if (_canvasGO == null) return;
 
             // Scrim first so the picker draws above it. Transparent but
             // raycast-blocking: clicking anywhere outside the picker closes
             // it, and the panel behind can't be interacted with meanwhile.
-            pickerScrim = MakeGO("PickerScrim", canvasGO.transform);
-            var scrimImg = pickerScrim.AddComponent<Image>();
+            _pickerScrim = MakeGO("PickerScrim", _canvasGO.transform);
+            var scrimImg = _pickerScrim.AddComponent<Image>();
             scrimImg.color = Color.clear;
-            Btn(pickerScrim, ClosePicker);
-            Fill(pickerScrim);
+            Btn(_pickerScrim, ClosePicker);
+            Fill(_pickerScrim);
 
-            pickerGO = MakeGO("ColorPicker", canvasGO.transform);
+            _pickerGO = MakeGO("ColorPicker", _canvasGO.transform);
 
             int pad = UIStyle.W(12);
             int pw = UIStyle.W(214);
             int innerW = pw - pad * 2;
 
             // 1px frame, same construction as the tooltip
-            var borderImg = pickerGO.AddComponent<Image>();
+            var borderImg = _pickerGO.AddComponent<Image>();
             borderImg.color = UIStyle.Overlay with { a = 0.9f };
 
-            var rt = pickerGO.GetComponent<RectTransform>();
+            var rt = _pickerGO.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = Vector2.zero; // bottom-left anchored
             rt.pivot = new Vector2(0f, 1f);             // position = top-left
 
-            var innerBg = MakeGO("Inner", pickerGO.transform);
+            var innerBg = MakeGO("Inner", _pickerGO.transform);
             var innerImg = innerBg.AddComponent<Image>();
             innerImg.color = UIStyle.Base with { a = 0.98f };
             var innerRt = innerBg.GetComponent<RectTransform>();
@@ -443,56 +444,54 @@ namespace ReplayTimerMod
             int closeW = UIStyle.W(44);
             int prevS = hdrH;
 
-            pickerContextLbl = MakeLbl(pickerGO.transform, "",
+            _pickerContextLbl = MakeLbl(_pickerGO.transform, "",
                 UIStyle.FontSizeTiny, UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: pad, y: y, w: innerW - prevS - closeW - UIStyle.Gap * 2,
                 h: hdrH);
 
-            var preview = MakeGO("Preview", pickerGO.transform);
+            var preview = MakeGO("Preview", _pickerGO.transform);
             Img(preview, UIStyle.Overlay with { a = 0.9f });
             Rect(preview, pw - pad - closeW - UIStyle.Gap - prevS, y, prevS, hdrH);
             var prevFill = MakeGO("Fill", preview.transform);
             Img(prevFill, Color.white);
             Rect(prevFill, 1, 1, prevS - 2, hdrH - 2);
             prevFill.GetComponent<Graphic>().raycastTarget = false;
-            pickerPreviewFill = prevFill.GetComponent<Image>();
+            _pickerPreviewFill = prevFill.GetComponent<Image>();
 
-            MakeButton(pickerGO.transform, "Close", "Close",
+            MakeButton(_pickerGO.transform, "Close", "Close",
                 UIStyle.FontSizeBtn, UIStyle.Text, UIStyle.Overlay with { a = 0.6f },
                 pw - pad - closeW, y, closeW, hdrH, ClosePicker);
             y += hdrH + UIStyle.H(8);
 
-            // Saturation/value square
             int svH = UIStyle.H(96);
-            pickerSVRect = AddPickerSurface(pickerGO.transform, "SV",
-                pad, y, innerW, svH, out pickerSVImg,
+            _pickerSVRect = AddPickerSurface(_pickerGO.transform, "SV",
+                pad, y, innerW, svH, out _pickerSVImg,
                 OnPickerSV, CommitPickerColor);
             RegenSVTexture();
-            pickerSVImg.texture = pickerSVTex;
-            pickerSVHandle = MakePickerMarker(pickerSVRect,
+            _pickerSVImg.texture = _pickerSVTex;
+            _pickerSVHandle = MakePickerMarker(_pickerSVRect,
                 UIStyle.H(10), UIStyle.H(10));
             y += svH + UIStyle.H(8);
 
-            // Hue bar
             int barH = UIStyle.H(12);
-            pickerHueRect = AddPickerSurface(pickerGO.transform, "Hue",
+            _pickerHueRect = AddPickerSurface(_pickerGO.transform, "Hue",
                 pad, y, innerW, barH, out RawImage hueImg,
                 OnPickerHue, CommitPickerColor);
             hueImg.texture = EnsureHueTexture();
-            pickerHueHandle = MakePickerMarker(pickerHueRect,
+            _pickerHueHandle = MakePickerMarker(_pickerHueRect,
                 UIStyle.W(5), barH + UIStyle.H(4));
             y += barH + UIStyle.H(8);
 
             // Alpha bar (dark base behind a tinted alpha ramp) + value
             int alphaLblW = UIStyle.W(40);
             int alphaBarW = innerW - alphaLblW - UIStyle.Gap;
-            pickerAlphaRect = AddPickerSurface(pickerGO.transform, "Alpha",
-                pad, y, alphaBarW, barH, out pickerAlphaImg,
+            _pickerAlphaRect = AddPickerSurface(_pickerGO.transform, "Alpha",
+                pad, y, alphaBarW, barH, out _pickerAlphaImg,
                 OnPickerAlpha, CommitPickerColor);
-            pickerAlphaImg.texture = EnsureAlphaTexture();
-            pickerAlphaHandle = MakePickerMarker(pickerAlphaRect,
+            _pickerAlphaImg.texture = EnsureAlphaTexture();
+            _pickerAlphaHandle = MakePickerMarker(_pickerAlphaRect,
                 UIStyle.W(5), barH + UIStyle.H(4));
-            pickerAlphaValueLbl = MakeLbl(pickerGO.transform, "0.40",
+            _pickerAlphaValueLbl = MakeLbl(_pickerGO.transform, "0.40",
                 UIStyle.FontSizeBtn, UIStyle.Text, TextAnchor.MiddleRight,
                 x: pad + alphaBarW + UIStyle.Gap, y: y,
                 w: alphaLblW, h: barH);
@@ -505,7 +504,7 @@ namespace ReplayTimerMod
             for (int i = 0; i < GhostColorPresets.Length; i++)
             {
                 Color c = GhostColorPresets[i];
-                var sw = MakeGO("Preset", pickerGO.transform);
+                var sw = MakeGO("Preset", _pickerGO.transform);
                 Img(sw, UIStyle.Overlay with { a = 0.9f });
                 Btn(sw, () => OnPickerPreset(c));
                 Rect(sw, pad + i * swStep, y, swS, swS);
@@ -520,21 +519,21 @@ namespace ReplayTimerMod
             // Footer action: "Use global color" (run override) or
             // "Reset to default" (global). Hidden — and the panel shortened —
             // when neither applies (run still following global).
-            pickerHeightCompact = y;
+            _pickerHeightCompact = y;
             int actH = UIStyle.H(20);
-            var actRef = MakeButton(pickerGO.transform, "PickerAction", "",
+            var actRef = MakeButton(_pickerGO.transform, "PickerAction", "",
                 UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
                 pad, y, innerW, actH, OnPickerAction);
-            pickerActionGO = actRef.bg.gameObject;
-            pickerActionLbl = actRef.label;
-            pickerHeightFull = y + actH + UIStyle.H(10);
+            _pickerActionGO = actRef.bg.gameObject;
+            _pickerActionLbl = actRef.label;
+            _pickerHeightFull = y + actH + UIStyle.H(10);
 
-            pickerWidth = pw;
-            pickerHeight = pickerHeightFull;
+            _pickerWidth = pw;
+            pickerHeight = _pickerHeightFull;
             rt.sizeDelta = new Vector2(pw, pickerHeight);
 
-            pickerScrim.SetActive(false);
-            pickerGO.SetActive(false);
+            _pickerScrim.SetActive(false);
+            _pickerGO.SetActive(false);
         }
 
         /// <summary>Bordered draggable RawImage surface (SV square / bars).

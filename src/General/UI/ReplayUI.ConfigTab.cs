@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -7,43 +8,43 @@ namespace ReplayTimerMod
     {
         private void ClearConfigRefs()
         {
-            ghostToggleLbl = null;
-            ghostToggleBg = null;
-            trackingToggleLbl = null;
-            trackingToggleBg = null;
-            savePolicyLbl = null;
-            savePolicyBg = null;
-            maxSavedLbl = null;
-            timerToggleLbl = null;
-            timerToggleBg = null;
-            chainToggleLbl = null;
-            chainToggleBg = null;
-            skipRunsToggleLbl = null;
-            skipRunsToggleBg = null;
-            skipTimerToggleLbl = null;
-            skipTimerToggleBg = null;
-            cfgGhostColorFill = null;
-            cfgGhostAlphaLbl = null;
-            clearAllCfgLbl = null;
-            clearAllCfgBg = null;
-            exportAllCfgLbl = null;
-            exportAllCfgBg = null;
-            clearAllPending = false;
-            onlineToggleLbl = null;
-            onlineToggleBg = null;
-            warpToggleLbl = null;
-            warpToggleBg = null;
-            camFollowToggleLbl = null;
-            camFollowToggleBg = null;
-            nameInput = null;
-            nameStatusLbl = null;
-            nameSaveBg = null;
-            nameSaveLbl = null;
+            _ghostToggleLbl = null;
+            _ghostToggleBg = null;
+            _trackingToggleLbl = null;
+            _trackingToggleBg = null;
+            _savePolicyLbl = null;
+            _savePolicyBg = null;
+            _maxSavedLbl = null;
+            _timerToggleLbl = null;
+            _timerToggleBg = null;
+            _chainToggleLbl = null;
+            _chainToggleBg = null;
+            _skipRunsToggleLbl = null;
+            _skipRunsToggleBg = null;
+            _skipTimerToggleLbl = null;
+            _skipTimerToggleBg = null;
+            _cfgGhostColorFill = null;
+            _cfgGhostAlphaLbl = null;
+            _clearAllCfgLbl = null;
+            _clearAllCfgBg = null;
+            _copyAllCfgLbl = null;
+            _copyAllCfgBg = null;
+            _clearAllPending = false;
+            _onlineToggleLbl = null;
+            _onlineToggleBg = null;
+            _warpToggleLbl = null;
+            _warpToggleBg = null;
+            _camFollowToggleLbl = null;
+            _camFollowToggleBg = null;
+            _nameInput = null;
+            _nameStatusLbl = null;
+            _nameSaveBg = null;
+            _nameSaveLbl = null;
         }
 
         private void BuildConfigContent()
         {
-            if (rightContent == null) return;
+            if (_rightContent == null) return;
 
             int rowH = UIStyle.H(24);
             int btnH = UIStyle.H(20);
@@ -55,35 +56,30 @@ namespace ReplayTimerMod
 
             ButtonRef br;
 
-            // -- Online --
-            AddSectionHeader(rightContent, "Online");
+            // All toggles are built with placeholder text/colors; the
+            // RefreshConfigValues() call that always follows BuildConfigContent
+            // paints the real state (one idiom for every toggle).
 
-            var onlineRow = AddConfigRow(rightContent, "Upload PBs", rowH, labelW);
-            br = MakeButton(onlineRow.transform, "OnlineToggle",
-                GhostSettings.OnlineEnabled ? "ON" : "OFF",
-                UIStyle.FontSizeRow,
-                GhostSettings.OnlineEnabled ? UIStyle.Accent : UIStyle.Subtext,
-                GhostSettings.OnlineEnabled
-                    ? UIStyle.BtnBgStrong(UIStyle.Accent)
-                    : UIStyle.Overlay,
+            AddSectionHeader(_rightContent, "Online");
+
+            var onlineRow = AddConfigRow(_rightContent, "Upload PBs", rowH, labelW);
+            br = MakeButton(onlineRow.transform, "OnlineToggle", "OFF",
+                UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnOnlineToggle);
-            onlineToggleBg = br.bg;
-            onlineToggleLbl = br.label;
+            _onlineToggleBg = br.bg;
+            _onlineToggleLbl = br.label;
 
-            // Display name row (visible when online is enabled)
             if (GhostSettings.OnlineEnabled)
             {
-                var nameRow = AddConfigRow(rightContent, "Name", rowH, labelW);
+                var nameRow = AddConfigRow(_rightContent, "Name", rowH, labelW);
                 int inputW = UIStyle.W(130);
                 int inputH = btnH + UIStyle.H(4);
                 int saveBtnW = UIStyle.W(40);
 
-                // InputField background
                 var inputGO = MakeGO("NameInput", nameRow.transform);
                 Img(inputGO, UIStyle.Surface);
                 Rect(inputGO, labelW, (rowH - inputH) / 2, inputW, inputH);
 
-                // Text child
                 var textGO = MakeGO("Text", inputGO.transform);
                 var textComp = textGO.AddComponent<Text>();
                 textComp.font = UIStyle.Arial;
@@ -97,7 +93,6 @@ namespace ReplayTimerMod
                 textRT.offsetMin = new Vector2(UIStyle.H(4), 1);
                 textRT.offsetMax = new Vector2(-UIStyle.H(4), -1);
 
-                // Placeholder child
                 var phGO = MakeGO("Placeholder", inputGO.transform);
                 var phText = phGO.AddComponent<Text>();
                 phText.font = UIStyle.Arial;
@@ -112,72 +107,66 @@ namespace ReplayTimerMod
                 phRT.offsetMin = new Vector2(UIStyle.H(4), 1);
                 phRT.offsetMax = new Vector2(-UIStyle.H(4), -1);
 
-                // InputField component
-                nameInput = inputGO.AddComponent<InputField>();
-                nameInput.textComponent = textComp;
-                nameInput.placeholder = phText;
-                nameInput.characterLimit = NameValidator.MaxLength;
-                nameInput.text = GhostSettings.DisplayName ?? "";
-                _lastSavedName = nameInput.text;
-                nameInput.onEndEdit.AddListener(OnNameEndEdit);
+                _nameInput = inputGO.AddComponent<InputField>();
+                _nameInput.textComponent = textComp;
+                _nameInput.placeholder = phText;
+                _nameInput.characterLimit = NameValidator.MaxLength;
+                _nameInput.text = GhostSettings.DisplayName ?? "";
+                _lastSavedName = _nameInput.text;
+                _nameInput.onEndEdit.AddListener(OnNameEndEdit);
 
-                // Save button
                 int saveX = labelW + inputW + gap;
                 br = MakeButton(nameRow.transform, "NameSave", "Save",
                     UIStyle.FontSizeBtn, UIStyle.Base, UIStyle.Accent,
                     saveX, (rowH - btnH) / 2, saveBtnW, btnH, OnNameSave);
-                nameSaveBg = br.bg;
-                nameSaveLbl = br.label;
+                _nameSaveBg = br.bg;
+                _nameSaveLbl = br.label;
 
-                // Status row (for feedback: "Saved!", errors, etc.)
-                var statusRow = MakeGO("NameStatus", rightContent);
+                var statusRow = MakeGO("NameStatus", _rightContent);
                 Img(statusRow, Color.clear);
                 var statusLE = statusRow.AddComponent<LayoutElement>();
                 statusLE.minHeight = statusLE.preferredHeight = UIStyle.H(16);
-                nameStatusLbl = MakeLbl(statusRow.transform, "",
+                _nameStatusLbl = MakeLbl(statusRow.transform, "",
                     UIStyle.FontSizeBtn, UIStyle.Subtext,
                     TextAnchor.MiddleLeft,
                     x: UIStyle.W(8), w: UIStyle.W(280), h: UIStyle.H(16));
 
-                // Show hint if no name set yet
                 if (string.IsNullOrEmpty(GhostSettings.DisplayName))
-                    nameStatusLbl.text = "Set a name to start uploading";
+                    _nameStatusLbl.text = "Set a name to start uploading";
             }
 
-            AddSectionSeparator(rightContent);
+            AddSectionSeparator(_rightContent);
 
-            // -- Recording --
-            AddSectionHeader(rightContent, "Recording");
+            AddSectionHeader(_rightContent, "Recording");
 
-            var trackRow = AddConfigRow(rightContent, "Tracking", rowH, labelW);
+            var trackRow = AddConfigRow(_rightContent, "Tracking", rowH, labelW);
             br = MakeButton(trackRow.transform, "TrackToggle", "ON",
                 UIStyle.FontSizeRow, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnTrackingToggle);
-            trackingToggleBg = br.bg;
-            trackingToggleLbl = br.label;
+            _trackingToggleBg = br.bg;
+            _trackingToggleLbl = br.label;
 
-            var saveRow = AddConfigRow(rightContent, "Save policy", rowH, labelW);
-            br = MakeButton(saveRow.transform, "SaveToggle",
-                GhostSettings.SaveAllRunsEnabled ? "Save all" : "PB only",
+            var saveRow = AddConfigRow(_rightContent, "Save policy", rowH, labelW);
+            br = MakeButton(saveRow.transform, "SaveToggle", "PB only",
                 UIStyle.FontSizeRow, UIStyle.Gold, UIStyle.BtnBg(UIStyle.Gold),
                 labelW, (rowH - btnH) / 2, UIStyle.W(72), btnH, OnSavePolicyToggle);
-            savePolicyBg = br.bg;
-            savePolicyLbl = br.label;
+            _savePolicyBg = br.bg;
+            _savePolicyLbl = br.label;
 
-            var skipRunRow = AddConfigRow(rightContent, "Skip backtrack", rowH, labelW);
+            var skipRunRow = AddConfigRow(_rightContent, "Skip backtrack", rowH, labelW);
             br = MakeButton(skipRunRow.transform, "SkipBacktrackRuns", "OFF",
                 UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnSkipBacktrackRunsToggle);
-            skipRunsToggleBg = br.bg;
-            skipRunsToggleLbl = br.label;
+            _skipRunsToggleBg = br.bg;
+            _skipRunsToggleLbl = br.label;
 
-            var keepRow = AddConfigRow(rightContent, "Keep per route", rowH, labelW);
+            var keepRow = AddConfigRow(_rightContent, "Keep per route", rowH, labelW);
             int keepX = labelW;
             MakeButton(keepRow.transform, "KeepMinus", "-",
                 UIStyle.FontSizeRow, UIStyle.Text, UIStyle.Overlay,
                 keepX, (rowH - btnH) / 2, stepW, btnH, OnMaxSavedReplaysMinus);
             keepX += stepW + gap;
-            maxSavedLbl = MakeLbl(keepRow.transform,
+            _maxSavedLbl = MakeLbl(keepRow.transform,
                 GhostSettings.MaxSavedReplaysPerRoute.ToString(),
                 UIStyle.FontSizeRow, UIStyle.Text, TextAnchor.MiddleCenter,
                 x: keepX, w: valueW, h: rowH);
@@ -186,42 +175,41 @@ namespace ReplayTimerMod
                 UIStyle.FontSizeRow, UIStyle.Text, UIStyle.Overlay,
                 keepX, (rowH - btnH) / 2, stepW, btnH, OnMaxSavedReplaysPlus);
 
-            AddSectionSeparator(rightContent);
+            AddSectionSeparator(_rightContent);
 
-            // -- Playback --
-            AddSectionHeader(rightContent, "Playback");
+            AddSectionHeader(_rightContent, "Playback");
 
-            var ghostRow = AddConfigRow(rightContent, "Ghost", rowH, labelW);
+            var ghostRow = AddConfigRow(_rightContent, "Ghost", rowH, labelW);
             br = MakeButton(ghostRow.transform, "GhostToggle", "ON",
                 UIStyle.FontSizeRow, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnGhostToggle);
-            ghostToggleBg = br.bg;
-            ghostToggleLbl = br.label;
+            _ghostToggleBg = br.bg;
+            _ghostToggleLbl = br.label;
 
-            var hudRow = AddConfigRow(rightContent, "Timer HUD", rowH, labelW);
+            var hudRow = AddConfigRow(_rightContent, "Timer HUD", rowH, labelW);
             br = MakeButton(hudRow.transform, "HUDToggle", "ON",
                 UIStyle.FontSizeRow, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnTimerToggleClicked);
-            timerToggleBg = br.bg;
-            timerToggleLbl = br.label;
+            _timerToggleBg = br.bg;
+            _timerToggleLbl = br.label;
 
-            var chainRow = AddConfigRow(rightContent, "Chain rooms", rowH, labelW);
+            var chainRow = AddConfigRow(_rightContent, "Chain rooms", rowH, labelW);
             br = MakeButton(chainRow.transform, "ChainToggle", "OFF",
                 UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnChainTimersToggleClicked);
-            chainToggleBg = br.bg;
-            chainToggleLbl = br.label;
+            _chainToggleBg = br.bg;
+            _chainToggleLbl = br.label;
 
-            var skipTimerRow = AddConfigRow(rightContent, "Hide backtrack", rowH, labelW);
+            var skipTimerRow = AddConfigRow(_rightContent, "Hide backtrack", rowH, labelW);
             br = MakeButton(skipTimerRow.transform, "SkipBacktrackTimer", "OFF",
                 UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnSkipBacktrackTimerToggle);
-            skipTimerToggleBg = br.bg;
-            skipTimerToggleLbl = br.label;
+            _skipTimerToggleBg = br.bg;
+            _skipTimerToggleLbl = br.label;
 
             // Ghost color: one chip that opens the color picker for the
             // global color. Per-run overrides are set from the Runs tab.
-            var colorRow = AddConfigRow(rightContent, "Ghost color", rowH, labelW);
+            var colorRow = AddConfigRow(_rightContent, "Ghost color", rowH, labelW);
             int chipW = UIStyle.W(46);
             var chip = MakeGO("GhostColorChip", colorRow.transform);
             Img(chip, UIStyle.Overlay with { a = 0.9f });
@@ -231,16 +219,15 @@ namespace ReplayTimerMod
             Img(chipFill, new Color(gc.r, gc.g, gc.b, 1f));
             Rect(chipFill, 1, 1, chipW - 2, btnH - 2);
             chipFill.GetComponent<Graphic>().raycastTarget = false;
-            cfgGhostColorFill = chipFill.GetComponent<Image>();
+            _cfgGhostColorFill = chipFill.GetComponent<Image>();
             Btn(chip, () => OpenGlobalColorPicker(chip));
             AddButtonHover(chip);
-            cfgGhostAlphaLbl = MakeLbl(colorRow.transform,
+            _cfgGhostAlphaLbl = MakeLbl(colorRow.transform,
                 "alpha " + gc.a.ToString("0.00"),
                 UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: labelW + chipW + UIStyle.Gap, w: UIStyle.W(120), h: rowH);
 
-            // Hint line pointing at per-run overrides
-            var colorHintRow = MakeGO("GhostColorHint", rightContent);
+            var colorHintRow = MakeGO("GhostColorHint", _rightContent);
             Img(colorHintRow, Color.clear);
             var colorHintLE = colorHintRow.AddComponent<LayoutElement>();
             colorHintLE.minHeight = colorHintLE.preferredHeight = UIStyle.H(16);
@@ -249,12 +236,11 @@ namespace ReplayTimerMod
                 UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: UIStyle.W(8), w: UIStyle.W(320), h: UIStyle.H(16));
 
-            AddSectionSeparator(rightContent);
+            AddSectionSeparator(_rightContent);
 
-            // -- Data --
-            AddSectionHeader(rightContent, "Data");
+            AddSectionHeader(_rightContent, "Data");
 
-            var dataRow1 = MakeGO("DataRow1", rightContent);
+            var dataRow1 = MakeGO("DataRow1", _rightContent);
             Img(dataRow1, Color.clear);
             var d1LE = dataRow1.AddComponent<LayoutElement>();
             d1LE.minHeight = d1LE.preferredHeight = UIStyle.H(30);
@@ -264,23 +250,23 @@ namespace ReplayTimerMod
             int dataY = UIStyle.H(4);
             int dataX = UIStyle.W(8);
 
-            br = MakeButton(dataRow1.transform, "ExportAllCfg", "Copy all",
+            br = MakeButton(dataRow1.transform, "CopyAllCfg", "Copy all",
                 UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
-                dataX, dataY, dataBtnW, dataBtnH, OnExportAllClicked);
-            exportAllCfgBg = br.bg;
-            exportAllCfgLbl = br.label;
+                dataX, dataY, dataBtnW, dataBtnH, OnCopyAllClicked);
+            _copyAllCfgBg = br.bg;
+            _copyAllCfgLbl = br.label;
             dataX += dataBtnW + gap;
 
-            MakeButton(dataRow1.transform, "DownloadCfg", "Export All",
+            MakeButton(dataRow1.transform, "ExportAllCfg", "Export all",
                 UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
-                dataX, dataY, dataBtnW, dataBtnH, OnDownloadAllClicked);
+                dataX, dataY, dataBtnW, dataBtnH, OnExportAllClicked);
             dataX += dataBtnW + gap;
 
             MakeButton(dataRow1.transform, "OpenExportsCfg", "Open exports",
                 UIStyle.FontSizeBtn, UIStyle.Text, UIStyle.Overlay with { a = 0.6f },
                 dataX, dataY, dataBtnW, dataBtnH, OnOpenExportFolderClicked);
 
-            var dataRow2 = MakeGO("DataRow2", rightContent);
+            var dataRow2 = MakeGO("DataRow2", _rightContent);
             Img(dataRow2, Color.clear);
             var d2LE = dataRow2.AddComponent<LayoutElement>();
             d2LE.minHeight = d2LE.preferredHeight = UIStyle.H(30);
@@ -288,28 +274,21 @@ namespace ReplayTimerMod
             br = MakeButton(dataRow2.transform, "ClearAllCfg", "Clear all data",
                 UIStyle.FontSizeBtn, UIStyle.Red, UIStyle.BtnBg(UIStyle.Red),
                 UIStyle.W(8), dataY, UIStyle.W(100), dataBtnH, OnClearAllClicked);
-            clearAllCfgBg = br.bg;
-            clearAllCfgLbl = br.label;
+            _clearAllCfgBg = br.bg;
+            _clearAllCfgLbl = br.label;
 
-            AddSectionSeparator(rightContent);
+            AddSectionSeparator(_rightContent);
 
-            // -- Experimental --
-            AddSectionHeader(rightContent, "Experimental");
+            AddSectionHeader(_rightContent, "Experimental");
 
-            var warpRow = AddConfigRow(rightContent, "Room warp", rowH, labelW);
-            br = MakeButton(warpRow.transform, "RoomWarpToggle",
-                GhostSettings.RoomWarpEnabled ? "ON" : "OFF",
-                UIStyle.FontSizeRow,
-                GhostSettings.RoomWarpEnabled ? UIStyle.Accent : UIStyle.Subtext,
-                GhostSettings.RoomWarpEnabled
-                    ? UIStyle.BtnBgStrong(UIStyle.Accent)
-                    : UIStyle.Overlay,
+            var warpRow = AddConfigRow(_rightContent, "Room warp", rowH, labelW);
+            br = MakeButton(warpRow.transform, "RoomWarpToggle", "OFF",
+                UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnRoomWarpToggle);
-            warpToggleBg = br.bg;
-            warpToggleLbl = br.label;
+            _warpToggleBg = br.bg;
+            _warpToggleLbl = br.label;
 
-            // Hint line explaining what the toggle unlocks
-            var warpHintRow = MakeGO("RoomWarpHint", rightContent);
+            var warpHintRow = MakeGO("RoomWarpHint", _rightContent);
             Img(warpHintRow, Color.clear);
             var warpHintLE = warpHintRow.AddComponent<LayoutElement>();
             warpHintLE.minHeight = warpHintLE.preferredHeight = UIStyle.H(16);
@@ -318,19 +297,14 @@ namespace ReplayTimerMod
                 UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: UIStyle.W(8), w: UIStyle.W(320), h: UIStyle.H(16));
 
-            var camFollowRow = AddConfigRow(rightContent, "Camera follow", rowH, labelW);
-            br = MakeButton(camFollowRow.transform, "CameraFollowToggle",
-                GhostSettings.CameraFollowEnabled ? "ON" : "OFF",
-                UIStyle.FontSizeRow,
-                GhostSettings.CameraFollowEnabled ? UIStyle.Accent : UIStyle.Subtext,
-                GhostSettings.CameraFollowEnabled
-                    ? UIStyle.BtnBgStrong(UIStyle.Accent)
-                    : UIStyle.Overlay,
+            var camFollowRow = AddConfigRow(_rightContent, "Camera follow", rowH, labelW);
+            br = MakeButton(camFollowRow.transform, "CameraFollowToggle", "OFF",
+                UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnCameraFollowFeatureToggle);
-            camFollowToggleBg = br.bg;
-            camFollowToggleLbl = br.label;
+            _camFollowToggleBg = br.bg;
+            _camFollowToggleLbl = br.label;
 
-            var camFollowHintRow = MakeGO("CameraFollowHint", rightContent);
+            var camFollowHintRow = MakeGO("CameraFollowHint", _rightContent);
             Img(camFollowHintRow, Color.clear);
             var camFollowHintLE = camFollowHintRow.AddComponent<LayoutElement>();
             camFollowHintLE.minHeight = camFollowHintLE.preferredHeight = UIStyle.H(16);
@@ -342,43 +316,43 @@ namespace ReplayTimerMod
 
         private void RefreshConfigValues()
         {
-            if (trackingToggleLbl != null)
+            if (_trackingToggleLbl != null)
             {
                 bool on = GhostSettings.TrackingEnabled;
-                trackingToggleLbl.text = on ? "ON" : "OFF";
-                trackingToggleLbl.color = on ? UIStyle.Accent : UIStyle.Red;
-                if (trackingToggleBg != null)
-                    trackingToggleBg.color = on
+                _trackingToggleLbl.text = on ? "ON" : "OFF";
+                _trackingToggleLbl.color = on ? UIStyle.Accent : UIStyle.Red;
+                if (_trackingToggleBg != null)
+                    _trackingToggleBg.color = on
                         ? UIStyle.BtnBgStrong(UIStyle.Accent)
                         : UIStyle.BtnBgStrong(UIStyle.Red);
             }
 
-            StyleToggle(ghostToggleLbl, ghostToggleBg, GhostSettings.GhostEnabled);
+            StyleToggle(_ghostToggleLbl, _ghostToggleBg, GhostSettings.GhostEnabled);
 
-            if (savePolicyLbl != null)
+            if (_savePolicyLbl != null)
             {
                 bool all = GhostSettings.SaveAllRunsEnabled;
-                savePolicyLbl.text = all ? "Save all" : "PB only";
-                savePolicyLbl.color = all ? UIStyle.Accent : UIStyle.Gold;
-                if (savePolicyBg != null)
-                    savePolicyBg.color = all
+                _savePolicyLbl.text = all ? "Save all" : "PB only";
+                _savePolicyLbl.color = all ? UIStyle.Accent : UIStyle.Gold;
+                if (_savePolicyBg != null)
+                    _savePolicyBg.color = all
                         ? UIStyle.BtnBgStrong(UIStyle.Accent)
                         : UIStyle.BtnBg(UIStyle.Gold);
             }
 
-            if (maxSavedLbl != null)
-                maxSavedLbl.text = GhostSettings.MaxSavedReplaysPerRoute.ToString();
+            if (_maxSavedLbl != null)
+                _maxSavedLbl.text = GhostSettings.MaxSavedReplaysPerRoute.ToString();
 
-            StyleToggle(timerToggleLbl, timerToggleBg, GhostSettings.TimerHudEnabled);
-            StyleToggle(chainToggleLbl, chainToggleBg, GhostSettings.ChainRoomTimers);
-            StyleToggle(skipRunsToggleLbl, skipRunsToggleBg, GhostSettings.SkipBacktrackRuns);
-            StyleToggle(skipTimerToggleLbl, skipTimerToggleBg, GhostSettings.SkipBacktrackTimer);
+            StyleToggle(_timerToggleLbl, _timerToggleBg, GhostSettings.TimerHudEnabled);
+            StyleToggle(_chainToggleLbl, _chainToggleBg, GhostSettings.ChainRoomTimers);
+            StyleToggle(_skipRunsToggleLbl, _skipRunsToggleBg, GhostSettings.SkipBacktrackRuns);
+            StyleToggle(_skipTimerToggleLbl, _skipTimerToggleBg, GhostSettings.SkipBacktrackTimer);
 
             RefreshGhostColorChip();
 
-            StyleToggle(onlineToggleLbl, onlineToggleBg, GhostSettings.OnlineEnabled);
-            StyleToggle(warpToggleLbl, warpToggleBg, GhostSettings.RoomWarpEnabled);
-            StyleToggle(camFollowToggleLbl, camFollowToggleBg, GhostSettings.CameraFollowEnabled);
+            StyleToggle(_onlineToggleLbl, _onlineToggleBg, GhostSettings.OnlineEnabled);
+            StyleToggle(_warpToggleLbl, _warpToggleBg, GhostSettings.RoomWarpEnabled);
+            StyleToggle(_camFollowToggleLbl, _camFollowToggleBg, GhostSettings.CameraFollowEnabled);
         }
 
         /// <summary>
@@ -439,12 +413,11 @@ namespace ReplayTimerMod
 
         private void OnNameSave()
         {
-            if (nameInput == null) return;
-            if (_nameRequest != null) return; // already saving
+            if (_nameInput == null) return;
+            if (_nameSaveInFlight) return;
 
-            string name = nameInput.text.Trim();
+            string name = _nameInput.text.Trim();
 
-            // Don't save if unchanged
             if (name == _lastSavedName && !string.IsNullOrEmpty(name))
             {
                 SetNameStatus("No changes", UIStyle.Subtext);
@@ -463,123 +436,79 @@ namespace ReplayTimerMod
             SetNameStatus("Saving...", UIStyle.Subtext);
             SetNameSaveEnabled(false);
 
+            // The name save runs BEFORE networking starts (StartNetworking
+            // waits for a display name), so it uses its own HttpService
+            // instance rather than NetworkClient's. HttpService owns the
+            // cross-version quirks - most importantly the manual V1221
+            // timeout, without which a stalled request would lock name-saving
+            // forever.
             GhostSettings.EnsureDeviceId();
-            string json = "{\"display_name\":\"" + ApiJson.EscapeString(name) + "\"}";
-            byte[] body = System.Text.Encoding.UTF8.GetBytes(json);
+            _nameHttp ??= new HttpService();
+            _nameSaveInFlight = true;
 
-            _nameRequest = new UnityEngine.Networking.UnityWebRequest(
-                GhostSettings.ApiBaseUrl + "/set-name", "POST");
-            _nameRequest.uploadHandler =
-                new UnityEngine.Networking.UploadHandlerRaw(body);
-            _nameRequest.downloadHandler =
-                new UnityEngine.Networking.DownloadHandlerBuffer();
-            _nameRequest.SetRequestHeader("Content-Type",
-                "application/json; charset=utf-8");
-            _nameRequest.SetRequestHeader("X-Device-Id",
-                GhostSettings.DeviceId);
+            var headers = new Dictionary<string, string>
+            {
+                { "X-Device-Id", GhostSettings.DeviceId }
+            };
 
-#if V1221
-            _nameRequest.Send();
-#else
-            _nameRequest.timeout = 10;
-            _nameRequest.SendWebRequest();
-#endif
+            _nameHttp.Post(GhostSettings.ApiBaseUrl + "/set-name",
+                ApiJson.SerializeSetName(name), 10,
+                (success, status, body) =>
+                {
+                    _nameSaveInFlight = false;
+
+                    if (success)
+                    {
+                        string? confirmed =
+                            ApiJson.ParseTopLevelString(body, "display_name");
+                        if (confirmed != null)
+                        {
+                            _lastSavedName = confirmed;
+                            if (_nameInput != null)
+                                _nameInput.text = confirmed;
+                            SetNameStatus("Saved!", UIStyle.Green);
+                            OnDisplayNameSet?.Invoke(confirmed);
+                        }
+                        else
+                        {
+                            SetNameStatus("Unexpected response", UIStyle.Red);
+                        }
+                    }
+                    else
+                    {
+                        string msg = ApiJson.ParseTopLevelString(body, "error")
+                            ?? "Connection failed. Try again.";
+                        SetNameStatus(msg, UIStyle.Red);
+                    }
+
+                    SetNameSaveEnabled(true);
+                }, headers);
         }
 
         /// <summary>
-        /// Polls the in-flight name-save request. Called from Tick().
+        /// Pumps the name-save HttpService. Called from Tick(); the panel's
+        /// own instance because the shared NetworkClient may not exist yet.
         /// </summary>
         private void TickNameSave()
         {
-            if (_nameRequest == null || !_nameRequest.isDone) return;
-
-            bool success;
-#if V1221
-            success = !_nameRequest.isError;
-#else
-            success = _nameRequest.result ==
-                UnityEngine.Networking.UnityWebRequest.Result.Success;
-#endif
-
-            if (success)
-            {
-                string resp = _nameRequest.downloadHandler?.text ?? "";
-                _nameRequest.Dispose();
-                _nameRequest = null;
-
-                // Parse the confirmed display_name from response
-                string? confirmedName = ParseNameFromResponse(resp);
-                if (confirmedName != null)
-                {
-                    _lastSavedName = confirmedName;
-                    if (nameInput != null)
-                        nameInput.text = confirmedName;
-                    SetNameStatus("Saved!", UIStyle.Green);
-                    OnDisplayNameSet?.Invoke(confirmedName);
-                }
-                else
-                {
-                    SetNameStatus("Unexpected response", UIStyle.Red);
-                }
-            }
-            else
-            {
-                string err = _nameRequest.downloadHandler?.text
-                    ?? _nameRequest.error ?? "";
-                _nameRequest.Dispose();
-                _nameRequest = null;
-
-                string msg = ParseErrorFromResponse(err);
-                SetNameStatus(msg, UIStyle.Red);
-            }
-
-            SetNameSaveEnabled(true);
+            _nameHttp?.Tick();
         }
 
         private void SetNameStatus(string text, Color color)
         {
-            if (nameStatusLbl != null)
+            if (_nameStatusLbl != null)
             {
-                nameStatusLbl.text = text;
-                nameStatusLbl.color = color;
+                _nameStatusLbl.text = text;
+                _nameStatusLbl.color = color;
             }
         }
 
         private void SetNameSaveEnabled(bool enabled)
         {
-            if (nameSaveBg != null)
-                nameSaveBg.color = enabled ? UIStyle.Accent : UIStyle.Overlay;
-            if (nameSaveLbl != null)
-                nameSaveLbl.color = enabled ? UIStyle.Base : UIStyle.Subtext;
-        }
-
-        private static string? ParseNameFromResponse(string json)
-        {
-            if (string.IsNullOrEmpty(json)) return null;
-            int idx = json.IndexOf("\"display_name\"");
-            if (idx < 0) return null;
-            int q1 = json.IndexOf('"', json.IndexOf(':', idx + 14) + 1);
-            if (q1 < 0) return null;
-            int q2 = json.IndexOf('"', q1 + 1);
-            return q2 > q1 ? json.Substring(q1 + 1, q2 - q1 - 1) : null;
-        }
-
-        private static string ParseErrorFromResponse(string response)
-        {
-            if (string.IsNullOrEmpty(response))
-                return "Connection failed. Try again.";
-            int idx = response.IndexOf("\"error\"");
-            if (idx >= 0)
-            {
-                int q1 = response.IndexOf('"', response.IndexOf(':', idx + 7) + 1);
-                if (q1 >= 0)
-                {
-                    int q2 = response.IndexOf('"', q1 + 1);
-                    if (q2 > q1)
-                        return response.Substring(q1 + 1, q2 - q1 - 1);
-                }
-            }
-            return "Connection failed. Try again.";
+            if (_nameSaveBg != null)
+                _nameSaveBg.color = enabled ? UIStyle.Accent : UIStyle.Overlay;
+            if (_nameSaveLbl != null)
+                _nameSaveLbl.color = enabled ? UIStyle.Base : UIStyle.Subtext;
         }
     }
 }

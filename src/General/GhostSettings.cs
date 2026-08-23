@@ -1,4 +1,9 @@
-﻿using System.Reflection;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Reflection;
+using BepInEx.Logging;
 using UnityEngine;
 
 namespace ReplayTimerMod
@@ -18,10 +23,10 @@ namespace ReplayTimerMod
         public bool  ChainRoomTimers         = false;
         public bool  SkipBacktrackRuns       = false;
         public bool  SkipBacktrackTimer      = false;
-        public bool   OnlineEnabled  = false;
-        public string DeviceId       = "";
-        public string DisplayName    = "";
-        public string ApiBaseUrl     = "https://oqsfhqbakarleqahxiyo.supabase.co/functions/v1";
+        public bool  OnlineEnabled           = false;
+        public string DeviceId    = "";
+        public string DisplayName = "";
+        public string ApiBaseUrl  = "https://oqsfhqbakarleqahxiyo.supabase.co/functions/v1";
         // Modifier filter (shared by Runs + Leaderboard tabs; see ModifierMask).
         public int ModifierRequireMask = 0;
         public int ModifierExcludeMask = 0;
@@ -32,8 +37,18 @@ namespace ReplayTimerMod
 
     public static class GhostSettings
     {
+        private static readonly ManualLogSource Log =
+            BepInEx.Logging.Logger.CreateLogSource("GhostSettings");
+
         private static string _filePath = "";
         private static readonly GhostSettingsData _d = new GhostSettingsData();
+
+        // Slider-driven setters (color/alpha) fire every drag frame; writing
+        // the file per frame would hammer the disk. Those setters go through
+        // SaveThrottled, which defers to a Flush (picker close / menu close).
+        private const float MinSaveIntervalSec = 0.5f;
+        private static bool _dirty;
+        private static float _lastSaveRealtime = float.NegativeInfinity;
 
         // ── Properties ────────────────────────────────────────────────────────
 
@@ -70,13 +85,18 @@ namespace ReplayTimerMod
         public static Color GhostColor
         {
             get => new Color(_d.ColorR, _d.ColorG, _d.ColorB, _d.Alpha);
-            set { _d.ColorR = value.r; _d.ColorG = value.g; _d.ColorB = value.b; _d.Alpha = value.a; Save(); }
+            set
+            {
+                _d.ColorR = value.r; _d.ColorG = value.g; _d.ColorB = value.b;
+                _d.Alpha = value.a;
+                SaveThrottled();
+            }
         }
 
         public static float GhostAlpha
         {
             get => _d.Alpha;
-            set { _d.Alpha = Mathf.Clamp01(value); Save(); }
+            set { _d.Alpha = Mathf.Clamp01(value); SaveThrottled(); }
         }
 
         public static bool TimerHudEnabled
@@ -183,7 +203,7 @@ namespace ReplayTimerMod
         public static void EnsureDeviceId()
         {
             if (!string.IsNullOrEmpty(_d.DeviceId)) return;
-            _d.DeviceId = System.Guid.NewGuid().ToString("N");
+            _d.DeviceId = Guid.NewGuid().ToString("N");
             Save();
         }
 
@@ -191,8 +211,8 @@ namespace ReplayTimerMod
 
         public static void Init(string baseDirectory)
         {
-            _filePath = System.IO.Path.Combine(
-                System.IO.Path.Combine(baseDirectory, "ReplayMod"), "settings.txt");
+            _filePath = Path.Combine(
+                Path.Combine(baseDirectory, "ReplayMod"), "settings.txt");
             Load();
         }
 
@@ -203,24 +223,45 @@ namespace ReplayTimerMod
             if (string.IsNullOrEmpty(_filePath)) return;
             try
             {
-                var lines = new System.Collections.Generic.List<string>();
+                var lines = new List<string>();
                 foreach (var f in typeof(GhostSettingsData).GetFields(BindingFlags.Public | BindingFlags.Instance))
-                    lines.Add($"{f.Name}={System.Convert.ToString(f.GetValue(_d), System.Globalization.CultureInfo.InvariantCulture)}");
-                System.IO.File.WriteAllLines(_filePath, lines.ToArray());
+                    lines.Add($"{f.Name}={Convert.ToString(f.GetValue(_d), CultureInfo.InvariantCulture)}");
+                File.WriteAllLines(_filePath, lines.ToArray());
+                _dirty = false;
+                _lastSaveRealtime = Time.realtimeSinceStartup;
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-                UnityEngine.Debug.LogError($"[GhostSettings] Save failed: {ex.Message}");
+                Log.LogError($"[GhostSettings] Save failed: {ex.Message}");
             }
+        }
+
+        private static void SaveThrottled()
+        {
+            if (Time.realtimeSinceStartup - _lastSaveRealtime >= MinSaveIntervalSec)
+            {
+                Save();
+                return;
+            }
+            _dirty = true;
+        }
+
+        /// <summary>
+        /// Write any deferred (throttled) changes to disk. Called when the
+        /// color picker or the replay panel closes.
+        /// </summary>
+        public static void Flush()
+        {
+            if (_dirty) Save();
         }
 
         private static void Load()
         {
-            if (!System.IO.File.Exists(_filePath)) return;
+            if (!File.Exists(_filePath)) return;
             try
             {
                 var defaults = new GhostSettingsData();
-                foreach (string line in System.IO.File.ReadAllLines(_filePath))
+                foreach (string line in File.ReadAllLines(_filePath))
                 {
                     int sep = line.IndexOf('=');
                     if (sep < 0) continue;
@@ -235,19 +276,19 @@ namespace ReplayTimerMod
                     catch { /* leave default */ }
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-                UnityEngine.Debug.LogError($"[GhostSettings] Load failed: {ex.Message}");
+                Log.LogError($"[GhostSettings] Load failed: {ex.Message}");
             }
         }
 
-        private static object ParseField(System.Type t, string val, object fallback)
+        private static object ParseField(Type t, string val, object fallback)
         {
             try
             {
                 if (t == typeof(bool))   return bool.Parse(val);
-                if (t == typeof(int))    return int.Parse(val, System.Globalization.CultureInfo.InvariantCulture);
-                if (t == typeof(float))  return float.Parse(val, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture);
+                if (t == typeof(int))    return int.Parse(val, CultureInfo.InvariantCulture);
+                if (t == typeof(float))  return float.Parse(val, NumberStyles.Float, CultureInfo.InvariantCulture);
                 if (t == typeof(string)) return val;
             }
             catch { }

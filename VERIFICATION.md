@@ -91,7 +91,7 @@ automatically). Ledger of repo changes possibly awaiting deploy:
 **Bit-table finalization (blocking for release):**
 - [ ] **[SS]** Equip each crest (Hunter incl. v2/v3 upgrades, Reaper, Wanderer, Beast, Witch, Architect, Shaman, Cursed) → correct bit 12–19 set; watch the log for `unmapped crest id` lines — any hit means `CrestIdToBit` needs fixing **before release** (bits are frozen forever once shipped).
 - [ ] **[SS]** Equip Silkspeed Anklets → bit 20 sets (asset name "Sprintmaster"); the tracker logs equipped tool names on every change — confirm no movement tool you care about is missing from the alias table.
-- [ ] **[SS]** Abilities: Swift Step / Cling Grip / Faydown Cloak / Drifter's Cloak / Clawline / Silk Soar each set bits 0/1/2/8/9/10 by **possession** (unlocked = set, even if unused); **Sprint (bit 11) is usage-based** — only set after actually sprinting in the room.
+- [ ] **[SS]** Abilities: Swift Step / Cling Grip / Faydown Cloak / Drifter's Cloak / Clawline / Silk Soar each set bits 0/1/2/8/9/10 by **possession** (unlocked = set, even if unused). Bit 11 (the old usage-based "Sprint") is **retired** — it must never be set on a new run; old masks that carry it still display harmlessly.
 - [ ] **[HK78]/[HK21]** Mothwing Cloak / Mantis Claw / Monarch Wings / Shade Cloak / Crystal Heart / Isma's Tear set bits 0/1/2/8/9/10 by possession; charms Sharp Shadow / Dashmaster / Sprintmaster set bits 11/12/13 only while **equipped**.
 - [ ] Mid-room pickup/equip: gaining an ability or equipping a charm mid-run ORs the bit in for that run (per-frame poll).
 

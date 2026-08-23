@@ -353,13 +353,28 @@ namespace ReplayTimerMod.Tests
         [Fact]
         public void SaveAndLoad_RoundTrip()
         {
+            // GhostSettings is a static singleton, so Init over the same file
+            // can't prove anything by itself - Load only OVERLAYS parsed keys
+            // onto the current in-memory values. To make the round trip real:
+            // save the wanted state, snapshot the file, clobber every asserted
+            // property with sentinels (overwriting the file), restore the
+            // snapshot, and only then Init.
             GhostSettings.DisplayName = "Hornet";
             GhostSettings.OnlineEnabled = true;
             GhostSettings.GhostAlpha = 0.7f;
+            GhostSettings.Flush(); // alpha saves are throttled
             GhostSettings.ModifierRequireMask = 0b101;
 
-            // Wipe in-memory state by loading fresh from the same file.
-            GhostSettings.DisplayName = "Hornet"; // ensure a Save happened
+            string file = Path.Combine(Dir.Path, "ReplayMod", "settings.txt");
+            string saved = File.ReadAllText(file);
+
+            GhostSettings.DisplayName = "Sentinel";
+            GhostSettings.OnlineEnabled = false;
+            GhostSettings.GhostAlpha = 0.1f;
+            GhostSettings.Flush();
+            GhostSettings.ModifierRequireMask = 0;
+
+            File.WriteAllText(file, saved);
             GhostSettings.Init(Dir.Path);
 
             Assert.Equal("Hornet", GhostSettings.DisplayName);

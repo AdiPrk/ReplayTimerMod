@@ -14,7 +14,6 @@ namespace ReplayTimerMod
         public static readonly Color Base = RGB(36, 39, 58);
         public static readonly Color Surface = RGB(49, 52, 76);
         public static readonly Color Overlay = RGB(73, 77, 100);
-        public static readonly Color Border = RGB(202, 211, 245);
         public static readonly Color Text = RGB(202, 211, 245);
         public static readonly Color Subtext = RGB(128, 135, 162);
         public static readonly Color Accent = RGB(138, 173, 244);
@@ -38,7 +37,12 @@ namespace ReplayTimerMod
         public static int TabBarHeight => H(28);
         public static int SearchBarHeight => H(26);
         public static int FooterHeight => H(24);
-        public static int Margin => H(6);
+
+        /// <summary>Standard horizontal inset from a container edge.
+        /// Width-scaled like <see cref="Gap"/> - both are horizontal units,
+        /// and RowRightCluster's margin/gap symmetry relies on them scaling
+        /// together on non-16:9 resolutions.</summary>
+        public static int Margin => W(6);
 
         /// <summary>Standard horizontal gap between row elements
         /// (buttons, markers, labels). Use this instead of ad-hoc
@@ -63,7 +67,6 @@ namespace ReplayTimerMod
         public static int TabBtnWidth => W(72);
         public static int TabBtnHeight => H(28);
 
-        // Fonts
         private static Font? _arial;
         public static Font? Arial => _arial;
 
@@ -95,6 +98,10 @@ namespace ReplayTimerMod
             catch (System.Exception ex)
             {
                 Log.LogError($"[UIStyle] Font load failed: {ex.Message}");
+                // Fall back to the OS-installed Arial so the panel degrades
+                // to a usable font instead of rendering no text at all.
+                try { _arial = Font.CreateDynamicFontFromOSFont("Arial", 14); }
+                catch { /* leave null - labels stay empty but nothing throws */ }
             }
         }
     }

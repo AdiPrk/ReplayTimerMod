@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,16 +9,16 @@ namespace ReplayTimerMod
     {
         private void RebuildSceneList()
         {
-            if (sceneListContent == null) return;
+            if (_sceneListContent == null) return;
 
             // Preserve scroll position across rebuilds (scene-index refreshes,
             // PB updates, selection changes shouldn't yank the list around)
-            float keepScroll = sceneListScroll != null
-                ? sceneListScroll.verticalNormalizedPosition : 1f;
+            float keepScroll = _sceneListScroll != null
+                ? _sceneListScroll.verticalNormalizedPosition : 1f;
 
-            ClearContentDetached(sceneListContent);
+            ClearContentDetached(_sceneListContent);
 
-            string filter = (searchFilter ?? "").Trim().ToLowerInvariant();
+            string filter = (_searchFilter ?? "").Trim().ToLowerInvariant();
 
             // ── Merge local + server rooms ──────────────────────────────────
             //
@@ -31,7 +32,7 @@ namespace ReplayTimerMod
                 .Distinct()
                 .ToList();
 
-            var localSet = new System.Collections.Generic.HashSet<string>(localScenes);
+            var localSet = new HashSet<string>(localScenes);
 
             var serverScenes = _leaderboardCache.GetServerScenes();
 
@@ -39,7 +40,6 @@ namespace ReplayTimerMod
             // HandleSceneIndexReady can skip rebuilds when nothing changed.
             _renderedServerScenesVersion = _leaderboardCache.ServerScenesVersion;
 
-            // Union, sorted alphabetically
             var scenes = localSet
                 .Union(serverScenes)
                 .OrderBy(s => s)
@@ -48,16 +48,16 @@ namespace ReplayTimerMod
             if (!string.IsNullOrEmpty(filter))
                 scenes = scenes.Where(s => s.ToLowerInvariant().Contains(filter)).ToList();
 
-            if (selectedScene != null && !scenes.Contains(selectedScene)
+            if (_selectedScene != null && !scenes.Contains(_selectedScene)
                 && string.IsNullOrEmpty(filter))
             {
-                selectedScene = null;
+                _selectedScene = null;
                 UpdateRightSubHeader();
-                if (rightContent != null)
+                if (_rightContent != null)
                 {
-                    ClearContentDetached(rightContent);
-                    AddCenteredMessage(rightContent, "Select a room to view runs.");
-                    ForceLayout(rightContent);
+                    ClearContentDetached(_rightContent);
+                    AddCenteredMessage(_rightContent, "Select a room to view runs.");
+                    ForceLayout(_rightContent);
                 }
             }
 
@@ -75,27 +75,27 @@ namespace ReplayTimerMod
                     msg = "No replays yet.\nSyncing rooms...";
                 else
                     msg = "No replays recorded yet.";
-                AddCenteredMessage(sceneListContent, msg);
+                AddCenteredMessage(_sceneListContent, msg);
             }
             else
             {
                 foreach (string scene in scenes)
                 {
                     bool isServerOnly = !localSet.Contains(scene);
-                    AddSceneRow(sceneListContent, scene, isServerOnly);
+                    AddSceneRow(_sceneListContent, scene, isServerOnly);
                 }
             }
 
-            ForceLayout(sceneListContent);
+            ForceLayout(_sceneListContent);
 
-            if (sceneListScroll != null)
-                sceneListScroll.verticalNormalizedPosition = Mathf.Clamp01(keepScroll);
+            if (_sceneListScroll != null)
+                _sceneListScroll.verticalNormalizedPosition = Mathf.Clamp01(keepScroll);
         }
 
         private void AddSceneRow(Transform parent, string scene,
             bool isServerOnly = false)
         {
-            bool selected = scene == selectedScene;
+            bool selected = scene == _selectedScene;
             bool current = scene == RoomTracker.CurrentScene;
 
             Color bgColor;
@@ -108,7 +108,6 @@ namespace ReplayTimerMod
             }
             else if (isServerOnly)
             {
-                // Server-only rooms: subtler colors to distinguish from local
                 bgColor = selected
                     ? UIStyle.Accent with { a = 0.18f }
                     : Color.clear;
@@ -158,16 +157,15 @@ namespace ReplayTimerMod
         /// </summary>
         private void ScrollToScene(string scene)
         {
-            if (sceneListScroll == null || sceneListContent == null) return;
+            if (_sceneListScroll == null || _sceneListContent == null) return;
 
-            int totalChildren = sceneListContent.childCount;
+            int totalChildren = _sceneListContent.childCount;
             if (totalChildren <= 0) return;
 
-            // Find the target row index by matching label text
             int targetIndex = -1;
             for (int i = 0; i < totalChildren; i++)
             {
-                var lbl = sceneListContent.GetChild(i).GetComponentInChildren<Text>();
+                var lbl = _sceneListContent.GetChild(i).GetComponentInChildren<Text>();
                 if (lbl == null) continue;
 
                 if (lbl.text == scene)
@@ -179,18 +177,20 @@ namespace ReplayTimerMod
 
             if (targetIndex < 0) return;
 
-            // Calculate normalized scroll position (1 = top, 0 = bottom)
-            float viewportH = sceneListScroll.viewport != null
-                ? sceneListScroll.viewport.rect.height : 0f;
-            float contentH = ((RectTransform)sceneListContent).rect.height;
+            // verticalNormalizedPosition: 1 = top, 0 = bottom
+            float viewportH = _sceneListScroll.viewport != null
+                ? _sceneListScroll.viewport.rect.height : 0f;
+            float contentH = ((RectTransform)_sceneListContent).rect.height;
 
             if (contentH <= viewportH) return; // all visible, no scrolling needed
 
-            float targetY = targetIndex * RH;
+            // Row pitch = row height + the VerticalLayoutGroup's 1px spacing
+            // (see BuildLeftPane); RH alone drifts ~1px short per row.
+            float targetY = targetIndex * (RH + 1);
             float maxScroll = contentH - viewportH;
             float normalized = 1f - Mathf.Clamp01(targetY / maxScroll);
 
-            sceneListScroll.verticalNormalizedPosition = normalized;
+            _sceneListScroll.verticalNormalizedPosition = normalized;
         }
     }
 }

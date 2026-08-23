@@ -5,183 +5,24 @@
   -->
   <Import Condition="Exists('..\..\.config\local\HollowKnightPath1578.props')" Project="..\..\.config\local\HollowKnightPath1578.props" />
 
+  <!-- Only the 1578-specific deltas live here; everything shared with the
+       1221 target is in HK.Common.targets (imported at the bottom). -->
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
-    <AssemblyName>ReplayTimerMod.HK</AssemblyName>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <DefineConstants>$(DefineConstants);HOLLOW_KNIGHT_BUILD;V1578</DefineConstants>
-    <EnableNETAnalyzers>True</EnableNETAnalyzers>
-    <AnalysisMode>recommended</AnalysisMode>
-
-    <PathMap Condition="'$(Configuration)' == 'Release'">$(MSBuildProjectDirectory)=/</PathMap>
-
-    <AssemblyTitle>ReplayTimerMod</AssemblyTitle>
-    <Version>1.0.0</Version>
-
-    <!-- Keep HK build artifacts in-repo instead of copying directly to a game install. -->
-    <HKPackageOutputDir>$(OutputPath)dist\ReplayTimerMod</HKPackageOutputDir>
-    <HKZipFileName>ReplayTimerMod.HK-v$(Version).zip</HKZipFileName>
-    <HKZipFilePath>$(OutputPath)dist\$(HKZipFileName)</HKZipFilePath>
-    <HKCreateZip Condition="'$(HKCreateZip)' == '' and '$(Configuration)' == 'Release'">true</HKCreateZip>
-    <HKCreateZip Condition="'$(HKCreateZip)' == '' and '$(Configuration)' != 'Release'">false</HKCreateZip>
+    <HKVersionConstant>V1578</HKVersionConstant>
+    <HKLocalPropsName>HollowKnightPath1578.props</HKLocalPropsName>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Unity.Analyzers" Version="1.25.0" PrivateAssets="all" />
-    <PackageReference Include="ILRepack" Version="2.0.44" PrivateAssets="all" />
-    <PackageReference Include="SharpZipLib" Version="0.86.0" NoWarn="NU1902;NU1903" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Include="**\*.cs" Exclude="obj\**\*.cs" />
-    <Compile Include="..\General\**\*.cs" />
-    <None Include="..\..\README.md" />
-  </ItemGroup>
-
-  <ItemGroup>
-      <EmbeddedResource Include="..\..\Resources\Arial.ttf" />
-      <EmbeddedResource Include="..\..\Resources\hk_transitions.json" />
-  </ItemGroup>
-
   <ItemGroup Condition="'$(HollowKnightManagedFolder)' != ''">
-    <Reference Include="Assembly-CSharp" Condition="Exists('$(HollowKnightManagedFolder)\Assembly-CSharp.dll')">
-      <HintPath>$(HollowKnightManagedFolder)\Assembly-CSharp.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine" Condition="Exists('$(HollowKnightManagedFolder)\UnityEngine.dll')">
-      <HintPath>$(HollowKnightManagedFolder)\UnityEngine.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.UI" Condition="Exists('$(HollowKnightManagedFolder)\UnityEngine.UI.dll')">
-      <HintPath>$(HollowKnightManagedFolder)\UnityEngine.UI.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.UIModule" Condition="Exists('$(HollowKnightManagedFolder)\UnityEngine.UIModule.dll')">
-      <HintPath>$(HollowKnightManagedFolder)\UnityEngine.UIModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.CoreModule" Condition="Exists('$(HollowKnightManagedFolder)\UnityEngine.CoreModule.dll')">
-      <HintPath>$(HollowKnightManagedFolder)\UnityEngine.CoreModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.IMGUIModule" Condition="Exists('$(HollowKnightManagedFolder)\UnityEngine.IMGUIModule.dll')">
-      <HintPath>$(HollowKnightManagedFolder)\UnityEngine.IMGUIModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.TextRenderingModule" Condition="Exists('$(HollowKnightManagedFolder)\UnityEngine.TextRenderingModule.dll')">
-      <HintPath>$(HollowKnightManagedFolder)\UnityEngine.TextRenderingModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.Physics2DModule" Condition="Exists('$(HollowKnightManagedFolder)\UnityEngine.Physics2DModule.dll')">
-      <HintPath>$(HollowKnightManagedFolder)\UnityEngine.Physics2DModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="tk2dRuntime" Condition="Exists('$(HollowKnightManagedFolder)\tk2dRuntime.dll')">
-      <HintPath>$(HollowKnightManagedFolder)\tk2dRuntime.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.UnityWebRequestModule" Condition="Exists('$(HollowKnightManagedFolder)\UnityEngine.UnityWebRequestModule.dll')">
-      <HintPath>$(HollowKnightManagedFolder)\UnityEngine.UnityWebRequestModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
     <Reference Include="MMHOOK_Assembly-CSharp" Condition="Exists('$(HollowKnightManagedFolder)\MMHOOK_Assembly-CSharp.dll')">
       <HintPath>$(HollowKnightManagedFolder)\MMHOOK_Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.InputLegacyModule">
-    <HintPath>$(HollowKnightManagedFolder)\UnityEngine.InputLegacyModule.dll</HintPath>
-    <Private>false</Private>
-  </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule" Condition="Exists('$(HollowKnightManagedFolder)\UnityEngine.InputLegacyModule.dll')">
+      <HintPath>$(HollowKnightManagedFolder)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
-  <Target Name="ValidateHKReferences" BeforeTargets="CoreCompile">
-    <Error Condition="'$(HollowKnightManagedFolder)' == ''"
-           Text="HollowKnightManagedFolder is empty. Set it in .config/local/HollowKnightPath1578.props." />
-    <Error Condition="!Exists('$(HollowKnightManagedFolder)\Assembly-CSharp.dll')"
-           Text="Assembly-CSharp.dll not found under $(HollowKnightManagedFolder). Update .config/local/HollowKnightPath1578.props to your Hollow Knight_Data/Managed folder." />
-  </Target>
-
-  <!--
-    Merge ICSharpCode.SharpZipLib into our output DLL so it ships as one file.
-
-    Why this is written so defensively: the previous version used an
-    Inputs/Outputs stamp for incremental skipping. On an up-to-date build
-    CopyFilesToOutputDirectory copies the freshly compiled, *unmerged* assembly
-    over the merged output, and the stamp guard then considered the merge "up
-    to date" and skipped it - so the shipped DLL still referenced SharpZipLib
-    externally and threw FileNotFoundException at runtime (every replay
-    save/encode crashed - this is exactly what broke HK 1.5.78 saving).
-
-    Robust scheme that works whether or not OutputPath aliases the intermediate
-    directory (the 1221 build outputs into its own obj tree, so its
-    intermediate assembly and final output are the SAME file - merging "from
-    the intermediate" there would double-merge):
-      * Run after the output DLL is in place (AfterTargets=CopyFilesToOutputDirectory).
-      * Record the merged DLL's last-write-time in a stamp after each merge.
-      * On the next build, skip the merge ONLY if the output DLL's write time
-        still matches the stamp (i.e. nothing recompiled/recopied it since we
-        merged). Any recompile or copy changes the time and forces a fresh
-        merge. This never double-merges and never ships an unmerged DLL.
-  -->
-  <Target Name="ILRepackSharpZipLib"
-          AfterTargets="CopyFilesToOutputDirectory"
-          BeforeTargets="PrepareHKReleaseLayout"
-          Condition="Exists('$(TargetDir)ICSharpCode.SharpZipLib.dll')">
-    <PropertyGroup>
-      <_ILRepackExe>$(NuGetPackageRoot)ilrepack\2.0.44\tools\ILRepack.exe</_ILRepackExe>
-      <_ILRepackInput>$(TargetDir)$(TargetName).premerge.dll</_ILRepackInput>
-      <_ILRepackStamp>$(IntermediateOutputPath)$(TargetName).ilrepack.stamp</_ILRepackStamp>
-    </PropertyGroup>
-
-    <!-- Probe the output DLL's current modified time and the time recorded
-         after the last merge. MSBuild forbids System.IO.File property
-         functions, so use well-known item metadata + ReadLinesFromFile. -->
-    <ItemGroup>
-      <_OutDllProbe Include="$(TargetPath)" Condition="Exists('$(TargetPath)')" />
-    </ItemGroup>
-    <ReadLinesFromFile File="$(_ILRepackStamp)" Condition="Exists('$(_ILRepackStamp)')">
-      <Output TaskParameter="Lines" PropertyName="_StampTime" />
-    </ReadLinesFromFile>
-    <PropertyGroup>
-      <_OutDllTime>@(_OutDllProbe->'%(ModifiedTime)')</_OutDllTime>
-      <_AlreadyMerged>false</_AlreadyMerged>
-      <_AlreadyMerged Condition="'$(_OutDllTime)' != '' and '$(_OutDllTime)' == '$(_StampTime)'">true</_AlreadyMerged>
-    </PropertyGroup>
-
-    <Message Importance="normal" Condition="'$(_AlreadyMerged)' == 'true'"
-             Text="ReplayTimerMod: SharpZipLib already merged into $(TargetFileName); skipping ILRepack." />
-
-    <!-- A merge is needed: the output DLL is the freshly produced, unmerged
-         compiler output. Merge SharpZipLib into it in place. -->
-    <Copy Condition="'$(_AlreadyMerged)' != 'true'"
-          SourceFiles="$(TargetPath)" DestinationFiles="$(_ILRepackInput)" />
-    <Exec Condition="'$(_AlreadyMerged)' != 'true'"
-          Command="&quot;$(_ILRepackExe)&quot; /internalize /lib:&quot;$(TargetDir).&quot; /lib:&quot;$(HollowKnightManagedFolder)&quot; /out:&quot;$(TargetPath)&quot; &quot;$(_ILRepackInput)&quot; &quot;$(TargetDir)ICSharpCode.SharpZipLib.dll&quot;"
-          IgnoreStandardErrorWarningFormat="true" />
-    <Delete Condition="'$(_AlreadyMerged)' != 'true'" Files="$(_ILRepackInput)" />
-    <!-- Re-probe the merged DLL's new modified time and record it. -->
-    <ItemGroup Condition="'$(_AlreadyMerged)' != 'true'">
-      <_MergedProbe Include="$(TargetPath)" />
-    </ItemGroup>
-    <WriteLinesToFile Condition="'$(_AlreadyMerged)' != 'true'"
-          File="$(_ILRepackStamp)"
-          Lines="@(_MergedProbe->'%(ModifiedTime)')"
-          Overwrite="true" />
-  </Target>
-
-  <Target Name="PrepareHKReleaseLayout" AfterTargets="Build">
-    <RemoveDir Directories="$(HKPackageOutputDir)" Condition="Exists('$(HKPackageOutputDir)')" />
-    <MakeDir Directories="$(HKPackageOutputDir)" />
-    <!-- SharpZipLib is now embedded; only the merged DLL (and optional PDB) are needed. -->
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(HKPackageOutputDir)" />
-    <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="$(HKPackageOutputDir)" Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
-  </Target>
-
-  <Target Name="CreateHKReleaseZip" AfterTargets="PrepareHKReleaseLayout" Condition="'$(HKCreateZip)' == 'true'">
-    <Delete Files="$(HKZipFilePath)" Condition="Exists('$(HKZipFilePath)')" />
-    <ZipDirectory SourceDirectory="$(HKPackageOutputDir)" DestinationFile="$(HKZipFilePath)" Overwrite="true" />
-    <Message Importance="high" Text="Created HK release archive: $(HKZipFilePath)" />
-  </Target>
+  <Import Project="HK.Common.targets" />
 </Project>

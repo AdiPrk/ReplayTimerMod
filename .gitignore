@@ -15,7 +15,6 @@
 .config/local/SilksongPath.props
 .config/local/HollowKnightPath1221.props
 .config/local/HollowKnightPath1578.props
-.config/local/HollowKnightPath1432.props
 obj/ss/
 obj/hk/
 bin/
@@ -439,8 +438,7 @@ FodyWeavers.xsd
 *.msm
 *.msp
 
-# Thunderstore build artifacts
-thunderstore/dist/
-thunderstore/temp/*.dll
-
+# Supabase: local CLI scratch plus (deliberately) the whole backend tree.
+# NOTE: the deno-tests CI job needs supabase/ tracked to run on a fresh
+# checkout - drop this line to version the backend, or drop that CI job.
 supabase/
