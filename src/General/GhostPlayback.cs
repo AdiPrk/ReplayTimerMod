@@ -30,6 +30,8 @@ namespace ReplayTimerMod
             public LineRenderer? DiamondLine { get; set; }
             public Material? DiamondMat { get; set; }
             public GameObject? AnchorGo { get; set; }
+            public GameObject? ReeseGo { get; set; }
+            public SpriteRenderer? Reese { get; set; }
             public bool FacingRight { get; set; } = true;
 
             public RecordedRoom Room => Snapshot.Room;
@@ -208,6 +210,11 @@ namespace ReplayTimerMod
                 instance.AnchorGo.transform.position = pos;
             instance.FacingRight = animFrame.facingRight;
 
+            if (GhostSettings.ReeseEnabled && RenderReese(instance, pos, animFrame.facingRight, color))
+                return;
+            if (instance.ReeseGo != null)
+                instance.ReeseGo.SetActive(false);
+
             if (!string.IsNullOrEmpty(animFrame.animClip) && instance.Sprite != null)
                 RenderSprite(instance, pos, animFrame, color);
             else
@@ -334,6 +341,8 @@ namespace ReplayTimerMod
                 Object.Destroy(instance.DiamondMat);
             if (instance.AnchorGo != null)
                 Object.Destroy(instance.AnchorGo);
+            if (instance.ReeseGo != null)
+                Object.Destroy(instance.ReeseGo);
 
             instance.SpriteGo = null;
             instance.Sprite = null;
@@ -341,6 +350,31 @@ namespace ReplayTimerMod
             instance.DiamondLine = null;
             instance.DiamondMat = null;
             instance.AnchorGo = null;
+            instance.ReeseGo = null;
+            instance.Reese = null;
+        }
+
+        private static bool RenderReese(PlaybackInstance instance, Vector3 pos,
+            bool facingRight, Color color)
+        {
+            if (instance.Reese == null)
+            {
+                Sprite? sprite = ReeseImages.Random();
+                if (sprite == null)
+                    return false;
+                instance.ReeseGo = new GameObject($"ReplayGhost_Reese_{instance.Snapshot.SnapshotId}");
+                ScenePersistence.Apply(instance.ReeseGo);
+                instance.Reese = instance.ReeseGo.AddComponent<SpriteRenderer>();
+                instance.Reese.sprite = sprite;
+            }
+
+            instance.Reese.color = color;
+            instance.ReeseGo!.transform.position = pos;
+            instance.ReeseGo.transform.localScale = new Vector3(facingRight ? 1f : -1f, 1f, 1f);
+            instance.ReeseGo.SetActive(true);
+            if (instance.SpriteGo != null) instance.SpriteGo.SetActive(false);
+            instance.DiamondGo?.SetActive(false);
+            return true;
         }
 
         private void RenderSprite(PlaybackInstance instance, Vector3 pos,

@@ -24,6 +24,7 @@ namespace ReplayTimerMod
         public bool  SkipBacktrackRuns       = false;
         public bool  SkipBacktrackTimer      = false;
         public bool  CancelRunOnCheats       = true;
+        public bool  ReeseEnabled            = false;
     }
 
     public static class GhostSettings
@@ -48,6 +49,12 @@ namespace ReplayTimerMod
         {
             get => _d.GhostEnabled;
             set { _d.GhostEnabled = value; Save(); }
+        }
+
+        public static bool ReeseEnabled
+        {
+            get => _d.ReeseEnabled;
+            set { _d.ReeseEnabled = value; Save(); }
         }
 
         public static bool MultiReplayEnabled

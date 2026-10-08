@@ -62,6 +62,8 @@ namespace ReplayTimerMod
 
         private Text? _ghostToggleLbl;
         private Image? _ghostToggleBg;
+        private Text? _reeseToggleLbl;
+        private Image? _reeseToggleBg;
         private Text? _trackingToggleLbl;
         private Image? _trackingToggleBg;
         private Text? _savePolicyLbl;

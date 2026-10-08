@@ -9,6 +9,8 @@ namespace ReplayTimerMod
         {
             _ghostToggleLbl = null;
             _ghostToggleBg = null;
+            _reeseToggleLbl = null;
+            _reeseToggleBg = null;
             _trackingToggleLbl = null;
             _trackingToggleBg = null;
             _savePolicyLbl = null;
@@ -82,7 +84,7 @@ namespace ReplayTimerMod
             var cheatHintLE = cheatHintRow.AddComponent<LayoutElement>();
             cheatHintLE.minHeight = cheatHintLE.preferredHeight = UIStyle.H(16);
             MakeLbl(cheatHintRow.transform,
-                "When off, runs with DebugMod cheats are kept and marked with a red !",
+                "When off, runs with DebugMod cheats are kept and shown with red stripes.",
                 UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: UIStyle.W(8), w: UIStyle.W(320), h: UIStyle.H(16));
 
@@ -105,7 +107,7 @@ namespace ReplayTimerMod
 
             AddSectionHeader(_rightContent, "Playback");
 
-            var ghostRow = AddConfigRow(_rightContent, "Ghost", rowH, labelW);
+            var ghostRow = AddConfigRow(_rightContent, "Enable Playback", rowH, labelW);
             br = MakeButton(ghostRow.transform, "GhostToggle", "ON",
                 UIStyle.FontSizeRow, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnGhostToggle);
@@ -200,6 +202,15 @@ namespace ReplayTimerMod
                 UIStyle.W(8), dataY, UIStyle.W(100), dataBtnH, OnClearAllClicked);
             _clearAllCfgBg = br.bg;
             _clearAllCfgLbl = br.label;
+
+            AddSectionSeparator(_rightContent);
+
+            var reeseRow = AddConfigRow(_rightContent, "Reese", rowH, labelW);
+            br = MakeButton(reeseRow.transform, "ReeseToggle", "OFF",
+                UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
+                labelW, (rowH - btnH) / 2, toggleW, btnH, OnReeseToggle);
+            _reeseToggleBg = br.bg;
+            _reeseToggleLbl = br.label;
         }
 
         private void RefreshConfigValues()
@@ -216,6 +227,7 @@ namespace ReplayTimerMod
             }
 
             StyleToggle(_ghostToggleLbl, _ghostToggleBg, GhostSettings.GhostEnabled);
+            StyleToggle(_reeseToggleLbl, _reeseToggleBg, GhostSettings.ReeseEnabled);
 
             if (_savePolicyLbl != null)
             {

@@ -31,6 +31,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\..\Resources\Arial.ttf" />
+    <EmbeddedResource Include="..\..\Reese\*.jpg;..\..\Reese\*.png" LogicalName="Reese.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(HollowKnightManagedFolder)' != ''">

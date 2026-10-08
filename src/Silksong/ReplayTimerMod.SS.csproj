@@ -39,6 +39,7 @@
   <ItemGroup>
       <EmbeddedResource Include="..\..\Resources\Arial.ttf" />
       <EmbeddedResource Include="..\..\Resources\ss_transitions.json" />
+      <EmbeddedResource Include="..\..\Reese\*.jpg;..\..\Reese\*.png" LogicalName="Reese.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <Target Name="CopyAndPackageMod" AfterTargets="PostBuildEvent"

@@ -147,6 +147,16 @@ namespace ReplayTimerMod
             Btn(row, () => ToggleSnapshotPlayback(rowKey, rowSnapshotId));
             AddHoverEffect(row);
 
+            RawImage? stripesImg = null;
+            if (snapshot.UsedCheats)
+            {
+                stripesImg = MakeGO("Cheated", row.transform).AddComponent<RawImage>();
+                stripesImg.texture = HazardStripeTexture();
+                stripesImg.color = UIStyle.Red with { a = 0.10f };
+                stripesImg.raycastTarget = false;
+                AttachTooltip(row, "Recorded with DebugMod cheats active");
+            }
+
             int x = M;
             int btnH = UIStyle.H(20);
             int btnY = (h - btnH) / 2;
@@ -208,6 +218,13 @@ namespace ReplayTimerMod
 
             int camW = btnH;
             int camX = cluster.AddButton(camW);
+            if (stripesImg != null)
+            {
+                int stripesW = camX - UIStyle.Gap;
+                float tile = UIStyle.H(12);
+                Rect(stripesImg.gameObject, 0, 0, stripesW, h);
+                stripesImg.uvRect = new UnityEngine.Rect(0f, 0f, stripesW / tile, h / tile);
+            }
             bool followOn =
                 SelectionState?.CameraFollowSnapshotId == snapshot.SnapshotId;
 
@@ -248,19 +265,6 @@ namespace ReplayTimerMod
                 UIStyle.FontSizeRow, labelColor, TextAnchor.MiddleLeft,
                 x: x, w: labelW, h: h);
 
-            if (snapshot.UsedCheats)
-            {
-                int markX = x + Mathf.CeilToInt(
-                    MeasureTextWidth(labelText, UIStyle.FontSizeRow)) + UIStyle.Gap;
-                int markW = UIStyle.W(10);
-                var cheatMark = MakeGO("Cheated", row.transform);
-                Img(cheatMark, Color.clear);
-                Rect(cheatMark, markX, 0, markW, h);
-                MakeLbl(cheatMark.transform, "!",
-                    UIStyle.FontSizeRow, UIStyle.Red, TextAnchor.MiddleCenter,
-                    fill: true);
-                AttachTooltip(cheatMark, "Recorded with DebugMod cheats active");
-            }
         }
 
         private static string ColorHex(Color c) =>

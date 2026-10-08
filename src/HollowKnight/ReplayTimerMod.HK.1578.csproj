@@ -16,6 +16,10 @@
       <HintPath>$(HollowKnightManagedFolder)\UnityEngine.InputLegacyModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule" Condition="Exists('$(HollowKnightManagedFolder)\UnityEngine.ImageConversionModule.dll')">
+      <HintPath>$(HollowKnightManagedFolder)\UnityEngine.ImageConversionModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <Import Project="HK.Common.targets" />

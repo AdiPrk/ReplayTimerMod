@@ -319,6 +319,12 @@ namespace ReplayTimerMod
             if (_activeTab == TabKind.Config) RefreshConfigValues();
         }
 
+        private void OnReeseToggle()
+        {
+            GhostSettings.ReeseEnabled = !GhostSettings.ReeseEnabled;
+            if (_activeTab == TabKind.Config) RefreshConfigValues();
+        }
+
         private void OnSavePolicyToggle()
         {
             GhostSettings.SaveAllRunsEnabled = !GhostSettings.SaveAllRunsEnabled;
