@@ -11,7 +11,7 @@ namespace ReplayTimerMod
         public ICollection<string> PlaybackSnapshotIds => playbackSnapshotIds;
 
         /// <summary>
-        /// Single camera-follow slot (experimental): the one run the game
+        /// Single camera-follow slot: the one run the game
         /// camera should track instead of the player, whenever that run is
         /// playing as a ghost. A snapshot belongs to exactly one room, so
         /// this naturally applies to one room at a time. Session-only.

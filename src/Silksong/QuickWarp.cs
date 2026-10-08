@@ -1,3 +1,4 @@
+#if SILKSONG_BUILD
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -8,7 +9,7 @@ using UnityEngine;
 namespace ReplayTimerMod
 {
     /// <summary>
-    /// Cross-platform warp utility for Hollow Knight and Silksong.
+    /// Silksong warp utility.
     ///
     /// Resolves warp targets from a static, bundled transition map — the same
     /// authoritative door data that Benchwarp / RandomizerMod use. The map is
@@ -50,7 +51,7 @@ namespace ReplayTimerMod
 
         /// <summary>
         /// Load the embedded transition map. Call once from the mod entry
-        /// point. The resource loaded depends on the build (SS vs HK).
+        /// point.
         /// </summary>
         public static void Init()
         {
@@ -219,7 +220,6 @@ namespace ReplayTimerMod
             // The UI is only interactable while paused, so unpause first.
             if (IsGamePaused(gm))
             {
-#if SILKSONG_BUILD
                 // Fully drain the unpause coroutine before warping (matches
                 // QuickWarp/Benchwarp). Getting the iterator is wrapped in
                 // try/catch; the draining yield is outside it (C# forbids
@@ -230,11 +230,6 @@ namespace ReplayTimerMod
                     while (unpause.MoveNext())
                         yield return unpause.Current;
                 }
-#else
-                // HK: TogglePauseGame is synchronous.
-                TryUnpauseHK(gm);
-                yield return null;
-#endif
             }
 
             yield return null; // safety frame before transition
@@ -259,7 +254,6 @@ namespace ReplayTimerMod
 
         private const float WarpWatchdogSeconds = 15f;
 
-#if SILKSONG_BUILD
         private static IEnumerator? GetUnpauseIterator(GameManager gm)
         {
             try
@@ -272,35 +266,9 @@ namespace ReplayTimerMod
                 return null;
             }
         }
-#else
-        private static void TryUnpauseHK(GameManager gm)
-        {
-            try
-            {
-                object uiMgr = typeof(GameManager)
-                    .GetProperty("ui",
-                        System.Reflection.BindingFlags.Instance
-                        | System.Reflection.BindingFlags.Public)
-                    .GetValue(gm, null);
-
-                if (uiMgr != null)
-                {
-                    System.Reflection.MethodInfo toggle =
-                        uiMgr.GetType().GetMethod("TogglePauseGame");
-                    if (toggle != null)
-                        toggle.Invoke(uiMgr, null);
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.LogWarning($"[QuickWarp] Unpause failed: {ex.Message}");
-            }
-        }
-#endif
 
         private static void DoWarp(GameManager gm, string sceneName, string gateName)
         {
-#if SILKSONG_BUILD
             GameManager.SceneLoadInfo info = new GameManager.SceneLoadInfo
             {
                 SceneName = sceneName,
@@ -312,41 +280,6 @@ namespace ReplayTimerMod
                 IsFirstLevelForPlayer = false
             };
             GameManager.UnsafeInstance.BeginSceneTransition(info);
-#elif V1221
-            try { gm.entryGateName = gateName; } catch { }
-            try
-            {
-                Type sliType = typeof(GameManager).GetNestedType("SceneLoadInfo");
-                if (sliType != null)
-                {
-                    object info = Activator.CreateInstance(sliType);
-                    SetMember(info, "SceneName", sceneName);
-                    SetMember(info, "EntryGateName", gateName);
-                    SetMember(info, "PreventCameraFadeOut", true);
-                    SetMember(info, "WaitForSceneTransitionCameraFade", false);
-                    SetMember(info, "AlwaysUnloadUnusedAssets", true);
-                    System.Reflection.MethodInfo m = typeof(GameManager)
-                        .GetMethod("BeginSceneTransition", new Type[] { sliType });
-                    if (m != null) { m.Invoke(gm, new object[] { info }); return; }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.LogWarning($"[QuickWarp] v1221 SceneLoadInfo path failed: {ex.Message}");
-            }
-            UnityEngine.SceneManagement.SceneManager.LoadScene(sceneName);
-#else
-            gm.BeginSceneTransition(new GameManager.SceneLoadInfo
-            {
-                SceneName = sceneName,
-                EntryGateName = gateName,
-                PreventCameraFadeOut = true,
-                WaitForSceneTransitionCameraFade = false,
-                Visualization = GameManager.SceneLoadVisualizations.Default,
-                AlwaysUnloadUnusedAssets = true,
-                IsFirstLevelForPlayer = false
-            });
-#endif
         }
 
         // ── Helpers ─────────────────────────────────────────────────────────
@@ -360,21 +293,6 @@ namespace ReplayTimerMod
                 catch { return false; }
             }
         }
-
-#if V1221
-        private static void SetMember(object obj, string name, object value)
-        {
-            const System.Reflection.BindingFlags F =
-                System.Reflection.BindingFlags.Instance
-                | System.Reflection.BindingFlags.Public
-                | System.Reflection.BindingFlags.NonPublic;
-            Type type = obj.GetType();
-            System.Reflection.PropertyInfo p = type.GetProperty(name, F);
-            if (p != null) { p.SetValue(obj, value, null); return; }
-            System.Reflection.FieldInfo f = type.GetField(name, F);
-            if (f != null) f.SetValue(obj, value);
-        }
-#endif
 
         // ── Flat JSON parser ────────────────────────────────────────────────
         // Parses {"key":"value","key2":"value2",...} where keys and values
@@ -457,3 +375,4 @@ namespace ReplayTimerMod
         }
     }
 }
+#endif

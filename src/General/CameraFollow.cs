@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace ReplayTimerMod
 {
-    // Experimental: points the game's camera at a ghost replay instead of
+    // Points the game's camera at a ghost replay instead of
     // the player, keeping the game's normal camera feel.
     //
     // Both games drive the camera the same way: CameraTarget.Update()

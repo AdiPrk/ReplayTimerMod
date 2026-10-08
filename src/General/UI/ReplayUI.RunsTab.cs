@@ -77,8 +77,6 @@ namespace ReplayTimerMod
             int btnH = UIStyle.H(20);
             int btnY = (h - btnH) / 2;
             int clearW = UIStyle.W(48);
-            int warpW = UIStyle.W(44);
-            int sp = UIStyle.Gap;
 
             var row = MakeGO("RouteHeader", parent);
             Img(row, UIStyle.Overlay with { a = 0.45f });
@@ -93,13 +91,15 @@ namespace ReplayTimerMod
                 RW - clearW - M, btnY, clearW, btnH,
                 () => OnRouteClearClicked(key));
 
-            // Warp button (experimental, hidden unless enabled in Config) —
-            // shown for any route whose entry transition is known. Lands the
-            // player in the previous room at a door leading into the run
-            // room. Placed left of Clear.
             int labelRight = clearW + M;
-            if (GhostSettings.RoomWarpEnabled && QuickWarp.CanWarp(key))
+#if SILKSONG_BUILD
+            // Warp button — shown for any route whose entry transition is
+            // known. Lands the player in the previous room at a door leading
+            // into the run room. Placed left of Clear.
+            if (QuickWarp.CanWarp(key))
             {
+                int warpW = UIStyle.W(44);
+                int sp = UIStyle.Gap;
                 RoomKey warpKey = key;
                 MakeButton(row.transform, "WarpRoute", "Warp",
                     UIStyle.FontSizeBtn, UIStyle.Green, UIStyle.BtnBg(UIStyle.Green),
@@ -107,6 +107,7 @@ namespace ReplayTimerMod
                     () => OnRouteWarpClicked(warpKey));
                 labelRight += warpW + sp;
             }
+#endif
 
             string from = string.IsNullOrEmpty(route.Key.EntryFromScene)
                 ? "spawn" : route.Key.EntryFromScene;
@@ -228,40 +229,36 @@ namespace ReplayTimerMod
                 cluster.AddButton(copyW), btnY, copyW, btnH,
                 () => CopyReplay(copyKey, copyId));
 
-            // Camera-follow button (experimental, gated by the Config
-            // toggle so the column only exists when the feature is on).
-            // Leftmost of the button cluster; one run at a time can hold
-            // the follow slot, and following also enables the ghost.
-            if (GhostSettings.CameraFollowEnabled)
-            {
-                int camW = btnH;
-                int camX = cluster.AddButton(camW);
-                bool followOn =
-                    SelectionState?.CameraFollowSnapshotId == snapshot.SnapshotId;
+            // Camera-follow button, leftmost of the button cluster; one run
+            // at a time can hold the follow slot, and following also enables
+            // the ghost.
+            int camW = btnH;
+            int camX = cluster.AddButton(camW);
+            bool followOn =
+                SelectionState?.CameraFollowSnapshotId == snapshot.SnapshotId;
 
-                var camBtn = MakeGO("CamFollow", row.transform);
-                Img(camBtn, followOn
-                    ? UIStyle.BtnBgStrong(UIStyle.Gold)
-                    : UIStyle.Overlay);
-                Rect(camBtn, camX, btnY, camW, btnH);
+            var camBtn = MakeGO("CamFollow", row.transform);
+            Img(camBtn, followOn
+                ? UIStyle.BtnBgStrong(UIStyle.Gold)
+                : UIStyle.Overlay);
+            Rect(camBtn, camX, btnY, camW, btnH);
 
-                var camIcon = MakeGO("Icon", camBtn.transform);
-                var camImg = camIcon.AddComponent<RawImage>();
-                camImg.texture = CameraMarkerTexture();
-                camImg.color = followOn ? UIStyle.Gold : UIStyle.Subtext;
-                camImg.raycastTarget = false;
-                int camIconS = UIStyle.H(14);
-                Rect(camIcon, (camW - camIconS) / 2, (btnH - camIconS) / 2,
-                    camIconS, camIconS);
+            var camIcon = MakeGO("Icon", camBtn.transform);
+            var camImg = camIcon.AddComponent<RawImage>();
+            camImg.texture = CameraMarkerTexture();
+            camImg.color = followOn ? UIStyle.Gold : UIStyle.Subtext;
+            camImg.raycastTarget = false;
+            int camIconS = UIStyle.H(14);
+            Rect(camIcon, (camW - camIconS) / 2, (btnH - camIconS) / 2,
+                camIconS, camIconS);
 
-                string camId = snapshot.SnapshotId;
-                RoomKey camKey = route.Key;
-                Btn(camBtn, () => OnCameraFollowClicked(camKey, camId));
-                AddButtonHover(camBtn);
-                AttachTooltip(camBtn, followOn
-                    ? "Camera following this run"
-                    : "Follow with camera (experimental)");
-            }
+            string camId = snapshot.SnapshotId;
+            RoomKey camKey = route.Key;
+            Btn(camBtn, () => OnCameraFollowClicked(camKey, camId));
+            AddButtonHover(camBtn);
+            AttachTooltip(camBtn, followOn
+                ? "Camera following this run"
+                : "Follow with camera. For full ghost visibility, use \"Deactivate Visual Masks\" in debug mod.");
 
             int timeX = cluster.AddTime(timeColW);
             MakeLbl(row.transform, TimeUtil.Format(snapshot.TotalTime),

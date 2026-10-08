@@ -246,6 +246,7 @@ namespace ReplayTimerMod
                 RebuildRightContent();
         }
 
+#if SILKSONG_BUILD
         // -- Route warp --
         // Warps to the previous room (EntryFromScene) at a door that leads
         // into the run room, placing the player right before the transition
@@ -257,6 +258,7 @@ namespace ReplayTimerMod
             if (!QuickWarp.WarpToRoute(key))
                 Log.LogInfo($"[ReplayUI] Warp unavailable for {key}");
         }
+#endif
 
         private void ToggleSnapshotPlayback(RoomKey key, string snapshotId)
         {
@@ -266,7 +268,7 @@ namespace ReplayTimerMod
         }
 
         /// <summary>
-        /// Experimental camera-follow toggle for a run. Following implies
+        /// Camera-follow toggle for a run. Following implies
         /// playback: engaging the slot also enables the run's ghost so
         /// there is always something for the camera to track. Takes effect
         /// immediately if that ghost is already playing, otherwise on the
@@ -393,29 +395,6 @@ namespace ReplayTimerMod
         private void OnSkipBacktrackTimerToggle()
         {
             GhostSettings.SkipBacktrackTimer = !GhostSettings.SkipBacktrackTimer;
-            if (_activeTab == TabKind.Config) RefreshConfigValues();
-        }
-
-        /// <summary>
-        /// Experimental room-warp toggle. Warp buttons in the Runs tab only
-        /// render when this is on, so no extra rebuild is needed here - the
-        /// tab rebuilds on switch.
-        /// </summary>
-        private void OnRoomWarpToggle()
-        {
-            GhostSettings.RoomWarpEnabled = !GhostSettings.RoomWarpEnabled;
-            if (_activeTab == TabKind.Config) RefreshConfigValues();
-        }
-
-        /// <summary>
-        /// Experimental camera-follow feature toggle. Turning it off
-        /// releases the camera on the next ghost tick (GhostPlayback
-        /// reconciles the follow slot against this setting every frame);
-        /// the Runs tab camera buttons only render while it is on.
-        /// </summary>
-        private void OnCameraFollowFeatureToggle()
-        {
-            GhostSettings.CameraFollowEnabled = !GhostSettings.CameraFollowEnabled;
             if (_activeTab == TabKind.Config) RefreshConfigValues();
         }
     }

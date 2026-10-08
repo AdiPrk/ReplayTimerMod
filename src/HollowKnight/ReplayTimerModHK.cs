@@ -30,7 +30,6 @@ namespace ReplayTimerMod
                 Assembly.GetExecutingAssembly().Location) ?? ".";
 
             GhostSettings.Init(baseDirectory);
-            QuickWarp.Init();
 
             string dataDir = Path.Combine(
                 Path.Combine(baseDirectory, "ReplayMod"), "data");

@@ -142,18 +142,15 @@ namespace ReplayTimerMod
 
         /// <summary>
         /// Reconciles the camera-follow slot against the active instances
-        /// every tick: engaged while the followed run's ghost is _playing
-        /// (and the experimental feature is on), released the moment it
-        /// finishes or the selection/setting changes.
+        /// every tick: engaged while the followed run's ghost is _playing,
+        /// released the moment it finishes or the selection changes.
         /// </summary>
         private void UpdateCameraFollow()
         {
             Transform? target = null;
             bool facingRight = true;
 
-            string? followId = GhostSettings.CameraFollowEnabled
-                ? _selectionState?.CameraFollowSnapshotId
-                : null;
+            string? followId = _selectionState?.CameraFollowSnapshotId;
             if (!string.IsNullOrEmpty(followId))
             {
                 foreach (var instance in _activeInstances)

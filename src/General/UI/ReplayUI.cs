@@ -89,10 +89,6 @@ namespace ReplayTimerMod
         private Image? _clearAllCfgBg;
         private Text? _copyAllCfgLbl;
         private Image? _copyAllCfgBg;
-        private Text? _warpToggleLbl;
-        private Image? _warpToggleBg;
-        private Text? _camFollowToggleLbl;
-        private Image? _camFollowToggleBg;
 
         // Layout dimensions (computed once in Setup)
         private int PW, PH, LW, RW, M, RH;

@@ -205,7 +205,11 @@ namespace ReplayTimerMod
                 }
             }
 
+#if SILKSONG_BUILD
             bool wasWarping = QuickWarp.IsWarping;
+#else
+            bool wasWarping = false; // room warp is Silksong-only
+#endif
 
             if (arrivedViaGate && !toMenu && !wasWarping)
             {
@@ -237,8 +241,10 @@ namespace ReplayTimerMod
             // handled. Tying this to the actual scene activation (rather than
             // a frame count in QuickWarp) is what guarantees a warp never
             // starts a run, since BeginSceneTransition activates async.
+#if SILKSONG_BUILD
             if (wasWarping)
                 QuickWarp.NotifyArrival();
+#endif
 
             bool IsOverTime() => CurrentRoomTime > MAX_ROOM_TIME;
         }

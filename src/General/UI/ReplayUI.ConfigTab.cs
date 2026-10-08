@@ -29,10 +29,6 @@ namespace ReplayTimerMod
             _copyAllCfgLbl = null;
             _copyAllCfgBg = null;
             _clearAllPending = false;
-            _warpToggleLbl = null;
-            _warpToggleBg = null;
-            _camFollowToggleLbl = null;
-            _camFollowToggleBg = null;
         }
 
         private void BuildConfigContent()
@@ -192,42 +188,6 @@ namespace ReplayTimerMod
                 UIStyle.W(8), dataY, UIStyle.W(100), dataBtnH, OnClearAllClicked);
             _clearAllCfgBg = br.bg;
             _clearAllCfgLbl = br.label;
-
-            AddSectionSeparator(_rightContent);
-
-            AddSectionHeader(_rightContent, "Experimental");
-
-            var warpRow = AddConfigRow(_rightContent, "Room warp", rowH, labelW);
-            br = MakeButton(warpRow.transform, "RoomWarpToggle", "OFF",
-                UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
-                labelW, (rowH - btnH) / 2, toggleW, btnH, OnRoomWarpToggle);
-            _warpToggleBg = br.bg;
-            _warpToggleLbl = br.label;
-
-            var warpHintRow = MakeGO("RoomWarpHint", _rightContent);
-            Img(warpHintRow, Color.clear);
-            var warpHintLE = warpHintRow.AddComponent<LayoutElement>();
-            warpHintLE.minHeight = warpHintLE.preferredHeight = UIStyle.H(16);
-            MakeLbl(warpHintRow.transform,
-                "Adds Warp buttons to route headers.",
-                UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
-                x: UIStyle.W(8), w: UIStyle.W(320), h: UIStyle.H(16));
-
-            var camFollowRow = AddConfigRow(_rightContent, "Camera follow", rowH, labelW);
-            br = MakeButton(camFollowRow.transform, "CameraFollowToggle", "OFF",
-                UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
-                labelW, (rowH - btnH) / 2, toggleW, btnH, OnCameraFollowFeatureToggle);
-            _camFollowToggleBg = br.bg;
-            _camFollowToggleLbl = br.label;
-
-            var camFollowHintRow = MakeGO("CameraFollowHint", _rightContent);
-            Img(camFollowHintRow, Color.clear);
-            var camFollowHintLE = camFollowHintRow.AddComponent<LayoutElement>();
-            camFollowHintLE.minHeight = camFollowHintLE.preferredHeight = UIStyle.H(16);
-            MakeLbl(camFollowHintRow.transform,
-                "Adds camera buttons to runs; the camera tracks that ghost.",
-                UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
-                x: UIStyle.W(8), w: UIStyle.W(320), h: UIStyle.H(16));
         }
 
         private void RefreshConfigValues()
@@ -265,9 +225,6 @@ namespace ReplayTimerMod
             StyleToggle(_skipTimerToggleLbl, _skipTimerToggleBg, GhostSettings.SkipBacktrackTimer);
 
             RefreshGhostColorChip();
-
-            StyleToggle(_warpToggleLbl, _warpToggleBg, GhostSettings.RoomWarpEnabled);
-            StyleToggle(_camFollowToggleLbl, _camFollowToggleBg, GhostSettings.CameraFollowEnabled);
         }
 
         /// <summary>

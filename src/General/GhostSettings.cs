@@ -23,9 +23,6 @@ namespace ReplayTimerMod
         public bool  ChainRoomTimers         = false;
         public bool  SkipBacktrackRuns       = false;
         public bool  SkipBacktrackTimer      = false;
-        // Experimental features (Config > Experimental).
-        public bool RoomWarpEnabled = false;
-        public bool CameraFollowEnabled = false;
     }
 
     public static class GhostSettings
@@ -128,27 +125,6 @@ namespace ReplayTimerMod
         {
             get => _d.SkipBacktrackTimer;
             set { _d.SkipBacktrackTimer = value; Save(); }
-        }
-
-        /// <summary>
-        /// Experimental: room warping. When false (the default) the warp
-        /// buttons are hidden everywhere and warping is unavailable.
-        /// </summary>
-        public static bool RoomWarpEnabled
-        {
-            get => _d.RoomWarpEnabled;
-            set { _d.RoomWarpEnabled = value; Save(); }
-        }
-
-        /// <summary>
-        /// Experimental: camera follow. When false (the default) the camera
-        /// buttons in the Runs tab are hidden and the camera never leaves
-        /// the player.
-        /// </summary>
-        public static bool CameraFollowEnabled
-        {
-            get => _d.CameraFollowEnabled;
-            set { _d.CameraFollowEnabled = value; Save(); }
         }
 
         // ── Init ─────────────────────────────────────────────────────────────
