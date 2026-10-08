@@ -1,8 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- 
-  Imports silksong path properties only if present in order to allow CI builds. The file should be gitignored.
-  If you are checking out from git and need to create a new one, you can use `dotnet new silksongpath` to generate one.
-  -->
   <Import Condition="Exists('..\..\.config\local\SilksongPath.props')" Project="..\..\.config\local\SilksongPath.props" />
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
@@ -13,10 +9,8 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableNETAnalyzers>True</EnableNETAnalyzers>
     <AnalysisMode>recommended</AnalysisMode>
-    <!-- Ignore warning about processor architecture mismatch with PlayMaker ConditionalExpression -->
     <NoWarn>$(NoWarn);MSB3270</NoWarn>
 
-    <!-- Shortens and anonymizes paths in debug symbols relative to the project directory. Breakpoints will not work, however. -->
     <PathMap Condition="'$(Configuration)' == 'Release'">$(MSBuildProjectDirectory)=/</PathMap>
 
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -47,8 +41,6 @@
       <EmbeddedResource Include="..\..\Resources\ss_transitions.json" />
   </ItemGroup>
 
-  <!-- Local-install copy + Thunderstore packaging. CI passes
-       /p:SkipModPackaging=true to compile without tcli/network. -->
   <Target Name="CopyAndPackageMod" AfterTargets="PostBuildEvent"
           Condition="'$(SkipModPackaging)' != 'true'">
     <ItemGroup>
@@ -59,10 +51,8 @@
       <ThunderstoreDir>$(MSBuildProjectDirectory)\..\..\thunderstore</ThunderstoreDir>
     </PropertyGroup>
 
-    <!-- Local install -->
     <Copy SourceFiles="@(Binaries)" DestinationFolder="$(SilksongPluginsFolder)/$(AssemblyTitle)/%(Binaries.LocalDir)" Condition="'$(SilksongPluginsFolder)' != '' And Exists('$(SilksongPluginsFolder)')" />
 
-    <!-- Thunderstore packaging -->
     <RemoveDir Directories="$(ThunderstoreDir)/temp;$(ThunderstoreDir)/dist" />
     <MakeDir Directories="$(ThunderstoreDir)/temp" />
     <Copy SourceFiles="@(Binaries)" DestinationFolder="$(ThunderstoreDir)/temp/%(Binaries.PackDir)" />

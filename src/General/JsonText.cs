@@ -3,19 +3,8 @@ using System.Text;
 
 namespace ReplayTimerMod
 {
-    /// <summary>
-    /// Shared JSON string primitives. The mod's hand-rolled JSON writers and
-    /// readers (on-disk data in <see cref="MiniJson"/>) must work on net35;
-    /// string escaping and the ref-int string/whitespace readers live here
-    /// once instead of being copy-pasted per file. (MiniJson's stateful
-    /// parser is the deliberate exception.)
-    /// </summary>
     internal static class JsonText
     {
-        /// <summary>
-        /// Appends <paramref name="s"/> as a quoted, escaped JSON string. A null
-        /// value is written as the literal <c>null</c> (no quotes).
-        /// </summary>
         public static void AppendQuoted(StringBuilder sb, string? s)
         {
             if (s == null) { sb.Append("null"); return; }
@@ -24,10 +13,6 @@ namespace ReplayTimerMod
             sb.Append('"');
         }
 
-        /// <summary>
-        /// Escapes <paramref name="s"/> for use inside a JSON string, without the
-        /// surrounding quotes. Null/empty yields an empty string.
-        /// </summary>
         public static string Escape(string? s)
         {
             if (string.IsNullOrEmpty(s)) return s ?? "";
@@ -36,21 +21,12 @@ namespace ReplayTimerMod
             return sb.ToString();
         }
 
-        /// <summary>
-        /// Reads a quoted JSON string starting at <paramref name="i"/> and
-        /// advances the cursor past the closing quote. Returns "" if the
-        /// cursor is not on an opening quote.
-        /// </summary>
         public static string ReadString(string json, ref int i)
         {
             if (i >= json.Length || json[i] != '"')
                 return "";
             i++;
 
-            // Fast path: the vast majority of fields (scene names, run ids,
-            // most display names) contain no escape sequences, so scan to the
-            // closing quote and slice once — no StringBuilder, no per-char
-            // copy. Only fall back to the escape-aware path when a '\' appears.
             int start = i;
             while (i < json.Length)
             {
@@ -61,14 +37,12 @@ namespace ReplayTimerMod
                     i++;
                     return s;
                 }
-                if (c == '\\') break; // contains an escape — slow path below
+                if (c == '\\') break;
                 i++;
             }
             if (i >= json.Length)
-                return json.Substring(start, i - start); // unterminated
+                return json.Substring(start, i - start);
 
-            // Slow path: seed the builder with the prefix already scanned, then
-            // decode escapes for the remainder.
             var sb = new StringBuilder(json, start, i - start, (i - start) + 16);
             while (i < json.Length)
             {
@@ -105,7 +79,6 @@ namespace ReplayTimerMod
             return sb.ToString();
         }
 
-        /// <summary>Advances the cursor past any JSON whitespace.</summary>
         public static void SkipWs(string json, ref int i)
         {
             while (i < json.Length && (json[i] == ' ' || json[i] == '\t'

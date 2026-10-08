@@ -27,12 +27,10 @@ namespace ReplayTimerMod
 
         private RoomTimerHUD? _timerHud;
 
-        // Panel structure (persistent, never rebuilt)
         private GameObject _canvasGO = null!;
         private GameObject _tabGO = null!;
         private GameObject _panelGO = null!;
 
-        // Left panel
         private Transform _sceneListContent = null!;
         private ScrollRect _sceneListScroll = null!;
         private Text? _jumpCurrentLbl;
@@ -40,22 +38,17 @@ namespace ReplayTimerMod
         private Text? _jumpPreviousLbl;
         private Image? _jumpPreviousBg;
 
-        // Right panel - tab bar
         private readonly Dictionary<TabKind, ButtonRef> _tabButtons =
             new Dictionary<TabKind, ButtonRef>();
 
-        // Right panel - sub-header
         private Text? _rightHeaderLbl;
         private Text? _pasteStatusLbl;
         private GameObject? _runsActionButtons;
         private Text? _sceneClearLbl;
         private Image? _sceneClearBg;
 
-        // Right panel - content area (cleared and rebuilt per tab/selection)
         private Transform? _rightContent;
 
-        // Lazily-resolved ScrollRect that owns _rightContent
-        // (_rightContent is Content under Viewport under the ScrollRect GO)
         private ScrollRect? _rightScroll;
         private ScrollRect? RightScroll
         {
@@ -67,7 +60,6 @@ namespace ReplayTimerMod
             }
         }
 
-        // Config tab references (only valid when config tab is active)
         private Text? _ghostToggleLbl;
         private Image? _ghostToggleBg;
         private Text? _trackingToggleLbl;
@@ -81,6 +73,8 @@ namespace ReplayTimerMod
         private Image? _chainToggleBg;
         private Text? _skipRunsToggleLbl;
         private Image? _skipRunsToggleBg;
+        private Text? _cheatCancelToggleLbl;
+        private Image? _cheatCancelToggleBg;
         private Text? _skipTimerToggleLbl;
         private Image? _skipTimerToggleBg;
         private Image? _cfgGhostColorFill;
@@ -90,10 +84,8 @@ namespace ReplayTimerMod
         private Text? _copyAllCfgLbl;
         private Image? _copyAllCfgBg;
 
-        // Layout dimensions (computed once in Setup)
         private int PW, PH, LW, RW, M, RH;
 
-        // Last-built view, for deciding whether to preserve scroll position
         private TabKind _lastContentTab = (TabKind)(-1);
         private string? _lastContentScene;
 
@@ -131,10 +123,6 @@ namespace ReplayTimerMod
         {
             if (!_isSetup) return;
 
-            // The host game destroyed the canvas (HK 1221's additive scene
-            // unload can do this despite DontDestroyOnLoad). Rebuild the
-            // whole panel; Setup() recreates every GameObject reference and
-            // BuildTabBar clears/refills _tabButtons.
             if (_canvasGO == null)
             {
                 Log.LogWarning("[ReplayUI] Canvas was destroyed externally - rebuilding");
@@ -146,7 +134,7 @@ namespace ReplayTimerMod
                 _lastContentScene = null;
                 ClearConfigRefs();
                 Setup();
-                if (_canvasGO == null) return; // Setup always assigns
+                if (_canvasGO == null) return;
             }
 
             bool paused = GameUiState.IsPaused();
@@ -166,7 +154,7 @@ namespace ReplayTimerMod
                 _canvasGO.SetActive(false);
                 ResetClearAllConfirm();
                 ClosePicker();
-                GhostSettings.Flush(); // write any throttled color/alpha change
+                GhostSettings.Flush();
                 _wasPaused = false;
                 return;
             }
@@ -184,10 +172,6 @@ namespace ReplayTimerMod
             TickTooltip();
         }
 
-        /// <summary>
-        /// Public entry point to refresh the config tab toggle states.
-        /// Called by mod entry point after programmatic state changes.
-        /// </summary>
         public void RefreshConfigTab()
         {
             if (_activeTab == TabKind.Config)
@@ -195,8 +179,6 @@ namespace ReplayTimerMod
         }
 
         public void OnPBUpdated() => _rebuildPending = true;
-
-        // ── Panel & tab management ─────────────────────────────────────
 
         private void TogglePanel()
         {
@@ -258,12 +240,9 @@ namespace ReplayTimerMod
             if (_runsActionButtons != null)
                 _runsActionButtons.SetActive(_activeTab == TabKind.Runs);
 
-            // A pending scene-Clear confirm doesn't survive tab/scene changes
             ResetSceneClearConfirm();
         }
 
-        /// <summary>Reverts the sub-header Clear button from its "Sure?"
-        /// confirm state back to idle.</summary>
         private void ResetSceneClearConfirm()
         {
             _sceneClearPending = false;
@@ -288,14 +267,9 @@ namespace ReplayTimerMod
         {
             if (_rightContent == null) return;
 
-            // Preserve scroll position only when rebuilding the SAME view
-            // (same tab + same scene). Tab/scene switches reset to top.
-            // Pixel offset, not normalized fraction - same-view rebuilds can
-            // change the content height (snapshot deleted, confirm row armed)
-            // and the same fraction of a different height drifts.
             bool sameView = _activeTab == _lastContentTab
                 && _selectedScene == _lastContentScene;
-            float keepOffset = 0f; // pixels from the top
+            float keepOffset = 0f;
             var scroll = RightScroll;
             if (sameView && scroll != null)
                 keepOffset = ScrollOffsetFromTop(scroll);
@@ -326,7 +300,7 @@ namespace ReplayTimerMod
                 if (sameView)
                     RestoreScrollOffsetFromTop(scroll, keepOffset);
                 else
-                    scroll.verticalNormalizedPosition = 1f; // top
+                    scroll.verticalNormalizedPosition = 1f;
             }
 
             _lastContentTab = _activeTab;
@@ -358,12 +332,6 @@ namespace ReplayTimerMod
             }
         }
 
-        /// <summary>
-        /// Clears children, detaching them from the parent BEFORE the
-        /// (deferred) Destroy so the layout group doesn't see destroyed-but-
-        /// pending children for a frame. Eliminates the one-frame visual
-        /// jump on rebuilds.
-        /// </summary>
         private static void ClearContentDetached(Transform t)
         {
             for (int i = t.childCount - 1; i >= 0; i--)

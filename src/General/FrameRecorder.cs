@@ -3,9 +3,6 @@ using UnityEngine;
 
 namespace ReplayTimerMod
 {
-    // Records Hornet's position at a fixed LR-time rate of RECORD_FPS,
-    // regardless of actual frame rate. At 200fps actual, we still only
-    // store 30 frames per second of gameplay - 1800 max for a 60s run.
     public class FrameRecorder
     {
         public const float RECORD_FPS = 30f;
@@ -22,7 +19,6 @@ namespace ReplayTimerMod
             _frames.Clear();
             _recording = true;
             _cachedAnim = null;
-            // Pre-fill the accumulator so the very first Tick() captures a frame immediately
             _accumulatedTime = RECORD_INTERVAL;
         }
 
@@ -51,24 +47,15 @@ namespace ReplayTimerMod
             return result;
         }
 
-        // Called every LateUpdate if LoadRemover.ShouldTick()
         public void Tick(bool shouldTick)
         {
             if (!_recording) return;
             if (HeroController.instance == null) return;
             if (!shouldTick) return;
 
-            // Use Time.deltaTime (scaled) to match the playback cursor
             _accumulatedTime += Time.deltaTime;
             if (_accumulatedTime < RECORD_INTERVAL) return;
 
-            // Drain EVERY whole interval, not just one. Below RECORD_FPS a
-            // single capture per game frame would let the accumulator grow
-            // without bound: frame i would no longer mean time i/RECORD_FPS,
-            // the ghost would replay faster than real time, and the recorded
-            // frame count would drift from TotalTime (which the server
-            // cross-checks). Duplicating the current sample is correct - the
-            // player really was here for that whole stretch of time.
             bool facingRight = HeroController.instance.transform.localScale.x > 0f;
             Vector3 pos = HeroController.instance.transform.position;
 
@@ -86,7 +73,6 @@ namespace ReplayTimerMod
                 }
                 else
                 {
-                    // Some states swap sprite/animator ownership; re-resolve when clip is missing.
                     _cachedAnim = ResolveHeroAnimator();
                     if (_cachedAnim?.CurrentClip != null)
                     {
@@ -95,7 +81,7 @@ namespace ReplayTimerMod
                     }
                 }
             }
-            catch { _cachedAnim = null; } // animator was torn down mid-read; re-resolve next tick
+            catch { _cachedAnim = null; }
 
             while (_accumulatedTime >= RECORD_INTERVAL)
             {
@@ -119,7 +105,6 @@ namespace ReplayTimerMod
             var hero = HeroController.instance;
             if (hero == null) return null;
 
-            // Prefer animator on the same GO as the visible hero sprite.
             var heroSprite = hero.GetComponent<tk2dSprite>()
                           ?? hero.GetComponentInChildren<tk2dSprite>();
 

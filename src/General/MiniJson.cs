@@ -5,13 +5,8 @@ using System.Text;
 
 namespace ReplayTimerMod
 {
-    /// <summary>
-    /// Hand-rolled JSON for DataStore's on-disk scene indexes (net35-safe).
-    /// </summary>
     internal static class MiniJson
     {
-        // ── Public API ────────────────────────────────────────────────────────
-
         public static string Serialize(SceneIndex idx)
         {
             var sb = new StringBuilder();
@@ -62,8 +57,6 @@ namespace ReplayTimerMod
             return idx;
         }
 
-        // ── Private helpers ───────────────────────────────────────────────────
-
         private static void SerializeEntry(StringBuilder sb, EntryIndex e)
         {
             sb.Append("{\"snapshotId\":");
@@ -88,6 +81,8 @@ namespace ReplayTimerMod
             sb.Append(e.colorB.ToString("R", CultureInfo.InvariantCulture));
             sb.Append(",\"alpha\":");
             sb.Append(e.alpha.ToString("R", CultureInfo.InvariantCulture));
+            sb.Append(",\"usedCheats\":");
+            sb.Append(e.usedCheats ? "true" : "false");
             sb.Append(",\"data\":");
             AppendString(sb, e.data);
             sb.Append('}');
@@ -123,6 +118,7 @@ namespace ReplayTimerMod
                     case "colorG":         e.colorG         = p.ReadFloat();  break;
                     case "colorB":         e.colorB         = p.ReadFloat();  break;
                     case "alpha":          e.alpha          = p.ReadFloat();  break;
+                    case "usedCheats":     e.usedCheats     = p.ReadBool();   break;
                     case "data":           e.data           = p.ReadString(); break;
                     default:               p.SkipValue();                     break;
                 }
@@ -130,8 +126,6 @@ namespace ReplayTimerMod
 
             return e;
         }
-
-        // ── Recursive-descent parser ──────────────────────────────────────────
 
         private sealed class Parser
         {
@@ -220,11 +214,10 @@ namespace ReplayTimerMod
             {
                 SkipWs();
                 bool value = Peek() == 't';
-                SkipValue(); // consume the true/false literal
+                SkipValue();
                 return value;
             }
 
-            /// Skips any JSON value without interpreting it (forward-compat).
             public void SkipValue()
             {
                 SkipWs();
@@ -252,7 +245,6 @@ namespace ReplayTimerMod
                     }
                     return;
                 }
-                // number or literal (true / false / null)
                 while (_pos < _s.Length)
                 {
                     char ch = _s[_pos];

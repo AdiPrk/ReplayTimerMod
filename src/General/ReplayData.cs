@@ -9,14 +9,10 @@ namespace ReplayTimerMod
         public float y;
         public bool facingRight;
 
-        // Animation state - populated at record time, empty string when unavailable.
-        public string animClip;   // tk2dSpriteAnimationClip.name
-        public int animFrame;     // integer frame index within that clip
+        public string animClip;
+        public int animFrame;
     }
 
-    // Uniquely identifies a route through a room.
-    // EntryFromScene (not gate name) is the entry discriminator - the same gate
-    // name can appear on both sides of a boundary, but the source scene is unique.
     public readonly struct RoomKey
     {
         public readonly string SceneName;
@@ -56,25 +52,15 @@ namespace ReplayTimerMod
     {
         public static string Format(float t)
         {
-            // Truncate to centiseconds (never round a timer up past the real
-            // time). FormatDelta below truncates the same way so a time and
-            // its delta can't disagree by 0.01.
             int cs = (int)(t * 100) % 100;
             int s = (int)t % 60;
             int min = (int)t / 60;
             return $"{min}:{s:00}.{cs:00}";
         }
 
-        /// <summary>
-        /// Formats a signed time delta as "+m:ss.cc" / "+s.cc" (the minute part
-        /// is omitted under a minute); negative deltas use "-". When
-        /// <paramref name="padSeconds"/> is true the sub-minute seconds field is
-        /// zero-padded ("+05.30" instead of "+5.30").
-        /// </summary>
         public static string FormatDelta(float seconds, bool padSeconds = false)
         {
             string sign = seconds >= 0f ? "+" : "-";
-            // Truncate like Format above - one rounding rule everywhere.
             int cs = (int)(Mathf.Abs(seconds) * 100f);
             int min = cs / 6000;
             int sec = (cs / 100) % 60;
@@ -118,10 +104,13 @@ namespace ReplayTimerMod
         public float Alpha { get; }
         public Color OverrideColor => new Color(ColorR, ColorG, ColorB, Alpha);
 
+        public bool UsedCheats { get; }
+
         public ReplaySnapshot(string snapshotId, long capturedAtUtcTicks,
             RecordedRoom room, string? encodedData = null,
             bool hasVisualOverride = false,
-            float colorR = 1f, float colorG = 1f, float colorB = 1f, float alpha = 0.4f)
+            float colorR = 1f, float colorG = 1f, float colorB = 1f, float alpha = 0.4f,
+            bool usedCheats = false)
         {
             SnapshotId = string.IsNullOrEmpty(snapshotId)
                 ? System.Guid.NewGuid().ToString("N")
@@ -134,6 +123,7 @@ namespace ReplayTimerMod
             ColorG = Mathf.Clamp01(colorG);
             ColorB = Mathf.Clamp01(colorB);
             Alpha = Mathf.Clamp01(alpha);
+            UsedCheats = usedCheats;
         }
 
         public Color ResolveGhostColor(Color globalColor) =>
@@ -151,15 +141,18 @@ namespace ReplayTimerMod
                 color.r,
                 color.g,
                 color.b,
-                color.a);
+                color.a,
+                UsedCheats);
 
         public static ReplaySnapshot CreateNew(RecordedRoom room,
-            string? encodedData = null, long? capturedAtUtcTicks = null) =>
+            string? encodedData = null, long? capturedAtUtcTicks = null,
+            bool usedCheats = false) =>
             new ReplaySnapshot(
                 System.Guid.NewGuid().ToString("N"),
                 capturedAtUtcTicks ?? System.DateTime.UtcNow.Ticks,
                 room,
-                encodedData);
+                encodedData,
+                usedCheats: usedCheats);
     }
 
     public sealed class RouteReplayHistory

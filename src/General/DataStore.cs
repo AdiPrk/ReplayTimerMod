@@ -5,15 +5,6 @@ using BepInEx.Logging;
 
 namespace ReplayTimerMod
 {
-    // Persists replays to disk, one JSON file per scene.
-    //
-    // File layout: <_dataDirectory>/<sceneName>.json
-    // JSON: { "entries": [ { snapshotId, capturedAtUtcTicks, sceneName,
-    //                         entryFromScene, exitToScene, totalTime, data }, ... ] }
-    //
-    // "data" is an RTM3 string - identical to what [Copy] puts on the clipboard.
-    // Loading or saving a replay goes through ReplayShareEncoder exclusively.
-
     [Serializable]
     internal class SceneIndex
     {
@@ -29,12 +20,13 @@ namespace ReplayTimerMod
         public string entryFromScene = "";
         public string exitToScene = "";
         public float totalTime = 0f;
-        public string data = "";   // RTM3 string
+        public string data = "";
         public bool hasVisualOverride = false;
         public float colorR = 1f;
         public float colorG = 1f;
         public float colorB = 1f;
         public float alpha = 0.4f;
+        public bool usedCheats = false;
     }
 
     public static class DataStore
@@ -43,8 +35,6 @@ namespace ReplayTimerMod
             BepInEx.Logging.Logger.CreateLogSource("DataStore");
 
         private static string _dataDirectory = "";
-
-        // ── Init ──────────────────────────────────────────────────────────────
 
         public static void Init(string baseDirectory)
         {
@@ -55,8 +45,6 @@ namespace ReplayTimerMod
             MigrateFromLegacy();
         }
 
-        // Moves replays from the pre-1.0 data location (which differed per game)
-        // into the current directory, never overwriting newer files.
         private static void MigrateFromLegacy()
         {
             try
@@ -76,7 +64,7 @@ namespace ReplayTimerMod
                 foreach (string src in files)
                 {
                     string dest = Path.Combine(_dataDirectory, Path.GetFileName(src));
-                    if (File.Exists(dest)) continue;  // never overwrite newer data
+                    if (File.Exists(dest)) continue;
                     File.Move(src, dest);
                     moved++;
                 }
@@ -91,16 +79,12 @@ namespace ReplayTimerMod
         }
 
 #if SILKSONG_BUILD
-        // Old Silksong path: <AssemblyDir>/../../data/ReplayMod
         private static string LegacyDataDirectory(string assemblyDir) =>
             Path.Combine(assemblyDir, "..", "..", "data", "ReplayMod");
 #else
-        // Old Hollow Knight path: <AssemblyDir>/ReplayMod
         private static string LegacyDataDirectory(string assemblyDir) =>
             Path.Combine(assemblyDir, "ReplayMod");
 #endif
-
-        // ── Index I/O ─────────────────────────────────────────────────────────
 
         private static string FilePath(string sceneName) =>
             Path.Combine(_dataDirectory, $"{sceneName}.json");
@@ -195,10 +179,9 @@ namespace ReplayTimerMod
                 colorR = snapshot.ColorR,
                 colorG = snapshot.ColorG,
                 colorB = snapshot.ColorB,
-                alpha = snapshot.Alpha
+                alpha = snapshot.Alpha,
+                usedCheats = snapshot.UsedCheats
             };
-
-        // ── Public API ────────────────────────────────────────────────────────
 
         public static void SaveSnapshot(ReplaySnapshot snapshot)
         {
@@ -358,7 +341,8 @@ namespace ReplayTimerMod
                             entry.colorR,
                             entry.colorG,
                             entry.colorB,
-                            entry.alpha));
+                            entry.alpha,
+                            entry.usedCheats));
                     }
                     catch (Exception ex)
                     {

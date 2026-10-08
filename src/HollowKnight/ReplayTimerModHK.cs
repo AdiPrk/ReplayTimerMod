@@ -68,10 +68,6 @@ namespace ReplayTimerMod
             try { shouldTick = LoadRemover.ShouldTick(); }
             catch (Exception ex) { LogTickError("LoadRemover", ex); }
 
-            // Each subsystem ticks in its own guard so one failure can't
-            // take the whole mod down for the rest of the session (the old
-            // Modding API logs the exception but everything after the throw
-            // is skipped, every frame). Mirrored in ReplayTimerModSS.
             try { RoomTracker.Tick(shouldTick); } catch (Exception ex) { LogTickError("RoomTracker", ex); }
             try { frameRecorder.Tick(shouldTick); } catch (Exception ex) { LogTickError("FrameRecorder", ex); }
             try { ghostPlayback.Tick(shouldTick); } catch (Exception ex) { LogTickError("GhostPlayback", ex); }
@@ -79,8 +75,6 @@ namespace ReplayTimerMod
             try { roomTimerHUD.Tick(shouldTick); } catch (Exception ex) { LogTickError("RoomTimerHUD", ex); }
         }
 
-        // Throttled per-subsystem error log so a persistent per-frame fault
-        // doesn't flood ModLog.txt.
         private readonly Dictionary<string, float> _lastTickErrorLog =
             new Dictionary<string, float>();
 
@@ -104,10 +98,6 @@ namespace ReplayTimerMod
             replayUI.Setup();
             roomTimerHUD.Setup();
         }
-
-        // No teardown counterpart to ReplayTimerModSS.OnDestroy on purpose:
-        // Modding API mods are never unloaded mid-session, and the Modding
-        // API has no unload hook to attach one to.
     }
 }
 #endif

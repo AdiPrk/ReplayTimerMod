@@ -5,13 +5,7 @@ using System.Reflection;
 
 namespace ReplayTimerMod
 {
-    // Ported directly from TimerMod's LoadRemover.
-    // Determines whether the in-game clock should be ticking.
-    // All the edge-case logic (teleport from menu, cutscenes, hero transition
-    // state, etc.) is preserved exactly as-is. The reflection helpers below
-    // (added for cross-version member-name drift) cache their MemberInfo
-    // handles - ShouldTick runs every frame, so per-call GetProperty/GetField
-    // lookups would allocate and scan constantly.
+    // Ported from TimerMod's LoadRemover.
     public static class LoadRemover
     {
         private const BindingFlags AnyInstance =
@@ -20,7 +14,6 @@ namespace ReplayTimerMod
         private static GameState prevGameState = GameState.PLAYING;
         private static bool lookForTele = false;
 
-        // Cached reflection handles (resolved once per member, then reused).
         private static bool gameStateResolved;
         private static PropertyInfo? gameStateProp;
         private static FieldInfo? gameStateField;
@@ -36,7 +29,6 @@ namespace ReplayTimerMod
         public static bool ShouldTick()
         {
             var gm = GameManager.instance;
-            // Early boot: the managers may not exist yet - the timer is gated.
             if (gm == null || gm.ui == null || gm.inputHandler == null)
                 return false;
 
@@ -148,12 +140,10 @@ namespace ReplayTimerMod
                 object? sceneLoad = sceneLoadProp != null
                     ? sceneLoadProp.GetValue(gm, null)
                     : sceneLoadField?.GetValue(gm);
-                if (sceneLoad == null) return false; // no load in progress
+                if (sceneLoad == null) return false;
 
                 if (!activationResolved)
                 {
-                    // sceneLoad instances come and go per load but their type
-                    // is stable, so the member handle is resolved only once.
                     activationResolved = true;
                     var slt = sceneLoad.GetType();
                     foreach (string name in new[] { "IsActivationAllowed", "isActivationAllowed" })

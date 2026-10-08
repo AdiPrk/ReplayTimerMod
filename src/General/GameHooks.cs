@@ -17,7 +17,6 @@ namespace ReplayTimerMod
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("GameHooks");
 
-        // ── Death ─────────────────────────────────────────────────────────────
         public static event Action? OnPlayerDead;
         private static bool _pendingDeath = false;
 
@@ -30,25 +29,6 @@ namespace ReplayTimerMod
             OnPlayerDead?.Invoke();
         }
 
-        // ── Gate transitions ──────────────────────────────────────────────────
-        // Fired for ALL BeginSceneTransition calls except death respawns.
-        // This includes regular gate transitions (which use subclasses of
-        // SceneLoadInfo), vanilla spawns (which use the base class), AND
-        // savestate loads (which also use a subclass - DebugMod always calls
-        // BeginSceneTransition while restoring a savestate, even for same-room
-        // loads where the destination scene is identical to the current one).
-        //
-        // Savestate loads are primarily handled in RoomTracker.Tick(), which
-        // polls DebugModBridge.IsLoadingSavestate every frame and invalidates
-        // on true/false transitions - this catches same-room and cross-room
-        // loads alike, for both Silksong.DebugMod and HollowKnight.DebugMod
-        // (the latter has no BeforeLoad/AfterLoad events to hook).
-        // RoomTracker.OnActiveSceneChanged also re-checks IsLoadingSavestate
-        // as a defensive fallback right at scene-change time, clearing
-        // pendingGateTransition again before it can start a recording for the
-        // restored room.
-        //
-        // Vanilla spawns (from.name == Menu_Title) are filtered in RoomTracker.
         public static event Action<string, string>? OnGateTransitionBegin;
 
         [HarmonyPatch(typeof(GameManager), nameof(GameManager.BeginSceneTransition))]
@@ -94,7 +74,7 @@ namespace ReplayTimerMod
 #else
             On.GameManager.PlayerDead += GameManager_PlayerDead;
             On.GameManager.BeginSceneTransition += GameManager_BeginSceneTransition;
-#endif // v1221
+#endif
 
             Log.LogInfo("[GameHooks] ModHooks installed");
         }
@@ -117,7 +97,7 @@ namespace ReplayTimerMod
             OnPlayerDead?.Invoke();
             return orig(self, waitTime);
         }
-#endif // v1221
+#endif
 
 #if V1221
         private static string GameManager_BeginSceneTransition(string target)
@@ -171,10 +151,10 @@ namespace ReplayTimerMod
 
             orig(self, info);
         }
-#endif // v1221
+#endif
     }
 
-#endif // SILKSONG_BUILD
+#endif
 
     internal static class ReflectionStringMemberReader
     {
@@ -204,5 +184,4 @@ namespace ReplayTimerMod
             return "";
         }
     }
-
 }

@@ -6,8 +6,6 @@ namespace ReplayTimerMod
 {
     public partial class ReplayUI
     {
-        // -- Config tab: Copy all (to clipboard) --
-
         private void OnCopyAllClicked()
         {
             var all = PBManager.AllPBs().Select(p => p.Value).ToList();
@@ -20,8 +18,6 @@ namespace ReplayTimerMod
             ShowButtonFeedback(_copyAllCfgLbl, all.Count + " copied", UIStyle.Accent);
             Log.LogInfo($"[ReplayUI] Copied {all.Count} replays to clipboard");
         }
-
-        // -- Config tab: Export all (save to disk) --
 
         private void OnExportAllClicked()
         {
@@ -60,8 +56,6 @@ namespace ReplayTimerMod
                 System.Diagnostics.Process.Start(dir);
         }
 
-        // -- Config tab: Clear all (two-click confirm) --
-
         private void OnClearAllClicked()
         {
             if (!_clearAllPending)
@@ -79,8 +73,6 @@ namespace ReplayTimerMod
             Log.LogInfo("[ReplayUI] All replays cleared");
         }
 
-        /// <summary>Reverts every transient button state (confirm arms and
-        /// feedback flashes) back to idle. Called on unpause.</summary>
         private void ResetClearAllConfirm()
         {
             _clearAllPending = false;
@@ -89,9 +81,6 @@ namespace ReplayTimerMod
             ShowButtonFeedback(_copyAllCfgLbl, "Copy all", UIStyle.Accent);
             if (_copyAllCfgBg != null) _copyAllCfgBg.color = UIStyle.BtnBg(UIStyle.Accent);
 
-            // The jump buttons live in the persistent left footer (never
-            // rebuilt), so their "No PB"/"Not in a room" feedback would
-            // otherwise stick across close/reopen forever.
             ResetJumpFeedback();
             ResetJumpLastFeedback();
         }
@@ -100,8 +89,6 @@ namespace ReplayTimerMod
         {
             if (label != null) { label.text = msg; label.color = color; }
         }
-
-        // -- Scene-level actions --
 
         private void OnExportSceneClicked()
         {
@@ -128,8 +115,6 @@ namespace ReplayTimerMod
         {
             if (_selectedScene == null) return;
 
-            // Two-click confirm: deleting every run in the room is too
-            // destructive for a single click.
             if (!_sceneClearPending)
             {
                 _sceneClearPending = true;
@@ -148,8 +133,6 @@ namespace ReplayTimerMod
             RebuildSceneList();
             ResetSceneClearConfirm();
         }
-
-        // -- Paste --
 
         private void OnPasteClicked()
         {
@@ -214,8 +197,6 @@ namespace ReplayTimerMod
             }
         }
 
-        // -- Snapshot actions --
-
         private void CopyReplay(RoomKey key, string snapshotId)
         {
             var snapshot = PBManager.GetSnapshot(key, snapshotId);
@@ -225,7 +206,6 @@ namespace ReplayTimerMod
                 return;
             }
 
-            // Copy the full self-contained blob.
             GUIUtility.systemCopyBuffer = snapshot.EncodedData;
             Log.LogInfo($"[ReplayUI] Copied full replay for {key}#{snapshotId}");
         }
@@ -247,11 +227,6 @@ namespace ReplayTimerMod
         }
 
 #if SILKSONG_BUILD
-        // -- Route warp --
-        // Warps to the previous room (EntryFromScene) at a door that leads
-        // into the run room, placing the player right before the transition
-        // that starts the run. The button only renders when CanWarp is true,
-        // so the null path here is just defensive.
 
         private void OnRouteWarpClicked(RoomKey key)
         {
@@ -267,13 +242,6 @@ namespace ReplayTimerMod
                 RebuildRunsContentOnly();
         }
 
-        /// <summary>
-        /// Camera-follow toggle for a run. Following implies
-        /// playback: engaging the slot also enables the run's ghost so
-        /// there is always something for the camera to track. Takes effect
-        /// immediately if that ghost is already playing, otherwise on the
-        /// next entry into its room.
-        /// </summary>
         private void OnCameraFollowClicked(RoomKey key, string snapshotId)
         {
             if (SelectionState == null)
@@ -284,8 +252,6 @@ namespace ReplayTimerMod
             if (_activeTab == TabKind.Runs && _selectedScene == key.SceneName)
                 RebuildRunsContentOnly();
         }
-
-        // -- Jump navigation --
 
         private void OnJumpToCurrentClicked()
         {
@@ -341,8 +307,6 @@ namespace ReplayTimerMod
             if (_jumpPreviousBg != null) _jumpPreviousBg.color = UIStyle.BtnBg(UIStyle.Accent);
         }
 
-        // -- Settings toggles --
-
         private void OnTrackingToggle()
         {
             GhostSettings.TrackingEnabled = !GhostSettings.TrackingEnabled;
@@ -389,6 +353,12 @@ namespace ReplayTimerMod
         private void OnSkipBacktrackRunsToggle()
         {
             GhostSettings.SkipBacktrackRuns = !GhostSettings.SkipBacktrackRuns;
+            if (_activeTab == TabKind.Config) RefreshConfigValues();
+        }
+
+        private void OnCheatCancelToggle()
+        {
+            GhostSettings.CancelRunOnCheats = !GhostSettings.CancelRunOnCheats;
             if (_activeTab == TabKind.Config) RefreshConfigValues();
         }
 

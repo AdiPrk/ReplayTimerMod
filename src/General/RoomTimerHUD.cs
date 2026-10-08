@@ -5,28 +5,6 @@ using UnityEngine.UI;
 
 namespace ReplayTimerMod
 {
-    // ─────────────────────────────────────────────────────────────────────────
-    // RoomTimerHUD – Per-room timer with PB comparison.
-    //
-    // Each room gets its own self-contained "card" (timer + delta + PB).
-    // At most two cards are alive at once:
-    //
-    //   * Base mode (GhostSettings.ChainRoomTimers == false):
-    //       One card in the left slot. Entering a new room resets it and starts
-    //       a fresh timer — so the display always reflects the current room and
-    //       never freezes on a finished time.
-    //
-    //   * Chained mode (GhostSettings.ChainRoomTimers == true):
-    //       When the next room starts, the just-finished card stays in the left
-    //       slot and a new running card drops in to its right. After RollDelay
-    //       seconds OR the next transition (whichever comes first) the left card
-    //       slides off to the left and the right card slides into the left slot,
-    //       freeing the right slot for the room after that. Rolls forever,
-    //       always bounded to two cards.
-    //
-    // Savestate loads / deaths / cheat-cancels (OnRecordingDiscarded) clear all
-    // cards and return to the "Ready" indicator.
-    // ─────────────────────────────────────────────────────────────────────────
     public class RoomTimerHUD
     {
         private static readonly ManualLogSource Log =
@@ -35,11 +13,8 @@ namespace ReplayTimerMod
         private const int MarginX = 8;
         private const int MarginY = 8;
 
-        // How long both cards stay side-by-side before the older one rolls off,
-        // when the next room hasn't already triggered the roll by transitioning.
         private const float RollDelay = 2.5f;
 
-        // ── Per-room card ────────────────────────────────────────────────────
         private enum CardState { Running, Finished }
 
         private sealed class TimerCard
@@ -50,61 +25,48 @@ namespace ReplayTimerMod
             public Text delta  = null!;
             public Text pbLbl  = null!;
             public Text pbTime = null!;
-            public Text status = null!;   // small tag, e.g. "not saved"
+            public Text status = null!;
 
             public CardState state;
 
-            // True  → display the live ticking timer (reads CurrentRoomTime).
-            // False → hold whatever finished content is shown (non-chaining
-            //         keeps the previous result on screen while the next room
-            //         is timed in the background).
             public bool liveDisplay;
 
-            // Identity of the room this card represents.
             public string scene     = "";
             public string entryFrom = "";
             public string exitTo    = "";
 
-            public float? entryPb;     // best (counting) PB at room entry
-            public float  finishTime;  // frozen time once finished
-            public float? deltaVal;    // finishTime - entryPb (null = first run)
+            public float? entryPb;
+            public float  finishTime;
+            public float? deltaVal;
             public bool   isNewPb;
-            public bool   counts;      // does this run count toward the PB highlight
-            public bool   notSaved;    // backtrack skipped from saving → show tag
+            public bool   counts;
+            public bool   notSaved;
 
-            // Slide animation (anchored X). targetX is the slot it's moving to.
             public float currentX;
             public float targetX;
-            public bool  slidingOut;   // true → destroy once fully off-screen left
+            public bool  slidingOut;
         }
 
-        // ── Card list / orchestration ────────────────────────────────────────
-        // _cards[0] is the leftmost (oldest) card; the last element is the
-        // newest. _live is the single Running card that reads CurrentRoomTime.
         private readonly List<TimerCard> _cards = new List<TimerCard>(2);
         private TimerCard? _live;
-        private bool  _rollPending;   // older card is waiting to roll out
+        private bool  _rollPending;
         private float _rollTimer;
 
-        // ── Layout (computed once in BuildCanvas) ────────────────────────────
         private int   _cardW, _cardH;
         private int   _slot0X, _slot1X, _offLeftX;
         private int   _marginY;
         private float _slideSpeed;
 
-        // Saved sizing so each card is built identically.
         private int _timerFontSz, _deltaFontSz, _pbFontSz;
         private int _timerRowH, _pbRowH, _rowGap;
         private int _timerW, _deltaW, _colGap, _pbLblW, _pbTimeW;
 
-        // ── Persistent UI ────────────────────────────────────────────────────
         private GameObject? _canvasGO;
         private GameObject? _readyGO;
         private Transform?  _cardParent;
 
         private bool _setup = false;
 
-        // ── Cancellation banner ──────────────────────────────────────────────
         private enum BannerState { Hidden, SlidingIn, Visible, SlidingOut }
         private BannerState _bannerState = BannerState.Hidden;
         private float _bannerHoldTimer = 0f;
@@ -120,7 +82,6 @@ namespace ReplayTimerMod
         private RectTransform? _bannerRt;
         private Text?          _bannerText;
 
-        // ── Lifecycle ─────────────────────────────────────────────────────────
         public void Disarm()
         {
             ClearAllCards();
@@ -157,14 +118,10 @@ namespace ReplayTimerMod
             _setup = false;
         }
 
-        // ── Frame update ──────────────────────────────────────────────────────
         public void Tick(bool shouldTick)
         {
             if (!_setup) return;
 
-            // The host game destroyed the canvas (HK 1221's additive scene
-            // unload can do this despite DontDestroyOnLoad). Rebuild it;
-            // the cards died with it, so drop their references too.
             if (_canvasGO == null)
             {
                 Log.LogWarning("[RoomTimerHUD] Canvas was destroyed externally - rebuilding");
@@ -175,19 +132,16 @@ namespace ReplayTimerMod
                 _bannerState = BannerState.Hidden;
                 BuildCanvas();
 
-                // If a room is being timed right now, restore its live card
-                // so the timer reappears instead of waiting for the next room.
                 if (RoomTracker.IsRecording && GhostSettings.TimerHudEnabled)
                     HandleRoomEnter(RoomTracker.CurrentScene, RoomTracker.EntryFromScene);
 
-                if (_canvasGO == null) return; // BuildCanvas always assigns
+                if (_canvasGO == null) return;
             }
 
             bool enabled      = GhostSettings.TimerHudEnabled;
             bool shouldShow   = enabled && !GameUiState.IsPaused();
             bool bannerActive = _bannerState != BannerState.Hidden;
 
-            // Disabled entirely: drop everything (banner may still finish).
             if (!enabled && _cards.Count > 0) ClearAllCards();
 
             if (!shouldShow && !bannerActive)
@@ -200,7 +154,6 @@ namespace ReplayTimerMod
 
             if (shouldShow)
             {
-                // A mode change can leave a stale second card around.
                 if (!GhostSettings.ChainRoomTimers && _cards.Count > 1)
                     ForceCollapseToOne();
 
@@ -215,7 +168,6 @@ namespace ReplayTimerMod
             }
             else
             {
-                // Paused: freeze the cards (hide), keep canvas alive for banner.
                 SetReadyVisible(false);
                 SetCardsVisible(false);
             }
@@ -223,12 +175,6 @@ namespace ReplayTimerMod
             UpdateBanner();
         }
 
-        /// <summary>
-        /// Drops cards whose GameObjects were destroyed externally (scene
-        /// unload on HK 1221). RoomTracker's events fire BEFORE this HUD's
-        /// Tick gets a chance to rebuild a destroyed canvas, so every event
-        /// handler must purge dead cards before touching them.
-        /// </summary>
         private void PruneDeadCards()
         {
             for (int i = _cards.Count - 1; i >= 0; i--)
@@ -242,12 +188,11 @@ namespace ReplayTimerMod
                 _rollPending = false;
         }
 
-        // ── RoomTracker handlers ───────────────────────────────────────────────
         private void HandleRoomEnter(string sceneName, string entryFromScene)
         {
             if (!GhostSettings.TimerHudEnabled) return;
             PruneDeadCards();
-            if (_canvasGO == null || _cardParent == null) return; // rebuilt on next Tick
+            if (_canvasGO == null || _cardParent == null) return;
 
             if (GhostSettings.ChainRoomTimers)
                 EnterChaining(sceneName, entryFromScene);
@@ -255,11 +200,6 @@ namespace ReplayTimerMod
                 EnterNonChaining(sceneName, entryFromScene);
         }
 
-        // Non-chaining: a single card. The most recently FINISHED room's result
-        // stays on screen; the next room is timed in the background and only
-        // replaces the display once it finishes. The live ticking timer is
-        // shown only when nothing is being held (the first room after a reset),
-        // matching the original pre-chaining behaviour.
         private void EnterNonChaining(string scene, string entry)
         {
             if (_cards.Count > 1) ForceCollapseToOne();
@@ -270,7 +210,6 @@ namespace ReplayTimerMod
 
             if (card.state == CardState.Finished)
             {
-                // Hold the previous result; just retarget what we're timing.
                 card.scene       = scene;
                 card.entryFrom   = entry;
                 card.exitTo      = "";
@@ -279,17 +218,13 @@ namespace ReplayTimerMod
             }
             else
             {
-                InitRunning(card, scene, entry); // live display for the first room
+                InitRunning(card, scene, entry);
             }
             _live = card;
         }
 
-        // Chained: the just-finished card stays in the left slot while a new
-        // running card drops into the right slot and rolls the old one off.
         private void EnterChaining(string scene, string entry)
         {
-            // A previous roll still in flight: finish it instantly so the
-            // right slot is free for the new room.
             if (_cards.Count >= 2)
                 ForceCompleteRoll();
 
@@ -315,15 +250,10 @@ namespace ReplayTimerMod
             PruneDeadCards();
             if (_live == null) return;
 
-            // Always freeze and show the time — including same-transition
-            // backtracks. The backtrack options only affect the PB comparison
-            // and the "not saved" tag, handled inside FinishCard.
             FinishCard(_live, exitToScene, lrTime);
             _live.liveDisplay = false;
             _live = null;
 
-            // Chained mode: the live room ended, so push the older card out now
-            // ("...or transition, whichever's first").
             if (_rollPending) TriggerRoll();
         }
 
@@ -332,7 +262,6 @@ namespace ReplayTimerMod
             ClearAllCards();
         }
 
-        // ── Roll mechanics ─────────────────────────────────────────────────────
         private void AdvanceRoll()
         {
             if (!_rollPending) return;
@@ -340,8 +269,6 @@ namespace ReplayTimerMod
             if (_rollTimer <= 0f) TriggerRoll();
         }
 
-        /// <summary>Begins sliding the oldest card off-screen and the newer card
-        /// into the left slot. Removal happens in AnimateCards once off-screen.</summary>
         private void TriggerRoll()
         {
             _rollPending = false;
@@ -355,8 +282,6 @@ namespace ReplayTimerMod
             newer.targetX    = _slot0X;
         }
 
-        /// <summary>Instantly completes a pending/in-flight roll: drops the oldest
-        /// card and snaps the newer one into the left slot.</summary>
         private void ForceCompleteRoll()
         {
             _rollPending = false;
@@ -371,8 +296,6 @@ namespace ReplayTimerMod
                 PlaceInstant(_cards[0], _slot0X);
         }
 
-        /// <summary>Keeps a single card (the live one if present, else the newest)
-        /// in the left slot and discards the rest. Used in single-card mode.</summary>
         private void ForceCollapseToOne()
         {
             if (_cards.Count <= 1)
@@ -426,7 +349,6 @@ namespace ReplayTimerMod
             _rollTimer = 0f;
         }
 
-        // ── Card construction ──────────────────────────────────────────────────
         private TimerCard CreateCard(int slotX)
         {
             var go = new GameObject("TimerCard");
@@ -491,7 +413,6 @@ namespace ReplayTimerMod
             card.rt.anchoredPosition = new Vector2(x, -_marginY);
         }
 
-        // ── Card state transitions ─────────────────────────────────────────────
         private void InitRunning(TimerCard card, string scene, string entryFrom)
         {
             card.state       = CardState.Running;
@@ -516,13 +437,9 @@ namespace ReplayTimerMod
 
             bool backtrack = IsBacktrack(card.entryFrom, exitTo);
 
-            // A backtrack doesn't count toward the PB highlight if either option
-            // excludes it: hidden from the comparison, or skipped from saving
-            // (so it can never actually become the stored PB).
             card.counts = !(backtrack
                 && (GhostSettings.SkipBacktrackTimer || GhostSettings.SkipBacktrackRuns));
 
-            // Small tag when a backtrack was skipped from saving.
             card.notSaved = backtrack && GhostSettings.SkipBacktrackRuns;
 
             if (card.entryPb.HasValue)
@@ -532,8 +449,6 @@ namespace ReplayTimerMod
             }
             else
             {
-                // No counting PB to compare against. A counting first run is a
-                // PB; an excluded backtrack is not.
                 card.deltaVal = null;
                 card.isNewPb  = card.counts;
             }
@@ -541,10 +456,6 @@ namespace ReplayTimerMod
             RefreshFinished(card);
         }
 
-        // ── Card visuals ───────────────────────────────────────────────────────
-
-        // Called once when a card (re)enters the running state; the per-frame
-        // path below only touches the timer text.
         private void RefreshRunning(TimerCard card)
         {
             card.timer.color = UIStyle.Text;
@@ -553,9 +464,6 @@ namespace ReplayTimerMod
             RefreshRunningTimer(card);
         }
 
-        // Per-frame update while the card is live. Only the timer string
-        // changes frame to frame; rewriting the color/delta/PB row every frame
-        // would re-format strings and dirty the uGUI layout for nothing.
         private void RefreshRunningTimer(TimerCard card)
         {
             card.timer.text = TimeUtil.Format(RoomTracker.CurrentRoomTime);
@@ -568,8 +476,6 @@ namespace ReplayTimerMod
 
             if (!card.counts)
             {
-                // Backtrack excluded from the comparison: show the time, but no
-                // delta (comparing it to a forward-exit PB would be misleading).
                 card.delta.text = "";
             }
             else if (card.deltaVal.HasValue)
@@ -597,10 +503,6 @@ namespace ReplayTimerMod
                 card.delta.color = UIStyle.Accent;
             }
 
-            // PB row shows the best counting PB (backtracks excluded when the
-            // hide option is on, via BestPBForEntry). A non-counting backtrack
-            // never promotes itself to the PB, so it falls back to entryPb —
-            // which is "--:--.--" when only backtracks exist.
             float? displayPb = card.isNewPb ? card.finishTime : card.entryPb;
             RefreshPbRow(card, displayPb, highlightGold: card.isNewPb);
 
@@ -638,7 +540,6 @@ namespace ReplayTimerMod
                 _readyGO.SetActive(v);
         }
 
-        /// <summary>Shows or hides the small status tag on a card.</summary>
         private void SetCardStatus(TimerCard card, string? text)
         {
             if (card.status == null) return;
@@ -656,7 +557,6 @@ namespace ReplayTimerMod
                 card.status.gameObject.SetActive(true);
         }
 
-        // ── Cancellation banner ──────────────────────────────────────────────────
         private void HandleRunCancelled(string reason)
         {
             if (_bannerGO == null || _bannerRt == null || _bannerText == null) return;
@@ -716,7 +616,6 @@ namespace ReplayTimerMod
         private float ShownBannerY()  => -UIStyle.H(MarginY);
         private float HiddenBannerY() => _bannerHeight + UIStyle.H(20);
 
-        // ── Canvas + persistent UI ────────────────────────────────────────────────
         private void BuildCanvas()
         {
             _canvasGO = new GameObject("RoomTimerHUD_Canvas");
@@ -765,7 +664,6 @@ namespace ReplayTimerMod
             _slot1X = _slot0X + _cardW + gapX;
             _offLeftX = -(_cardW + mX + UIStyle.W(40));
 
-            // A slot-to-slot slide takes ~0.22s.
             _slideSpeed = (_slot1X - _slot0X) / 0.22f;
 
             _bannerHeight = _timerRowH;
@@ -797,8 +695,6 @@ namespace ReplayTimerMod
             _bannerWidth  = UIStyle.W(220);
             _bannerHeight = _timerRowH;
 
-            // To the right of where the second (right-slot) card sits, so it
-            // never overlaps either card.
             int bannerX = _slot1X + _cardW + UIStyle.W(BannerGapX);
 
             _bannerGO = new GameObject("RunCancelledBanner");
@@ -819,7 +715,6 @@ namespace ReplayTimerMod
             _bannerGO.SetActive(false);
         }
 
-        // ── Helpers ───────────────────────────────────────────────────────────────
         private static Text MakeLbl(Transform parent, string text,
             int fontSize, Color color, TextAnchor anchor,
             int x, int y, int w, int h)
@@ -866,9 +761,6 @@ namespace ReplayTimerMod
                 var key = kvp.Key;
                 if (key.SceneName != sceneName || key.EntryFromScene != entryFromScene)
                     continue;
-                // When hiding backtracks, the best PB comes only from runs that
-                // exit elsewhere. If every run is a backtrack, this returns null
-                // and the card shows no PB.
                 if (hideBacktrack && IsBacktrack(key.EntryFromScene, key.ExitToScene))
                     continue;
                 float t = kvp.Value.TotalTime;
@@ -876,6 +768,5 @@ namespace ReplayTimerMod
             }
             return best;
         }
-
     }
 }

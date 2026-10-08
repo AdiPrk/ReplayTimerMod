@@ -2,18 +2,7 @@ using UnityEngine;
 
 namespace ReplayTimerMod
 {
-    /// <summary>
-    /// Makes a mod-created GameObject survive the host game's scene changes.
-    ///
-    /// On Silksong / HK 1.5.78 plain <see cref="Object.DontDestroyOnLoad"/>
-    /// is enough. HK 1.2.2.1 (Unity 5.4) needs more: gameplay transitions
-    /// load the next room ADDITIVELY and then call
-    /// SceneManager.UnloadScene(oldScene) (see GameManager.LoadSceneAdditive).
-    /// DontDestroyOnLoad only shields an object from single-mode loads - an
-    /// object still belonging to the unloaded gameplay scene is destroyed
-    /// with it, DDOL flag or not. The fix is to move the object into the
-    /// persistent scene GameManager itself lives in, which is never unloaded.
-    /// </summary>
+    // HK 1.2.2.1 unloads rooms additively, so DontDestroyOnLoad alone isn't enough there.
     internal static class ScenePersistence
     {
         internal static void Apply(GameObject go)
@@ -34,8 +23,6 @@ namespace ReplayTimerMod
             }
             catch
             {
-                // Scene API unavailable/hostile - the self-healing rebuild
-                // paths in RoomTimerHUD/ReplayUI cover object loss.
             }
 #endif
         }

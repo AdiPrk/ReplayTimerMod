@@ -4,10 +4,7 @@ using GlobalEnums;
 
 namespace ReplayTimerMod
 {
-    // Ported directly from TimerMod's LoadRemover.
-    // Determines whether the in-game clock should be ticking.
-    // All the edge-case logic (teleport from menu, cutscenes, hero transition
-    // state, etc.) is preserved exactly as-is.
+    // Ported from TimerMod's LoadRemover.
     public static class LoadRemover
     {
         private static GameState prevGameState = GameState.PLAYING;
@@ -16,7 +13,6 @@ namespace ReplayTimerMod
         public static bool ShouldTick()
         {
             var gm = GameManager.instance;
-            // Early boot: the managers may not exist yet - the timer is gated.
             if (gm == null || gm.ui == null || gm.inputHandler == null)
                 return false;
 

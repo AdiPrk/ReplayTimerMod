@@ -6,8 +6,6 @@ on:
   pull_request:
 
 jobs:
-  # Shared-logic unit tests (no game install needed — Unity/BepInEx are
-  # stubbed; see tests/ReplayTimerMod.Tests).
   dotnet-tests:
     runs-on: ubuntu-latest
     steps:
@@ -18,9 +16,6 @@ jobs:
       - name: Run unit tests
         run: dotnet test tests/ReplayTimerMod.Tests/ReplayTimerMod.Tests.csproj -c Release --nologo
 
-  # Compile check for the Silksong plugin (all refs come from NuGet).
-  # The two Hollow Knight targets need real game DLLs (ValidateHKReferences
-  # fails fast without them), so they can only be built locally.
   silksong-build:
     runs-on: ubuntu-latest
     steps:
@@ -29,5 +24,4 @@ jobs:
         with:
           dotnet-version: "8.0.x"
       - name: Build Silksong plugin
-        # Compile only — skip the local-install/Thunderstore post-build target.
         run: dotnet build src/Silksong/ReplayTimerMod.SS.csproj -c Debug --nologo /p:SkipModPackaging=true

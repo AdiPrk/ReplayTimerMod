@@ -23,7 +23,6 @@ namespace ReplayTimerMod
                 return;
             }
 
-            // Sized to the widest time in the room before any row is built.
             int timeColW = TimeColumnWidth(
                 routes.SelectMany(r => r.Snapshots).Select(s => s.TotalTime));
 
@@ -35,10 +34,6 @@ namespace ReplayTimerMod
             }
         }
 
-        /// <summary>
-        /// Lightweight rebuild of just the Runs content area:
-        /// detached clear, scroll preserved.
-        /// </summary>
         private void RebuildRunsContentOnly()
         {
             if (_rightContent == null || _selectedScene == null) return;
@@ -93,9 +88,6 @@ namespace ReplayTimerMod
 
             int labelRight = clearW + M;
 #if SILKSONG_BUILD
-            // Warp button — shown for any route whose entry transition is
-            // known. Lands the player in the previous room at a door leading
-            // into the run room. Placed left of Clear.
             if (QuickWarp.CanWarp(key))
             {
                 int warpW = UIStyle.W(44);
@@ -116,9 +108,6 @@ namespace ReplayTimerMod
                 x: M, w: RW - labelRight - M * 2, h: h);
         }
 
-        /// <summary>Stable string identity for a route's two-click Clear
-        /// confirm (RoomKey itself isn't used as the pending marker so the
-        /// field can be a simple nullable string like _deleteConfirmId).</summary>
         private static string RouteConfirmKey(RoomKey key) =>
             key.SceneName + "|" + key.EntryFromScene + "|" + key.ExitToScene;
 
@@ -162,11 +151,6 @@ namespace ReplayTimerMod
             int btnH = UIStyle.H(20);
             int btnY = (h - btnH) / 2;
 
-            // Ghost-active affordance: the run currently playing as the
-            // ghost gets a gold caret (right-pointing triangle) tucked
-            // into the row's left margin, plus the gold row tint and gold
-            // label. The caret lives entirely inside the margin so it
-            // costs no layout space; inactive rows are untouched.
             if (playbackOn)
             {
                 int markH = UIStyle.H(10);
@@ -178,9 +162,6 @@ namespace ReplayTimerMod
                 Rect(mark, 0, (h - markH) / 2, M - 1, markH);
             }
 
-            // Ghost color swatch — a bordered chip that opens the color
-            // picker for this run. Solid, bright-bordered fill = custom
-            // color; dimmed fill = following the global color.
             int swatchS = UIStyle.H(16);
             var swatch = MakeGO("Color", row.transform);
             Img(swatch, snapshot.HasVisualOverride
@@ -203,12 +184,8 @@ namespace ReplayTimerMod
                 : ColorHex(resolved) + " (global)");
             x += swatchS + M;
 
-            // --- Right side: geometry comes from RowRightCluster.
-
             var cluster = RowRightCluster.Begin(RW);
 
-            // Delete button (two-click confirm). Fixed width so the row
-            // doesn't shift when the label flips to the confirm state.
             int delW = UIStyle.W(44);
             string delId = snapshot.SnapshotId;
             RoomKey delKey = route.Key;
@@ -229,9 +206,6 @@ namespace ReplayTimerMod
                 cluster.AddButton(copyW), btnY, copyW, btnH,
                 () => CopyReplay(copyKey, copyId));
 
-            // Camera-follow button, leftmost of the button cluster; one run
-            // at a time can hold the follow slot, and following also enables
-            // the ghost.
             int camW = btnH;
             int camX = cluster.AddButton(camW);
             bool followOn =
@@ -265,7 +239,6 @@ namespace ReplayTimerMod
                 UIStyle.FontSizeSm, UIStyle.Gold, TextAnchor.MiddleRight,
                 x: timeX, w: timeColW, h: h);
 
-            // Label — "#N"
             int labelW = cluster.LabelEnd - x;
             Color labelColor = playbackOn ? UIStyle.Gold : UIStyle.Subtext;
 
@@ -274,9 +247,22 @@ namespace ReplayTimerMod
             MakeLbl(row.transform, labelText,
                 UIStyle.FontSizeRow, labelColor, TextAnchor.MiddleLeft,
                 x: x, w: labelW, h: h);
+
+            if (snapshot.UsedCheats)
+            {
+                int markX = x + Mathf.CeilToInt(
+                    MeasureTextWidth(labelText, UIStyle.FontSizeRow)) + UIStyle.Gap;
+                int markW = UIStyle.W(10);
+                var cheatMark = MakeGO("Cheated", row.transform);
+                Img(cheatMark, Color.clear);
+                Rect(cheatMark, markX, 0, markW, h);
+                MakeLbl(cheatMark.transform, "!",
+                    UIStyle.FontSizeRow, UIStyle.Red, TextAnchor.MiddleCenter,
+                    fill: true);
+                AttachTooltip(cheatMark, "Recorded with DebugMod cheats active");
+            }
         }
 
-        /// <summary>"#RRGGBB" for a color (alpha ignored).</summary>
         private static string ColorHex(Color c) =>
             "#" + Mathf.RoundToInt(Mathf.Clamp01(c.r) * 255f).ToString("X2")
                 + Mathf.RoundToInt(Mathf.Clamp01(c.g) * 255f).ToString("X2")
@@ -291,8 +277,6 @@ namespace ReplayTimerMod
             }
             else
             {
-                // Arming the confirm only restyles this row - the lightweight
-                // rebuild, same as the route-clear confirm above.
                 _deleteConfirmId = snapshotId;
                 if (_selectedScene != null && _activeTab == TabKind.Runs)
                     RebuildRunsContentOnly();

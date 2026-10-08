@@ -44,7 +44,6 @@ namespace ReplayTimerMod
 
             int bodyY = HDR + 1;
 
-            // Left panel
             int searchY = bodyY;
             int footerY = PH - FOOT;
             int sceneListY = searchY + SRCH + 1;
@@ -62,7 +61,6 @@ namespace ReplayTimerMod
 
             VLine(_panelGO.transform, LW, bodyY, PH - bodyY);
 
-            // Right panel
             int tabBarY = bodyY;
             int rightSubY = tabBarY + TABH + 1;
             int rightContentY = rightSubY + SUBH + 1;
@@ -184,9 +182,6 @@ namespace ReplayTimerMod
             _runsActionButtons = MakeGO("RunsActions", hdr.transform);
             Fill(_runsActionButtons);
 
-            // Right-packed action cluster, each button sized to its text.
-            // Clear is sized to also fit its "Sure?" confirm state so the
-            // button doesn't jump when armed.
             int padX = UIStyle.W(9);
             int clearW = Mathf.CeilToInt(Mathf.Max(
                 MeasureTextWidth("Clear", UIStyle.FontSizeBtn),

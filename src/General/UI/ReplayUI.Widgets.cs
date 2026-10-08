@@ -5,16 +5,6 @@ using UnityEngine.UI;
 
 namespace ReplayTimerMod
 {
-    // ── Interaction MonoBehaviours ──────────────────────────────────────
-    //
-    // IMPORTANT: these components must stay ENABLED. Unity's EventSystem
-    // (ExecuteEvents.ShouldSendToComponent) skips disabled Behaviours, so
-    // a disabled component never receives OnPointerEnter/Exit. The Update
-    // methods early-out when settled instead.
-
-    /// <summary>
-    /// Subtle hover highlight on any interactive row.
-    /// </summary>
     internal sealed class RowHover : MonoBehaviour,
         IPointerEnterHandler, IPointerExitHandler
     {
@@ -39,7 +29,7 @@ namespace ReplayTimerMod
 
         private void Update()
         {
-            if (_current == _target) return; // settled — skip all work
+            if (_current == _target) return;
 
             _current = Mathf.MoveTowards(_current, _target,
                 Time.unscaledDeltaTime * Speed);
@@ -51,12 +41,6 @@ namespace ReplayTimerMod
             new Color(c.r, c.g, c.b, a);
     }
 
-    /// <summary>
-    /// Hover + press feedback for buttons: a light overlay fades in on
-    /// hover and brightens while pressed. uGUI's built-in Button tint
-    /// transition never fires here (no targetGraphic is assigned), so
-    /// this overlay is the only visual feedback buttons get.
-    /// </summary>
     internal sealed class ButtonHover : MonoBehaviour,
         IPointerEnterHandler, IPointerExitHandler,
         IPointerDownHandler, IPointerUpHandler
@@ -78,7 +62,6 @@ namespace ReplayTimerMod
         public void OnPointerDown(PointerEventData e)
         {
             _pressed = true;
-            // Press feedback must be instant, not eased
             _current = PressAlpha;
             Apply();
         }
@@ -88,7 +71,7 @@ namespace ReplayTimerMod
         private void Update()
         {
             float target = Target;
-            if (_current == target) return; // settled — skip all work
+            if (_current == target) return;
 
             _current = Mathf.MoveTowards(_current, target,
                 Time.unscaledDeltaTime * Speed);
@@ -111,19 +94,9 @@ namespace ReplayTimerMod
             public Text label;
         }
 
-        // ── Shared run-row right-side layout ────────────────────────────
-        //
-        // Run rows lay out their right side with one language: action
-        // buttons pack flush against the right edge, the time slot sits
-        // left of the buttons separated by a double gap (flush right when a
-        // row has no buttons), optional extra slots sit a gap left of the
-        // time, then the name/label fills what remains. This struct is the single source of that geometry: row
-        // builders declare WHAT the row contains, right to left, and
-        // consume the returned columns - so rows cannot drift apart.
-
         private struct RowRightCluster
         {
-            private int cursor; // right edge available to the next element
+            private int cursor;
             private bool hasButtons;
 
             public static RowRightCluster Begin(int rowWidth) => new RowRightCluster
@@ -132,7 +105,6 @@ namespace ReplayTimerMod
                 hasButtons = false,
             };
 
-            /// <summary>Right-packs a button of the given width; returns its x.</summary>
             public int AddButton(int width)
             {
                 cursor -= width;
@@ -142,45 +114,19 @@ namespace ReplayTimerMod
                 return x;
             }
 
-            /// <summary>Places the time slot: a double gap after the
-            /// buttons, or flush right when the row has none. Size the slot
-            /// with <see cref="TimeColumnWidth"/> so the right-aligned text
-            /// fills it and what follows on the left sits the same double
-            /// gap from the time text as the buttons do on the right.
-            /// Returns its x; render the label right-aligned.</summary>
             public int AddTime(int width)
             {
                 if (hasButtons)
-                    cursor -= UIStyle.Gap; // second half of the double gap
+                    cursor -= UIStyle.Gap;
                 cursor -= width;
                 int x = cursor;
-                cursor -= UIStyle.Gap * 2; // mirror the button-side double gap
+                cursor -= UIStyle.Gap * 2;
                 return x;
             }
 
-            /// <summary>Places an extra right-aligned slot (e.g. the WR
-            /// delta) left of what came before; returns its x.</summary>
-            public int AddSlot(int width)
-            {
-                cursor -= width;
-                int x = cursor;
-                cursor -= UIStyle.Gap;
-                return x;
-            }
-
-            /// <summary>Right edge available to the name/label.</summary>
             public int LabelEnd => cursor;
         }
 
-        /// <summary>
-        /// Canonical width of the time column for a set of rendered rows:
-        /// the widest formatted time among them, so the slot hugs its text
-        /// and the label's distance from the time matches the buttons'
-        /// distance on the other side. Time strings only contain digits
-        /// (556/1000 em in Arial) and ':' '.' separators (278/1000 em), so
-        /// the width is deterministic without live text measurement. All
-        /// row builders must size their time column with this.
-        /// </summary>
         private static int TimeColumnWidth(IEnumerable<float> times)
         {
             float maxEm = 0f;
@@ -214,9 +160,6 @@ namespace ReplayTimerMod
             var btn = go.GetComponent<Button>() ?? go.AddComponent<Button>();
             btn.onClick.RemoveAllListeners();
             btn.onClick.AddListener(action);
-            // Hover/press feedback comes from the hover helpers; the default
-            // ColorTint transition is inert (no targetGraphic) and Automatic
-            // navigation would let gamepad/keyboard focus wander onto rows.
             btn.transition = Selectable.Transition.None;
             btn.navigation = new Navigation { mode = Navigation.Mode.None };
         }
@@ -267,10 +210,6 @@ namespace ReplayTimerMod
             t.fontSize = fontSize;
             t.color = color;
             t.alignment = anchor;
-            // Never interpret rich-text markup in labels: markup like
-            // "<color=#f00>x" or "<size=400>" in any displayed string (scene
-            // names, imported data) is shown as literal characters instead of
-            // being interpreted.
             t.supportRichText = false;
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
             t.verticalOverflow = VerticalWrapMode.Truncate;
@@ -294,10 +233,6 @@ namespace ReplayTimerMod
             return t;
         }
 
-        /// <summary>
-        /// Subtle animated hover highlight for interactive ROWS
-        /// (run rows, scene list rows).
-        /// </summary>
         private static RowHover AddHoverEffect(GameObject row)
         {
             var overlayGO = MakeGO("HoverOverlay", row.transform);
@@ -312,11 +247,6 @@ namespace ReplayTimerMod
             return hover;
         }
 
-        /// <summary>
-        /// Hover + press feedback for BUTTONS. MakeButton attaches this
-        /// automatically; call it manually for hand-rolled buttons
-        /// (MakeGO + Image + Btn).
-        /// </summary>
         private static void AddButtonHover(GameObject buttonGO)
         {
             var overlayGO = MakeGO("HoverOverlay", buttonGO.transform);
@@ -328,16 +258,8 @@ namespace ReplayTimerMod
             buttonGO.AddComponent<ButtonHover>().overlay = img;
         }
 
-        // ── Shared marker textures ──────────────────────────────────────────
-        // Drawn once, shared by every consumer (Runs rows, route
-        // headers), and they survive canvas destruction
-        // (textures aren't scene objects). Edges get a 1px alpha ramp so the
-        // diagonals aren't jagged.
-
         private static Texture2D? _playMarkerTex;
 
-        /// <summary>White right-pointing triangle on transparent, tinted by
-        /// the RawImage that displays it.</summary>
         private static Texture2D PlayMarkerTexture()
         {
             if (_playMarkerTex == null)
@@ -348,9 +270,6 @@ namespace ReplayTimerMod
                 var px = new Color[n * n];
                 for (int y = 0; y < n; y++)
                 {
-                    // Apex at the right middle: each row is filled from the
-                    // left edge out to xEdge, which shrinks with the row's
-                    // distance from the vertical center.
                     float xEdge = n - 2f * Mathf.Abs(y + 0.5f - n / 2f);
                     for (int x = 0; x < n; x++)
                         px[y * n + x] = new Color(1f, 1f, 1f,
@@ -364,9 +283,6 @@ namespace ReplayTimerMod
 
         private static Texture2D? _cameraMarkerTex;
 
-        /// <summary>White video-camera glyph (body plus a right-widening
-        /// lens wedge) on transparent, tinted by the RawImage that displays
-        /// it.</summary>
         private static Texture2D CameraMarkerTexture()
         {
             if (_cameraMarkerTex == null)
@@ -381,12 +297,9 @@ namespace ReplayTimerMod
                     for (int x = 0; x < n; x++)
                     {
                         float xc = x + 0.5f;
-                        // Camera body: rectangle on the left.
                         float body = Mathf.Min(
                             Mathf.Min(xc - 0.5f, 13.5f - xc),
                             Mathf.Min(yc - 4.5f, 19.5f - yc));
-                        // Lens wedge: apex touching the body at mid
-                        // height, widening toward the right edge.
                         float half = 1f + (xc - 13f) * 0.6f;
                         float wedge = Mathf.Min(
                             Mathf.Min(xc - 13f, 23.5f - xc),
@@ -401,23 +314,12 @@ namespace ReplayTimerMod
             return _cameraMarkerTex;
         }
 
-        // ── Text measurement ───────────────────────────────────────────────
-
         private Text? _measureLbl;
 
-        /// <summary>
-        /// Width of rendered text in canvas px (the canvas uses
-        /// ConstantPixelSize, so preferredWidth is directly usable), via a
-        /// hidden reusable Text. Used to size the sub-header buttons to
-        /// their text.
-        /// </summary>
         private float MeasureTextWidth(string text, int fontSize)
         {
             if (_measureLbl == null)
             {
-                // Kept active with clear color: preferred-size queries are
-                // safest on an active Text across Unity versions, and a
-                // fully transparent zero-size label renders nothing.
                 var go = MakeGO("MeasureLbl", _canvasGO.transform);
                 _measureLbl = go.AddComponent<Text>();
                 _measureLbl.font = UIStyle.Arial;
@@ -445,15 +347,11 @@ namespace ReplayTimerMod
             bg.color = bgColor;
             var btn = go.AddComponent<Button>();
             btn.onClick.AddListener(onClick);
-            // Hover/press feedback comes from AddButtonHover; the default
-            // ColorTint transition is inert (no targetGraphic) and Automatic
-            // navigation would let gamepad/keyboard focus wander onto rows.
             btn.transition = Selectable.Transition.None;
             btn.navigation = new Navigation { mode = Navigation.Mode.None };
             Rect(go, x, y, w, h);
             var lbl = MakeLbl(go.transform, text, fontSize, textColor,
                 TextAnchor.MiddleCenter, fill: true);
-            // Overlay goes last so it draws on top of bg + label
             AddButtonHover(go);
 
             ButtonRef r;
@@ -522,14 +420,6 @@ namespace ReplayTimerMod
                 content.GetComponent<RectTransform>());
         }
 
-        // ── Scroll preservation across content rebuilds ────────────────────
-        //
-        // Preserve the PIXEL offset from the top, not the normalized
-        // fraction: a rebuild can change the content height (run deleted,
-        // confirm row armed), and the same fraction of a
-        // different height lands the view somewhere else entirely.
-
-        /// <summary>Current scroll offset from the top, in pixels.</summary>
         private static float ScrollOffsetFromTop(ScrollRect scroll)
         {
             float range = ScrollRange(scroll);
@@ -538,9 +428,6 @@ namespace ReplayTimerMod
                 : (1f - scroll.verticalNormalizedPosition) * range;
         }
 
-        /// <summary>Restores a pixel offset captured by
-        /// <see cref="ScrollOffsetFromTop"/> after the content was rebuilt
-        /// (layout must already be forced so the new height is valid).</summary>
         private static void RestoreScrollOffsetFromTop(ScrollRect scroll, float offset)
         {
             float range = ScrollRange(scroll);
@@ -549,7 +436,6 @@ namespace ReplayTimerMod
                 : Mathf.Clamp01(1f - offset / range);
         }
 
-        // Scrollable distance: content height minus viewport height.
         private static float ScrollRange(ScrollRect scroll)
         {
             var viewport = scroll.viewport != null

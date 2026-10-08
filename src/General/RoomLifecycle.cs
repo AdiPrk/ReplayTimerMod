@@ -2,14 +2,6 @@ using BepInEx.Logging;
 
 namespace ReplayTimerMod
 {
-    /// <summary>
-    /// Drives the per-room record → evaluate pipeline in response to
-    /// <see cref="RoomTracker"/> events. Shared by both platform entry points
-    /// (Silksong and Hollow Knight) so the logic never diverges between them.
-    ///
-    /// The entry point constructs one of these and points
-    /// <see cref="RoomTracker"/>'s events at its handlers.
-    /// </summary>
     internal sealed class RoomLifecycle
     {
         private static readonly ManualLogSource Log =
@@ -45,10 +37,8 @@ namespace ReplayTimerMod
                 return;
             }
 
-            // Belt-and-suspenders: RoomTracker cancels the run the instant a
-            // DebugMod cheat/debug ability is detected, so this should never
-            // actually be true here - but if it ever is, never save it.
-            if (RoomTracker.RoomUsedDebugAbilities)
+            bool usedCheats = RoomTracker.RoomUsedDebugAbilities;
+            if (usedCheats && GhostSettings.CancelRunOnCheats)
             {
                 Log.LogInfo("[RoomLifecycle] Discarding room exit - debug abilities were used");
                 _recorder.DiscardRecording();
@@ -76,7 +66,7 @@ namespace ReplayTimerMod
             RecordedRoom? recording = _recorder.FinishRecording(key, lrTime);
             if (recording == null) return;
 
-            var result = PBManager.Evaluate(recording, saveAllRuns);
+            var result = PBManager.Evaluate(recording, saveAllRuns, usedCheats);
             if (result.Kind == ResultKind.FirstRun
                 || result.Kind == ResultKind.NewPB
                 || result.Kind == ResultKind.SavedHistory)
@@ -85,9 +75,6 @@ namespace ReplayTimerMod
 
         public void HandleRecordingDiscarded()
         {
-            // Cheat-cancelled runs invalidate the recording but the player
-            // hasn't left the room - keep the ghost replay going so it can
-            // still be watched.
             if (!RoomTracker.KeepGhostPlaybackOnDiscard)
                 _ghost.StopPlayback();
 

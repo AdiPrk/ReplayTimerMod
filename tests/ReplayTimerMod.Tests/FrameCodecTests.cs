@@ -8,21 +8,19 @@ namespace ReplayTimerMod.Tests
 {
     public class FrameCodecTests
     {
-        // ── SVLQ (ZigZag + ULEB128) ─────────────────────────────────────────
-
         [Theory]
         [InlineData(0)]
         [InlineData(1)]
         [InlineData(-1)]
         [InlineData(63)]
-        [InlineData(64)]         // first two-byte value
+        [InlineData(64)]
         [InlineData(-64)]
         [InlineData(-65)]
         [InlineData(127)]
         [InlineData(128)]
         [InlineData(32767)]
         [InlineData(-32768)]
-        [InlineData(131072)]     // max 2nd-order residual magnitude (4×short)
+        [InlineData(131072)]
         [InlineData(-131072)]
         [InlineData(1000000)]
         [InlineData(-1000000)]
@@ -71,8 +69,6 @@ namespace ReplayTimerMod.Tests
                 Assert.Equal(values[i], FrameCodec.ReadSVLQ(r));
         }
 
-        // ── 2nd-order DPCM ──────────────────────────────────────────────────
-
         private static FrameData[] Frames(params float[] xs)
         {
             var frames = new FrameData[xs.Length];
@@ -93,8 +89,8 @@ namespace ReplayTimerMod.Tests
         [InlineData(new float[] { 5.25f })]
         [InlineData(new float[] { 5.25f, 5.30f })]
         [InlineData(new float[] { 0f, 0f, 0f, 0f })]
-        [InlineData(new float[] { 1f, 2f, 3f, 4f, 5f })]          // constant velocity
-        [InlineData(new float[] { -10f, 3.5f, 200.02f, -37.9f })] // erratic
+        [InlineData(new float[] { 1f, 2f, 3f, 4f, 5f })]
+        [InlineData(new float[] { -10f, 3.5f, 200.02f, -37.9f })]
         public void Dpcm_RoundTrips(float[] xs)
         {
             var frames = Frames(xs);
@@ -124,7 +120,6 @@ namespace ReplayTimerMod.Tests
         [Fact]
         public void Dpcm_ConstantVelocity_IsMaximallyCompact()
         {
-            // anchor (2 bytes) + first delta (1 byte) + zero residuals (1 byte each)
             var frames = Frames(0f, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f);
             byte[] stream = FrameCodec.Encode2ndOrder(frames, getX: true);
             Assert.Equal(2 + 1 + (frames.Length - 2), stream.Length);
@@ -149,22 +144,18 @@ namespace ReplayTimerMod.Tests
                 Assert.Equal(FrameCodec.ToShort(xs[i]), decoded[i]);
         }
 
-        // ── ToShort quantization ────────────────────────────────────────────
-
         [Theory]
         [InlineData(0f, 0)]
         [InlineData(1f, 100)]
         [InlineData(-1f, -100)]
         [InlineData(1.234f, 123)]
-        [InlineData(1.235f, 124)]        // rounds (banker's/half-even at .5 exact)
-        [InlineData(400f, short.MaxValue)]   // clamps high (40000 > 32767)
-        [InlineData(-400f, short.MinValue)]  // clamps low
+        [InlineData(1.235f, 124)]
+        [InlineData(400f, short.MaxValue)]
+        [InlineData(-400f, short.MinValue)]
         [InlineData(1e9f, short.MaxValue)]
         [InlineData(-1e9f, short.MinValue)]
         public void ToShort_ScalesAndClamps(float world, short expected) =>
             Assert.Equal(expected, FrameCodec.ToShort(world));
-
-        // ── Length-prefixed strings ─────────────────────────────────────────
 
         [Theory]
         [InlineData("")]

@@ -6,22 +6,14 @@ using Xunit;
 
 namespace ReplayTimerMod.Tests
 {
-    /// <summary>Base for tests that touch the static PBManager / DataStore /
-    /// GhostSettings trio: gives each test a fresh temp data dir and resets
-    /// the static settings that influence PB logic.</summary>
     public abstract class PersistenceTestBase : System.IDisposable
     {
         protected readonly Rooms.TempDir Dir = new Rooms.TempDir();
 
         protected PersistenceTestBase()
         {
-            // GhostSettings.Save() no-ops while its file path is unset/missing;
-            // point it at the temp dir so property sets are harmless, and
-            // restore the defaults PB logic depends on.
             Directory.CreateDirectory(Path.Combine(Dir.Path, "ReplayMod"));
             GhostSettings.Init(Dir.Path);
-            // GhostSettings is static — reset every field the tests mutate so
-            // values can't bleed between tests.
             GhostSettings.MaxSavedReplaysPerRoute = 5;
             GhostSettings.SaveAllRunsEnabled = false;
             GhostSettings.ChainRoomTimers = false;
@@ -44,7 +36,6 @@ namespace ReplayTimerMod.Tests
             var result = PBManager.Evaluate(run);
 
             Assert.Equal(ResultKind.FirstRun, result.Kind);
-            Assert.NotNull(result.Snapshot);
             Assert.Null(result.OldPBTime);
             Assert.Equal(5f, PBManager.GetPB(run.Key)!.TotalTime);
         }
@@ -70,7 +61,6 @@ namespace ReplayTimerMod.Tests
                 Rooms.Room(frames: 40, time: 6f, seed: 2));
 
             Assert.Equal(ResultKind.MissedPB, result.Kind);
-            Assert.Null(result.Snapshot);
             Assert.Single(PBManager.GetHistory(Rooms.Key()));
         }
 
@@ -78,11 +68,11 @@ namespace ReplayTimerMod.Tests
         public void WouldStoreRun_MatchesEvaluateDecisions()
         {
             var key = Rooms.Key();
-            Assert.True(PBManager.WouldStoreRun(key, 9f));       // first run
+            Assert.True(PBManager.WouldStoreRun(key, 9f));
 
             PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, seed: 1));
-            Assert.True(PBManager.WouldStoreRun(key, 4f));       // faster
-            Assert.False(PBManager.WouldStoreRun(key, 6f));      // slower
+            Assert.True(PBManager.WouldStoreRun(key, 4f));
+            Assert.False(PBManager.WouldStoreRun(key, 6f));
         }
 
         [Fact]
@@ -94,7 +84,6 @@ namespace ReplayTimerMod.Tests
             var stored = PBManager.Evaluate(slower, saveAllRuns: true);
             Assert.Equal(ResultKind.SavedHistory, stored.Kind);
 
-            // The exact same replay again → duplicate, not double-stored.
             var dup = PBManager.Evaluate(slower, saveAllRuns: true);
             Assert.Equal(ResultKind.DuplicateRun, dup.Kind);
             Assert.Equal(2, PBManager.GetHistory(Rooms.Key()).Count);
@@ -108,7 +97,6 @@ namespace ReplayTimerMod.Tests
             PBManager.Evaluate(Rooms.Room(frames: 30, time: 1.0f, seed: 1));
             PBManager.Evaluate(Rooms.Room(frames: 30, time: 2.0f, seed: 2),
                 saveAllRuns: true);
-            // Beyond the limit → pruned immediately.
             PBManager.Evaluate(Rooms.Room(frames: 30, time: 2.5f, seed: 4),
                 saveAllRuns: true);
 
@@ -124,12 +112,25 @@ namespace ReplayTimerMod.Tests
             PBManager.Evaluate(Rooms.Room(frames: 30, time: 6f, seed: 2),
                 saveAllRuns: true);
 
-            PBManager.Init(); // reload everything from DataStore
+            PBManager.Init();
 
             var history = PBManager.GetHistory(Rooms.Key());
             Assert.Equal(2, history.Count);
             Assert.Equal(6f, history[1].TotalTime);
             Assert.Equal(5f, PBManager.GetPB(Rooms.Key())!.TotalTime);
+        }
+
+        [Fact]
+        public void CheatedRun_IsFlagged_AndFlagSurvivesRecolorAndReload()
+        {
+            PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, seed: 1), usedCheats: true);
+            var pb = PBManager.GetPBSnapshot(Rooms.Key())!;
+            Assert.True(pb.UsedCheats);
+
+            PBManager.UpdateSnapshotVisuals(Rooms.Key(), pb.SnapshotId, true, new Color(1f, 0f, 0f, 1f));
+            PBManager.Init();
+
+            Assert.True(PBManager.GetPBSnapshot(Rooms.Key())!.UsedCheats);
         }
 
         [Fact]
@@ -140,7 +141,6 @@ namespace ReplayTimerMod.Tests
             Assert.Equal(PBManager.ImportOutcome.Duplicate, PBManager.ImportPB(room));
 
             GhostSettings.MaxSavedReplaysPerRoute = 1;
-            // Slower than every kept replay → won't be kept.
             var slow = Rooms.Room(frames: 40, time: 60f, seed: 2);
             Assert.Equal(PBManager.ImportOutcome.RouteFull, PBManager.ImportPB(slow));
         }
@@ -172,7 +172,8 @@ namespace ReplayTimerMod.Tests
             var room = Rooms.Room(frames: 30, time: 5f, seed: 1);
             var snapshot = new ReplaySnapshot("snap01", 638000000000000000L, room,
                 encodedData: null, hasVisualOverride: true,
-                colorR: 0.25f, colorG: 0.5f, colorB: 0.75f, alpha: 0.9f);
+                colorR: 0.25f, colorG: 0.5f, colorB: 0.75f, alpha: 0.9f,
+                usedCheats: true);
             DataStore.SaveSnapshot(snapshot);
 
             var loaded = DataStore.LoadAll().Single();
@@ -183,6 +184,7 @@ namespace ReplayTimerMod.Tests
             Assert.True(loaded.HasVisualOverride);
             Assert.Equal(0.25f, loaded.ColorR);
             Assert.Equal(0.9f, loaded.Alpha);
+            Assert.True(loaded.UsedCheats);
         }
 
         [Fact]
@@ -203,8 +205,8 @@ namespace ReplayTimerMod.Tests
         [Fact]
         public void DeleteRoute_RemovesOnlyThatRoute()
         {
-            var keyA = Rooms.Key();                                  // scene S, A→B
-            var keyB = Rooms.Key(to: "Elsewhere");                   // same scene, A→Elsewhere
+            var keyA = Rooms.Key();
+            var keyB = Rooms.Key(to: "Elsewhere");
             DataStore.SaveSnapshot(ReplaySnapshot.CreateNew(
                 Rooms.Room(frames: 20, key: keyA, seed: 1)));
             DataStore.SaveSnapshot(ReplaySnapshot.CreateNew(
@@ -246,15 +248,9 @@ namespace ReplayTimerMod.Tests
         [Fact]
         public void SaveAndLoad_RoundTrip()
         {
-            // GhostSettings is a static singleton, so Init over the same file
-            // can't prove anything by itself - Load only OVERLAYS parsed keys
-            // onto the current in-memory values. To make the round trip real:
-            // save the wanted state, snapshot the file, clobber every asserted
-            // property with sentinels (overwriting the file), restore the
-            // snapshot, and only then Init.
             GhostSettings.ChainRoomTimers = true;
             GhostSettings.GhostAlpha = 0.7f;
-            GhostSettings.Flush(); // alpha saves are throttled
+            GhostSettings.Flush();
 
             string file = Path.Combine(Dir.Path, "ReplayMod", "settings.txt");
             string saved = File.ReadAllText(file);
@@ -283,8 +279,8 @@ namespace ReplayTimerMod.Tests
             });
             GhostSettings.Init(Dir.Path);
 
-            Assert.Equal(5, GhostSettings.MaxSavedReplaysPerRoute); // default
-            Assert.True(GhostSettings.GhostEnabled);                 // default
+            Assert.Equal(5, GhostSettings.MaxSavedReplaysPerRoute);
+            Assert.True(GhostSettings.GhostEnabled);
         }
 
         [Fact]

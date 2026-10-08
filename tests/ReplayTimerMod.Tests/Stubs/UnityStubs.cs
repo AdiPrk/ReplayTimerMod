@@ -1,9 +1,3 @@
-// Minimal re-implementations of the UnityEngine surface the pure-logic
-// product sources touch, so they compile and run on plain .NET.
-// Time.realtimeSinceStartup is settable so tests can control time-based
-// logic (GhostSettings' throttled saves).
-
-// ReSharper disable all
 #pragma warning disable IDE0060
 
 namespace UnityEngine
@@ -33,7 +27,6 @@ namespace UnityEngine
 
     public static class Time
     {
-        /// <summary>Settable in tests (the real one is read-only).</summary>
         public static float realtimeSinceStartup { get; set; }
     }
 

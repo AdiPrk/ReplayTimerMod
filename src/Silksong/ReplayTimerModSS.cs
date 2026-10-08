@@ -66,9 +66,6 @@ namespace ReplayTimerMod
             bool shouldTick = false;
             try { shouldTick = LoadRemover.ShouldTick(); } catch (Exception ex) { LogTickError("LoadRemover", ex); }
 
-            // Each subsystem ticks in its own guard so one failure can't
-            // take the whole mod down for the rest of the session.
-            // Mirrored in ReplayTimerModHK.
             try { RoomTracker.Tick(shouldTick); } catch (Exception ex) { LogTickError("RoomTracker", ex); }
             try { frameRecorder.Tick(shouldTick); } catch (Exception ex) { LogTickError("FrameRecorder", ex); }
             try { ghostPlayback.Tick(shouldTick); } catch (Exception ex) { LogTickError("GhostPlayback", ex); }
@@ -76,8 +73,6 @@ namespace ReplayTimerMod
             try { roomTimerHUD.Tick(shouldTick); } catch (Exception ex) { LogTickError("RoomTimerHUD", ex); }
         }
 
-        // Throttled per-subsystem error log so a persistent per-frame fault
-        // doesn't flood the BepInEx log.
         private readonly Dictionary<string, float> _lastTickErrorLog =
             new Dictionary<string, float>();
 
@@ -104,7 +99,7 @@ namespace ReplayTimerMod
         private void OnDestroy()
         {
             roomTimerHUD.Teardown();
-            GhostSettings.Flush(); // commit any throttled color/alpha change
+            GhostSettings.Flush();
         }
 
         private static bool TryGetGameManager(out GameManager? gm)

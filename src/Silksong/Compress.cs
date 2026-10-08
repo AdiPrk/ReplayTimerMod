@@ -6,7 +6,6 @@ namespace ReplayTimerMod
 {
     internal static class Compress
     {
-        // Inflate ceiling — guards against a decompression bomb in shared replays.
         private const long MaxDecompressedBytes = 64L * 1024 * 1024;
 
         internal static byte[] CompressData(byte[] data)
@@ -36,4 +35,3 @@ namespace ReplayTimerMod
         }
     }
 }
-

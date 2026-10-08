@@ -5,8 +5,6 @@ using UnityEngine;
 
 namespace ReplayTimerMod
 {
-    // In-memory PB store. Loaded from disk on Init(), persisted on every new PB.
-    // All calls happen on the Unity main thread - no thread-safety needed.
     public static class PBManager
     {
         private static readonly ManualLogSource Log =
@@ -58,8 +56,6 @@ namespace ReplayTimerMod
             _selectionState = state;
             _selectionState?.PruneToExisting(_histories.Values.SelectMany(list => list));
         }
-
-        // ── Read ──────────────────────────────────────────────────────────────
 
         public static RecordedRoom? GetPB(RoomKey key)
         {
@@ -124,21 +120,17 @@ namespace ReplayTimerMod
             return true;
         }
 
-        // Returns true if a run with this time would be stored by Evaluate() -
-        // i.e. it's either the first run for this key or faster than the
-        // existing PB.
         public static bool WouldStoreRun(RoomKey key, float time)
         {
             if (!_currentPbs.TryGetValue(key, out var existing)) return true;
             return time < existing.TotalTime;
         }
 
-        // ── Evaluate (called after a live run) ────────────────────────────────
-
-        public static EvaluationResult Evaluate(RecordedRoom run, bool saveAllRuns = false)
+        public static EvaluationResult Evaluate(RecordedRoom run, bool saveAllRuns = false,
+            bool usedCheats = false)
         {
             float newTime = run.TotalTime;
-            var snapshot = ReplaySnapshot.CreateNew(run);
+            var snapshot = ReplaySnapshot.CreateNew(run, usedCheats: usedCheats);
 
             if (_currentPbs.TryGetValue(run.Key, out var existing))
             {
@@ -153,7 +145,7 @@ namespace ReplayTimerMod
 
                     Log.LogInfo($"[PBManager] New PB! {run.Key} {TimeUtil.Format(newTime)} " +
                                 $"(was {TimeUtil.Format(existing.TotalTime)}, -{TimeUtil.Format(improvement)})");
-                    return new EvaluationResult(ResultKind.NewPB, newTime, existing.TotalTime, improvement, snapshot);
+                    return new EvaluationResult(ResultKind.NewPB, newTime, existing.TotalTime, improvement);
                 }
 
                 float delta = newTime - existing.TotalTime;
@@ -165,14 +157,12 @@ namespace ReplayTimerMod
 
                 if (!AddSnapshot(snapshot, persist: true, allowDuplicate: false))
                 {
-                    // Duplicate of an existing run, or immediately evicted by
-                    // the route-history prune (slower than everything kept).
                     Log.LogInfo($"[PBManager] Did not store history for {run.Key}: {TimeUtil.Format(newTime)} (+{TimeUtil.Format(delta)})");
                     return new EvaluationResult(ResultKind.DuplicateRun, newTime, existing.TotalTime, delta);
                 }
 
                 Log.LogInfo($"[PBManager] Saved history for {run.Key}: {TimeUtil.Format(newTime)} (+{TimeUtil.Format(delta)})");
-                return new EvaluationResult(ResultKind.SavedHistory, newTime, existing.TotalTime, delta, snapshot);
+                return new EvaluationResult(ResultKind.SavedHistory, newTime, existing.TotalTime, delta);
             }
 
             if (!AddSnapshot(snapshot, persist: true, allowDuplicate: false))
@@ -182,28 +172,17 @@ namespace ReplayTimerMod
             }
 
             Log.LogInfo($"[PBManager] First run for {run.Key}: {TimeUtil.Format(newTime)}");
-            return new EvaluationResult(ResultKind.FirstRun, newTime, null, null, snapshot);
+            return new EvaluationResult(ResultKind.FirstRun, newTime, null, null);
         }
 
-        // ── Import ────────────────────────────────────────────────────────────
-        // Appends a decoded replay to local history (used for clipboard paste).
-
-        /// <summary>Outcome of an import attempt.</summary>
         public enum ImportOutcome { Imported, Duplicate, RouteFull }
 
-        /// <summary>
-        /// Whether a replay with the given time would actually be kept if
-        /// imported into this route — i.e. there is a free slot, or it is fast
-        /// enough to rank inside the retained window. Routes are pruned to the
-        /// best MaxSavedReplaysPerRoute by time. (History is ordered best → worst.)
-        /// </summary>
         public static bool WouldKeepReplay(RoomKey key, float time)
         {
             int max = Mathf.Max(1, GhostSettings.MaxSavedReplaysPerRoute);
             if (!_histories.TryGetValue(key, out var history) || history.Count < max)
                 return true;
-            var ordered = OrderSnapshots(history);          // best → worst
-            // Survives the prune iff it ranks inside the retained window.
+            var ordered = OrderSnapshots(history);
             return time < ordered[max - 1].TotalTime;
         }
 
@@ -218,8 +197,6 @@ namespace ReplayTimerMod
                 return ImportOutcome.Duplicate;
             }
 
-            // Route is full and this replay is too slow to survive the prune —
-            // don't claim success for something that won't be kept.
             if (!WouldKeepReplay(room.Key, room.TotalTime))
             {
                 Log.LogInfo($"[PBManager] Import skipped — route {room.Key} is full "
@@ -228,7 +205,6 @@ namespace ReplayTimerMod
                 return ImportOutcome.RouteFull;
             }
 
-            // Duplicate already ruled out; capacity already confirmed.
             AddSnapshot(snapshot, persist: true, allowDuplicate: true);
 
             bool isCurrent = _currentPbs.TryGetValue(room.Key, out var current)
@@ -257,9 +233,6 @@ namespace ReplayTimerMod
 
             RefreshCurrent(key, history);
 
-            // Only rewrite the scene file when something was actually removed.
-            // A no-op prune (the common case at startup, when no route exceeds
-            // the limit) must not touch disk — the on-disk data already matches.
             if (persist && pruned.Length > 0)
                 DataStore.ReplaceRouteSnapshots(key, OrderSnapshots(history));
 
@@ -279,8 +252,6 @@ namespace ReplayTimerMod
 
             return pruned;
         }
-
-        // ── Delete ────────────────────────────────────────────────────────────
 
         public static bool DeleteSnapshot(RoomKey key, string snapshotId)
         {
@@ -343,8 +314,6 @@ namespace ReplayTimerMod
             Log.LogInfo($"[PBManager] Deleted all entries ({scenes.Count} scenes)");
         }
 
-        // ── Internals ─────────────────────────────────────────────────────────
-
         private static bool AddSnapshot(ReplaySnapshot snapshot, bool persist,
             bool allowDuplicate, bool enforceLimit = true)
         {
@@ -370,17 +339,9 @@ namespace ReplayTimerMod
             int pruned = PruneRouteHistory(snapshot.Key, history,
                 GhostSettings.MaxSavedReplaysPerRoute, persist);
 
-            // PruneRouteHistory persists only when it actually prunes (which
-            // rewrites the whole route, including this new snapshot). If nothing
-            // was pruned, the freshly added snapshot still needs saving — append
-            // it incrementally rather than rewriting the route.
             if (persist && pruned == 0)
                 DataStore.SaveSnapshot(snapshot);
 
-            // On a full route the prune can evict the snapshot that was just
-            // added (it may be the slowest non-exempt entry). Report that
-            // truthfully so Evaluate doesn't claim SavedHistory for a run
-            // that no longer exists anywhere.
             return pruned == 0 || history.Contains(snapshot);
         }
 
@@ -418,18 +379,12 @@ namespace ReplayTimerMod
         public float? OldPBTime { get; }
         public float? Delta { get; }
 
-        /// <summary>The snapshot that was stored for this run, or null when
-        /// nothing was stored (MissedPB / DuplicateRun).</summary>
-        public ReplaySnapshot? Snapshot { get; }
-
-        public EvaluationResult(ResultKind kind, float newTime, float? oldPBTime,
-            float? delta, ReplaySnapshot? snapshot = null)
+        public EvaluationResult(ResultKind kind, float newTime, float? oldPBTime, float? delta)
         {
             Kind = kind;
             NewTime = newTime;
             OldPBTime = oldPBTime;
             Delta = delta;
-            Snapshot = snapshot;
         }
     }
 }

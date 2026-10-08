@@ -10,7 +10,7 @@ namespace ReplayTimerMod.Tests
 {
     public class ReplayShareEncoderTests
     {
-        private const float Quantum = 1f / 100f; // FrameCodec.PosScale
+        private const float Quantum = 1f / 100f;
 
         private static void AssertRoomsEquivalent(RecordedRoom expected,
             RecordedRoom? actual)
@@ -22,7 +22,6 @@ namespace ReplayTimerMod.Tests
 
             for (int i = 0; i < expected.FrameCount; i++)
             {
-                // Positions quantize to 1/100 world unit.
                 Assert.True(Math.Abs(expected.Frames[i].x - actual.Frames[i].x)
                     <= Quantum / 2 + 1e-4, $"x mismatch at frame {i}");
                 Assert.True(Math.Abs(expected.Frames[i].y - actual.Frames[i].y)
@@ -31,15 +30,11 @@ namespace ReplayTimerMod.Tests
                     actual.Frames[i].facingRight);
                 Assert.Equal(expected.Frames[i].animClip ?? "",
                     actual.Frames[i].animClip);
-                // animFrame is only meaningful alongside a clip; the decoder
-                // zeroes it for clipless frames.
                 if (!string.IsNullOrEmpty(expected.Frames[i].animClip))
                     Assert.Equal(Math.Min(expected.Frames[i].animFrame, 255),
                         actual.Frames[i].animFrame);
             }
         }
-
-        // ── Round trips ─────────────────────────────────────────────────────
 
         [Fact]
         public void RoundTrip_TypicalRoom()
@@ -112,7 +107,6 @@ namespace ReplayTimerMod.Tests
         [Fact]
         public void RoundTrip_FacingBits_ExactPattern()
         {
-            // 17 frames (crosses a byte boundary) with an irregular pattern.
             var frames = new FrameData[17];
             for (int i = 0; i < 17; i++)
                 frames[i] = new FrameData
@@ -127,9 +121,6 @@ namespace ReplayTimerMod.Tests
         [Fact]
         public void RoundTrip_ManyUniqueClips_DoesNotCorruptBlob()
         {
-            // Regression: >255 unique clips used to truncate the count byte
-            // ((byte)300 == 44) and produce an undecodable blob. Overflow
-            // clips now share table slot 254.
             var frames = new FrameData[300];
             for (int i = 0; i < 300; i++)
                 frames[i] = new FrameData
@@ -139,20 +130,15 @@ namespace ReplayTimerMod.Tests
             var decoded = ReplayShareEncoder.Decode(ReplayShareEncoder.Encode(room));
             Assert.NotNull(decoded);
             Assert.Equal(300, decoded!.FrameCount);
-            // First 254 clips keep their identity; overflow shares slot 254.
             Assert.Equal("Clip0", decoded.Frames[0].animClip);
             Assert.Equal("Clip253", decoded.Frames[253].animClip);
             Assert.Equal("Clip254", decoded.Frames[254].animClip);
             Assert.Equal("Clip254", decoded.Frames[299].animClip);
         }
 
-        // ── Trailing bytes ──────────────────────────────────────────────────
-
         [Fact]
         public void Decode_IgnoresTrailingBytes()
         {
-            // Older builds appended an "RTMX" modifier section after the anim
-            // block; those blobs must keep decoding.
             var room = Rooms.Room(frames: 20, time: 1f);
             byte[] raw = Inflate(ReplayShareEncoder.Encode(room));
             byte[] trailer = { (byte)'R', (byte)'T', (byte)'M', (byte)'X',
@@ -161,8 +147,6 @@ namespace ReplayTimerMod.Tests
             AssertRoomsEquivalent(room,
                 ReplayShareEncoder.Decode(Deflate(raw.Concat(trailer).ToArray())));
         }
-
-        // ── Malformed input ─────────────────────────────────────────────────
 
         [Fact]
         public void Decode_Garbage_ReturnsNull()
@@ -193,17 +177,14 @@ namespace ReplayTimerMod.Tests
         {
             byte[] raw = Inflate(ReplayShareEncoder.Encode(Rooms.Room(frames: 5)));
 
-            // frame count sits after magic+version and 3 length-prefixed strings.
             int p = 5;
             for (int i = 0; i < 3; i++)
                 p += 2 + BitConverter.ToUInt16(raw, p);
-            p += 4; // totalTime
+            p += 4;
             BitConverter.GetBytes(1_000_000).CopyTo(raw, p);
 
             Assert.Null(ReplayShareEncoder.Decode(Deflate(raw)));
         }
-
-        // ── Collections & share strings ─────────────────────────────────────
 
         [Fact]
         public void Collection_RoundTrips()
@@ -237,9 +218,6 @@ namespace ReplayTimerMod.Tests
         [Fact]
         public void DecodeShareString_ConcatenatedBlobsAndWhitespace()
         {
-            // Whitespace is stripped before splitting, so concatenated blobs
-            // are only separable at base64 '=' padding boundaries. Pick frame
-            // counts whose encodes actually end in '=' (length % 3 != 0).
             string a = EncodeEndingInPadding(seed: 1);
             string b = EncodeEndingInPadding(seed: 2);
             var coll = ReplayShareEncoder.EncodeCollection(
@@ -268,7 +246,6 @@ namespace ReplayTimerMod.Tests
         {
             var room = Rooms.Room(frames: 20);
             string good = ReplayShareEncoder.Encode(room);
-            // Junk that still ends with '=' so the splitter treats it as a chunk.
             string junk = Convert.ToBase64String(
                 Encoding.UTF8.GetBytes("this is not a replay at all, sorry"));
 
@@ -285,10 +262,6 @@ namespace ReplayTimerMod.Tests
                 new string('A', 16 * 1024 * 1024 + 1)));
         }
 
-        // ── Helpers ─────────────────────────────────────────────────────────
-
-        // Compress is internal to the product but the sources compile into
-        // this test assembly, so it's directly callable.
         private static byte[] Inflate(string base64) =>
             Compress.DecompressData(Convert.FromBase64String(base64));
 

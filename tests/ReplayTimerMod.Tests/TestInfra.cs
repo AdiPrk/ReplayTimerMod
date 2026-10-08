@@ -1,21 +1,14 @@
-// Shared test infrastructure: serial execution (much of the product surface
-// is static state — PBManager, GhostSettings, DataStore), repo-path
-// discovery for the shared corpus/fixtures, and RecordedRoom builders.
-
 using System;
 using System.IO;
 using ReplayTimerMod;
 using Xunit;
 
-// PBManager / GhostSettings / DataStore are static; never run tests in parallel.
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace ReplayTimerMod.Tests
 {
     internal static class RepoPaths
     {
-        /// <summary>Walks up from the test binary to the repo root (the
-        /// directory containing tests/shared).</summary>
         public static string SharedDir
         {
             get
@@ -39,8 +32,6 @@ namespace ReplayTimerMod.Tests
             string from = "Bone_East_09", string to = "Bone_East_11") =>
             new RoomKey(scene, from, to);
 
-        /// <summary>Builds a plausible recorded room: a deterministic walk with
-        /// direction flips and a couple of animation clips.</summary>
         public static RecordedRoom Room(int frames = 90, float time = 3f,
             RoomKey? key = null, int seed = 12345)
         {
@@ -65,7 +56,6 @@ namespace ReplayTimerMod.Tests
             return new RecordedRoom(key ?? Key(), time, data);
         }
 
-        /// <summary>A temp directory that cleans itself up.</summary>
         public sealed class TempDir : IDisposable
         {
             public string Path { get; }
@@ -80,7 +70,7 @@ namespace ReplayTimerMod.Tests
             public void Dispose()
             {
                 try { Directory.Delete(Path, recursive: true); }
-                catch { /* best effort */ }
+                catch { }
             }
         }
     }

@@ -10,12 +10,6 @@ namespace ReplayTimerMod
         public string? SelectedSnapshotId { get; private set; }
         public ICollection<string> PlaybackSnapshotIds => playbackSnapshotIds;
 
-        /// <summary>
-        /// Single camera-follow slot: the one run the game
-        /// camera should track instead of the player, whenever that run is
-        /// playing as a ghost. A snapshot belongs to exactly one room, so
-        /// this naturally applies to one room at a time. Session-only.
-        /// </summary>
         public string? CameraFollowSnapshotId { get; private set; }
 
         public void SelectSnapshot(string? snapshotId)
@@ -51,9 +45,6 @@ namespace ReplayTimerMod
             return true;
         }
 
-        /// <summary>Toggles the camera-follow slot for a run. Selecting a
-        /// different run moves the slot there (only one can be followed).
-        /// Returns true when the run is now followed.</summary>
         public bool ToggleCameraFollow(string snapshotId)
         {
             if (string.IsNullOrEmpty(snapshotId))

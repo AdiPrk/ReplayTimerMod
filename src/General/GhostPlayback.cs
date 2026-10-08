@@ -5,18 +5,6 @@ using UnityEngine;
 
 namespace ReplayTimerMod
 {
-    // Plays back previously recorded runs as world-space ghosts.
-    //
-    // Lifecycle:
-    //   RoomTracker.OnRoomEnter  → StartPlayback(scene, entryFromScene)
-    //   LateUpdate               → Tick() advances playback in LR time
-    //   RoomTracker.OnRoomExit / OnRecordingDiscarded → StopPlayback()
-    //
-    // Sprite rendering:
-    //   We create sprite GOs inactive so tk2dSprite.Awake() fires after Collection
-    //   is assigned - this prevents the pink-rectangle bug.
-    //   Clip name → spriteId is resolved via a Dictionary built once at init so
-    //   the hot tick path is a single hash lookup, not GetClipByName().
     public class GhostPlayback
     {
         private static readonly ManualLogSource Log =
@@ -99,10 +87,6 @@ namespace ReplayTimerMod
             _activeInstances.Clear();
         }
 
-        // Accepts the pre-computed shouldTick value from the plugin so that
-        // LoadRemover.ShouldTick() is only called once per LateUpdate across
-        // all subsystems. Calling it multiple times per frame causes incorrect
-        // state transitions because it writes prevGameState on every call.
         public void Tick(bool shouldTick)
         {
             if (!_playing || _activeInstances.Count == 0)
@@ -140,11 +124,6 @@ namespace ReplayTimerMod
             UpdateCameraFollow();
         }
 
-        /// <summary>
-        /// Reconciles the camera-follow slot against the active instances
-        /// every tick: engaged while the followed run's ghost is _playing,
-        /// released the moment it finishes or the selection changes.
-        /// </summary>
         private void UpdateCameraFollow()
         {
             Transform? target = null;
@@ -225,9 +204,6 @@ namespace ReplayTimerMod
             Vector3 pos = new Vector3(x, y, z);
             Color color = instance.Snapshot.ResolveGhostColor(globalColor);
 
-            // Camera anchor tracks the ghost regardless of whether it
-            // renders as a sprite or a diamond; facing feeds the camera
-            // look-ahead when this instance is followed.
             if (instance.AnchorGo != null)
                 instance.AnchorGo.transform.position = pos;
             instance.FacingRight = animFrame.facingRight;
@@ -247,9 +223,6 @@ namespace ReplayTimerMod
             {
                 if (HeroController.instance == null)
                 {
-                    // Don't latch _spriteInitDone: the hero just doesn't exist
-                    // YET (early-session playback); retry next room instead of
-                    // falling back to the diamond for the whole session.
                     Log.LogWarning("[GhostPlayback] HeroController null - using diamond for now");
                     return;
                 }
@@ -298,7 +271,6 @@ namespace ReplayTimerMod
 
         private void CreateVisuals(PlaybackInstance instance)
         {
-            // Invisible anchor the camera can follow (see CameraFollow).
             instance.AnchorGo = new GameObject($"ReplayGhost_Anchor_{instance.Snapshot.SnapshotId}");
             ScenePersistence.Apply(instance.AnchorGo);
 
@@ -309,7 +281,6 @@ namespace ReplayTimerMod
             var diamondLine = instance.DiamondGo.AddComponent<LineRenderer>();
             diamondLine.useWorldSpace = true;
 #if V1221
-            // Unity 5.2 (HK 1221 / net35) — old API only
             diamondLine.SetVertexCount(5);
             diamondLine.SetWidth(0.06f, 0.06f);
 #else

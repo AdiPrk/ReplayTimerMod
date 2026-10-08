@@ -7,16 +7,7 @@ using Xunit;
 
 namespace ReplayTimerMod.Tests
 {
-    /// <summary>
-    /// Format-regression fixtures: real RTM3 blobs produced by the C# encoder
-    /// and committed to tests/shared/rtm3-fixtures.json. Decoding the
-    /// PREVIOUSLY-committed blobs catches encoder/decoder drift that pure
-    /// in-memory round-trip tests cannot (old blobs must keep decoding).
-    ///
-    /// To regenerate after an intentional format change:
-    ///   RTM_WRITE_FIXTURES=1 dotnet test tests/ReplayTimerMod.Tests
-    /// then commit the updated JSON.
-    /// </summary>
+    // Regenerate after an intentional format change: RTM_WRITE_FIXTURES=1 dotnet test
     public class FixtureTests
     {
         private sealed record FixtureSpec(string Name, string Kind,

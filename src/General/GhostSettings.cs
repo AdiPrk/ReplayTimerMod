@@ -23,6 +23,7 @@ namespace ReplayTimerMod
         public bool  ChainRoomTimers         = false;
         public bool  SkipBacktrackRuns       = false;
         public bool  SkipBacktrackTimer      = false;
+        public bool  CancelRunOnCheats       = true;
     }
 
     public static class GhostSettings
@@ -33,14 +34,9 @@ namespace ReplayTimerMod
         private static string _filePath = "";
         private static readonly GhostSettingsData _d = new GhostSettingsData();
 
-        // Slider-driven setters (color/alpha) fire every drag frame; writing
-        // the file per frame would hammer the disk. Those setters go through
-        // SaveThrottled, which defers to a Flush (picker close / menu close).
         private const float MinSaveIntervalSec = 0.5f;
         private static bool _dirty;
         private static float _lastSaveRealtime = float.NegativeInfinity;
-
-        // ── Properties ────────────────────────────────────────────────────────
 
         public static bool TrackingEnabled
         {
@@ -95,39 +91,29 @@ namespace ReplayTimerMod
             set { _d.TimerHudEnabled = value; Save(); }
         }
 
-        /// <summary>
-        /// When true, the room timer HUD keeps the just-finished room's card
-        /// on screen and rolls in a second card for the next room, showing up
-        /// to two rooms at once before sliding the older one off.
-        /// </summary>
         public static bool ChainRoomTimers
         {
             get => _d.ChainRoomTimers;
             set { _d.ChainRoomTimers = value; Save(); }
         }
 
-        /// <summary>
-        /// When true, runs that exit back through the same transition they
-        /// entered from (exitTo == entryFrom) are not saved.
-        /// </summary>
         public static bool SkipBacktrackRuns
         {
             get => _d.SkipBacktrackRuns;
             set { _d.SkipBacktrackRuns = value; Save(); }
         }
 
-        /// <summary>
-        /// When true, the room timer HUD ignores runs that exit back through
-        /// the same transition they entered from (exitTo == entryFrom): no
-        /// finished time is shown and the live card just clears.
-        /// </summary>
         public static bool SkipBacktrackTimer
         {
             get => _d.SkipBacktrackTimer;
             set { _d.SkipBacktrackTimer = value; Save(); }
         }
 
-        // ── Init ─────────────────────────────────────────────────────────────
+        public static bool CancelRunOnCheats
+        {
+            get => _d.CancelRunOnCheats;
+            set { _d.CancelRunOnCheats = value; Save(); }
+        }
 
         public static void Init(string baseDirectory)
         {
@@ -135,8 +121,6 @@ namespace ReplayTimerMod
                 Path.Combine(baseDirectory, "ReplayMod"), "settings.txt");
             Load();
         }
-
-        // ── Save / Load ───────────────────────────────────────────────────────
 
         public static void Save()
         {
@@ -166,10 +150,6 @@ namespace ReplayTimerMod
             _dirty = true;
         }
 
-        /// <summary>
-        /// Write any deferred (throttled) changes to disk. Called when the
-        /// color picker or the replay panel closes.
-        /// </summary>
         public static void Flush()
         {
             if (_dirty) Save();
@@ -193,7 +173,7 @@ namespace ReplayTimerMod
                     if (f == null) continue;
 
                     try { f.SetValue(_d, ParseField(f.FieldType, val, f.GetValue(defaults))); }
-                    catch { /* leave default */ }
+                    catch { }
                 }
             }
             catch (Exception ex)

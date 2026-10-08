@@ -1,12 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!--
-    Unit tests for the shared (src/General) logic. Runs on plain .NET — no
-    game install, no Unity, no BepInEx. The Unity/BepInEx surface the shared
-    code touches is re-implemented by small test stubs in Stubs/ (the same
-    trick the HK builds use via BepInExStubs.HK.cs).
-
-    Only pure-logic product files are compiled in (cherry-picked below).
-  -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <LangVersion>latest</LangVersion>
@@ -14,10 +6,6 @@
     <IsPackable>false</IsPackable>
     <AssemblyName>ReplayTimerMod.Tests</AssemblyName>
     <RootNamespace>ReplayTimerMod.Tests</RootNamespace>
-    <!-- CS1591: product doc-comments reference types we don't compile in.
-         CS8600/8604: net8's BCL has stricter nullable annotations than the
-         game TFMs (e.g. Path.GetDirectoryName) — noise here, absent in the
-         real builds. -->
     <NoWarn>$(NoWarn);CS1591;CS8600;CS8604</NoWarn>
   </PropertyGroup>
 
@@ -28,7 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Product sources under test (pure logic only — no Unity scene/game APIs). -->
     <Compile Include="..\..\src\General\DataStore.cs" Link="Product\DataStore.cs" />
     <Compile Include="..\..\src\General\FrameCodec.cs" Link="Product\FrameCodec.cs" />
     <Compile Include="..\..\src\General\GhostSettings.cs" Link="Product\GhostSettings.cs" />
@@ -38,8 +25,6 @@
     <Compile Include="..\..\src\General\ReplayData.cs" Link="Product\ReplayData.cs" />
     <Compile Include="..\..\src\General\ReplaySelectionState.cs" Link="Product\ReplaySelectionState.cs" />
     <Compile Include="..\..\src\General\ReplayShareEncoder.cs" Link="Product\ReplayShareEncoder.cs" />
-    <!-- The Silksong Compress (System.IO.Compression Deflate) — same wire
-         format as the SharpZipLib HK variant. -->
     <Compile Include="..\..\src\Silksong\Compress.cs" Link="Product\Compress.cs" />
   </ItemGroup>
 </Project>

@@ -20,6 +20,8 @@ namespace ReplayTimerMod
             _chainToggleBg = null;
             _skipRunsToggleLbl = null;
             _skipRunsToggleBg = null;
+            _cheatCancelToggleLbl = null;
+            _cheatCancelToggleBg = null;
             _skipTimerToggleLbl = null;
             _skipTimerToggleBg = null;
             _cfgGhostColorFill = null;
@@ -45,10 +47,6 @@ namespace ReplayTimerMod
 
             ButtonRef br;
 
-            // All toggles are built with placeholder text/colors; the
-            // RefreshConfigValues() call that always follows BuildConfigContent
-            // paints the real state (one idiom for every toggle).
-
             AddSectionHeader(_rightContent, "Recording");
 
             var trackRow = AddConfigRow(_rightContent, "Tracking", rowH, labelW);
@@ -71,6 +69,22 @@ namespace ReplayTimerMod
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnSkipBacktrackRunsToggle);
             _skipRunsToggleBg = br.bg;
             _skipRunsToggleLbl = br.label;
+
+            var cheatRow = AddConfigRow(_rightContent, "Cancel on cheat", rowH, labelW);
+            br = MakeButton(cheatRow.transform, "CheatCancelToggle", "ON",
+                UIStyle.FontSizeRow, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
+                labelW, (rowH - btnH) / 2, toggleW, btnH, OnCheatCancelToggle);
+            _cheatCancelToggleBg = br.bg;
+            _cheatCancelToggleLbl = br.label;
+
+            var cheatHintRow = MakeGO("CheatCancelHint", _rightContent);
+            Img(cheatHintRow, Color.clear);
+            var cheatHintLE = cheatHintRow.AddComponent<LayoutElement>();
+            cheatHintLE.minHeight = cheatHintLE.preferredHeight = UIStyle.H(16);
+            MakeLbl(cheatHintRow.transform,
+                "When off, runs with DebugMod cheats are kept and marked with a red !",
+                UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: UIStyle.W(8), w: UIStyle.W(320), h: UIStyle.H(16));
 
             var keepRow = AddConfigRow(_rightContent, "Keep per route", rowH, labelW);
             int keepX = labelW;
@@ -119,8 +133,6 @@ namespace ReplayTimerMod
             _skipTimerToggleBg = br.bg;
             _skipTimerToggleLbl = br.label;
 
-            // Ghost color: one chip that opens the color picker for the
-            // global color. Per-run overrides are set from the Runs tab.
             var colorRow = AddConfigRow(_rightContent, "Ghost color", rowH, labelW);
             int chipW = UIStyle.W(46);
             var chip = MakeGO("GhostColorChip", colorRow.transform);
@@ -222,16 +234,12 @@ namespace ReplayTimerMod
             StyleToggle(_timerToggleLbl, _timerToggleBg, GhostSettings.TimerHudEnabled);
             StyleToggle(_chainToggleLbl, _chainToggleBg, GhostSettings.ChainRoomTimers);
             StyleToggle(_skipRunsToggleLbl, _skipRunsToggleBg, GhostSettings.SkipBacktrackRuns);
+            StyleToggle(_cheatCancelToggleLbl, _cheatCancelToggleBg, GhostSettings.CancelRunOnCheats);
             StyleToggle(_skipTimerToggleLbl, _skipTimerToggleBg, GhostSettings.SkipBacktrackTimer);
 
             RefreshGhostColorChip();
         }
 
-        /// <summary>
-        /// Applies the standard ON/OFF colouring to a config toggle: accent when
-        /// on, subtext/overlay when off. Toggles with bespoke off-states (e.g.
-        /// tracking, save policy) are styled inline instead.
-        /// </summary>
         private static void StyleToggle(Text? label, Image? bg, bool on)
         {
             if (label != null)

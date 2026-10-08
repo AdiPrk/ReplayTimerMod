@@ -8,51 +8,18 @@ using UnityEngine;
 
 namespace ReplayTimerMod
 {
-    /// <summary>
-    /// Silksong warp utility.
-    ///
-    /// Resolves warp targets from a static, bundled transition map — the same
-    /// authoritative door data that Benchwarp / RandomizerMod use. The map is
-    /// embedded as a resource and loaded once at startup, so warps work
-    /// immediately for any route (including imported routes the
-    /// player has never visited). No runtime scanning, no learned cache, no
-    /// room visits required.
-    ///
-    /// The map covers every known (sourceScene, destScene) transition. When a
-    /// room has two doors leading to the same neighbour, the map stores one of
-    /// them (deterministically, the lowest-sorted gate name). Every stored gate
-    /// provably leads to its keyed destination, so a warp always lands the
-    /// player in the correct previous room before a real transition into the
-    /// run room — even if it isn't the exact door the recorded run used.
-    ///
-    /// A warp goes to EntryFromScene (the previous room) at the door leading
-    /// into SceneName (the run room), placing the player right before the
-    /// transition that starts the run.
-    /// </summary>
     public static class QuickWarp
     {
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("QuickWarp");
 
-        // Map: "SourceScene|DestScene" -> gate name IN SourceScene that leads
-        // to DestScene. Loaded from the embedded transition resource.
         private static readonly Dictionary<string, string> _map =
             new Dictionary<string, string>();
 
         private static bool _loaded;
 
-        /// <summary>
-        /// True while a warp transition is in progress. RoomTracker checks
-        /// this to suppress recording for warp-triggered scene changes.
-        /// </summary>
         public static bool IsWarping { get; private set; }
 
-        // ── Init ────────────────────────────────────────────────────────────
-
-        /// <summary>
-        /// Load the embedded transition map. Call once from the mod entry
-        /// point.
-        /// </summary>
         public static void Init()
         {
             if (_loaded) return;
@@ -96,14 +63,6 @@ namespace ReplayTimerMod
             }
         }
 
-        // ── Gate resolution ─────────────────────────────────────────────────
-
-        /// <summary>
-        /// Get the gate in sourceScene that leads to destScene, or null if the
-        /// transition is unknown. When multiple doors connect the two scenes,
-        /// returns a deterministically-chosen one that provably reaches
-        /// destScene.
-        /// </summary>
         public static string? ResolveExitGate(string sourceScene, string destScene)
         {
             if (string.IsNullOrEmpty(sourceScene) || string.IsNullOrEmpty(destScene))
@@ -115,34 +74,18 @@ namespace ReplayTimerMod
             return null;
         }
 
-        /// <summary>
-        /// Resolve the exit gate for a route's entry: the gate in
-        /// EntryFromScene that leads into SceneName.
-        /// </summary>
         public static string? ResolveExitGate(RoomKey routeKey)
         {
             return ResolveExitGate(routeKey.EntryFromScene, routeKey.SceneName);
         }
 
-        /// <summary>
-        /// Whether this route has a warp target — true when the
-        /// (EntryFromScene -> SceneName) transition exists in the map. Spawn
-        /// routes (no previous room) return false.
-        /// </summary>
         public static bool CanWarp(RoomKey routeKey)
         {
             if (string.IsNullOrEmpty(routeKey.EntryFromScene))
-                return false; // spawn routes have no previous room
+                return false;
             return ResolveExitGate(routeKey) != null;
         }
 
-        // ── Warp ────────────────────────────────────────────────────────────
-
-        /// <summary>
-        /// Warp to the entry transition for a route: goes to EntryFromScene
-        /// at a door that leads into SceneName. Returns false if the route has
-        /// no known target (spawn route, or a transition absent from the map).
-        /// </summary>
         public static bool WarpToRoute(RoomKey routeKey)
         {
             string? gate = ResolveExitGate(routeKey);
@@ -155,12 +98,6 @@ namespace ReplayTimerMod
             return true;
         }
 
-        /// <summary>
-        /// Warp to <paramref name="sceneName"/> at <paramref name="gateName"/>.
-        /// Sets <see cref="IsWarping"/> to suppress run recording until the
-        /// destination scene actually activates (cleared by RoomTracker via
-        /// <see cref="NotifyArrival"/>, with a watchdog fallback).
-        /// </summary>
         public static void WarpToTransition(string sceneName, string gateName)
         {
             if (string.IsNullOrEmpty(sceneName) || string.IsNullOrEmpty(gateName))
@@ -169,8 +106,6 @@ namespace ReplayTimerMod
                 return;
             }
 
-            // Ignore re-entrant warp requests while one is already running,
-            // so spam-clicking can't fire multiple overlapping transitions.
             if (IsWarping)
             {
                 Log.LogInfo("[QuickWarp] Warp already in progress - ignoring");
@@ -198,11 +133,6 @@ namespace ReplayTimerMod
             }
         }
 
-        /// <summary>
-        /// Called by RoomTracker when it consumes the warp arrival (the
-        /// destination scene has activated). Ends the recording-suppression
-        /// window. Safe to call when not warping.
-        /// </summary>
         public static void NotifyArrival()
         {
             if (IsWarping)
@@ -212,18 +142,11 @@ namespace ReplayTimerMod
             }
         }
 
-        // ── Coroutine ───────────────────────────────────────────────────────
-
         private static IEnumerator WarpCoroutine(GameManager gm,
             string sceneName, string gateName)
         {
-            // The UI is only interactable while paused, so unpause first.
             if (IsGamePaused(gm))
             {
-                // Fully drain the unpause coroutine before warping (matches
-                // QuickWarp/Benchwarp). Getting the iterator is wrapped in
-                // try/catch; the draining yield is outside it (C# forbids
-                // yield inside try/catch).
                 IEnumerator? unpause = GetUnpauseIterator(gm);
                 if (unpause != null)
                 {
@@ -232,15 +155,10 @@ namespace ReplayTimerMod
                 }
             }
 
-            yield return null; // safety frame before transition
+            yield return null;
 
             DoWarp(gm, sceneName, gateName);
 
-            // IsWarping stays true until RoomTracker consumes the arrival
-            // (NotifyArrival) once the destination scene activates — which can
-            // be many frames later, since BeginSceneTransition is async.
-            // This watchdog only clears the flag if that arrival never comes
-            // (e.g. a failed/aborted transition), so the flag can't get stuck.
             float deadline = Time.unscaledTime + WarpWatchdogSeconds;
             while (IsWarping && Time.unscaledTime < deadline)
                 yield return null;
@@ -282,8 +200,6 @@ namespace ReplayTimerMod
             GameManager.UnsafeInstance.BeginSceneTransition(info);
         }
 
-        // ── Helpers ─────────────────────────────────────────────────────────
-
         private static bool IsGamePaused(GameManager gm)
         {
             try { return gm.IsGamePaused(); }
@@ -293,11 +209,6 @@ namespace ReplayTimerMod
                 catch { return false; }
             }
         }
-
-        // ── Flat JSON parser ────────────────────────────────────────────────
-        // Parses {"key":"value","key2":"value2",...} where keys and values
-        // are plain strings (no nesting, no escapes beyond \" and \\).
-        // Avoids a hard Newtonsoft dependency that differs across builds.
 
         private static void ParseFlatStringMap(string json,
             Dictionary<string, string> into)
@@ -371,7 +282,7 @@ namespace ReplayTimerMod
                     sb.Append(c);
                 }
             }
-            return null; // unterminated
+            return null;
         }
     }
 }

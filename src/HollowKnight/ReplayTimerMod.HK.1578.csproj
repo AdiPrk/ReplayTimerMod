@@ -1,12 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!--
-  Imports Hollow Knight path properties only if present.
-  Keep this file local (gitignored) if you need machine-specific paths.
-  -->
   <Import Condition="Exists('..\..\.config\local\HollowKnightPath1578.props')" Project="..\..\.config\local\HollowKnightPath1578.props" />
 
-  <!-- Only the 1578-specific deltas live here; everything shared with the
-       1221 target is in HK.Common.targets (imported at the bottom). -->
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <HKVersionConstant>V1578</HKVersionConstant>

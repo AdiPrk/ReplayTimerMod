@@ -10,8 +10,6 @@ namespace ReplayTimerMod
         {
             if (_sceneListContent == null) return;
 
-            // Preserve scroll position across rebuilds (scene-index refreshes,
-            // PB updates, selection changes shouldn't yank the list around)
             float keepScroll = _sceneListScroll != null
                 ? _sceneListScroll.verticalNormalizedPosition : 1f;
 
@@ -19,7 +17,6 @@ namespace ReplayTimerMod
 
             string filter = (_searchFilter ?? "").Trim().ToLowerInvariant();
 
-            // Rooms where the player has recorded at least one run.
             var scenes = PBManager.AllPBs()
                 .Select(p => p.Key.SceneName)
                 .Distinct()
@@ -90,8 +87,6 @@ namespace ReplayTimerMod
             var le = row.AddComponent<LayoutElement>();
             le.minHeight = le.preferredHeight = RH;
 
-            // Selection affordance: same accent edge bar as the Runs tab's
-            // editing row, so "selected" looks identical everywhere.
             if (selected)
             {
                 var bar = MakeGO("SelBar", row.transform);
@@ -103,18 +98,11 @@ namespace ReplayTimerMod
             int labelX = M;
             int labelW = LW - M * 2;
 
-            // No glyph prefix - the label is always exactly the scene name
-            // (ScrollToScene matches rows by label text).
             MakeLbl(row.transform, scene,
                 UIStyle.FontSizeRow, textColor, TextAnchor.MiddleLeft,
                 x: labelX, w: labelW, h: RH);
         }
 
-        /// <summary>
-        /// Scrolls the scene list so that the specified scene row is visible.
-        /// Row labels are exactly the scene name, so a direct text match finds
-        /// the child index.
-        /// </summary>
         private void ScrollToScene(string scene)
         {
             if (_sceneListScroll == null || _sceneListContent == null) return;
@@ -137,15 +125,12 @@ namespace ReplayTimerMod
 
             if (targetIndex < 0) return;
 
-            // verticalNormalizedPosition: 1 = top, 0 = bottom
             float viewportH = _sceneListScroll.viewport != null
                 ? _sceneListScroll.viewport.rect.height : 0f;
             float contentH = ((RectTransform)_sceneListContent).rect.height;
 
-            if (contentH <= viewportH) return; // all visible, no scrolling needed
+            if (contentH <= viewportH) return;
 
-            // Row pitch = row height + the VerticalLayoutGroup's 1px spacing
-            // (see BuildLeftPane); RH alone drifts ~1px short per row.
             float targetY = targetIndex * (RH + 1);
             float maxScroll = contentH - viewportH;
             float normalized = 1f - Mathf.Clamp01(targetY / maxScroll);

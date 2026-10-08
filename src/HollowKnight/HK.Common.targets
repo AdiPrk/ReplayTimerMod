@@ -1,10 +1,4 @@
 <Project>
-  <!--
-    Everything the two Hollow Knight targets share. Each csproj sets only its
-    deltas (TargetFramework, HKVersionConstant, HKLocalPropsName, plus any
-    version-specific References) and imports this file at the bottom.
-  -->
-
   <PropertyGroup>
     <AssemblyName>ReplayTimerMod.HK</AssemblyName>
     <LangVersion>latest</LangVersion>
@@ -16,7 +10,6 @@
 
     <PathMap Condition="'$(Configuration)' == 'Release'">$(MSBuildProjectDirectory)=/</PathMap>
 
-    <!-- Keep HK build artifacts in-repo instead of copying directly to a game install. -->
     <HKPackageOutputDir>$(OutputPath)dist\ReplayTimerMod</HKPackageOutputDir>
     <HKZipFileName>ReplayTimerMod.HK-v$(Version).zip</HKZipFileName>
     <HKZipFilePath>$(OutputPath)dist\$(HKZipFileName)</HKZipFilePath>
@@ -86,28 +79,7 @@
            Text="Assembly-CSharp.dll not found under $(HollowKnightManagedFolder). Update .config/local/$(HKLocalPropsName) to your Hollow Knight_Data/Managed folder." />
   </Target>
 
-  <!--
-    Merge ICSharpCode.SharpZipLib into our output DLL so it ships as one file.
-
-    Why this is written so defensively: the previous version used an
-    Inputs/Outputs stamp for incremental skipping. On an up-to-date build
-    CopyFilesToOutputDirectory copies the freshly compiled, *unmerged* assembly
-    over the merged output, and the stamp guard then considered the merge "up
-    to date" and skipped it - so the shipped DLL still referenced SharpZipLib
-    externally and threw FileNotFoundException at runtime (every replay
-    save/encode crashed - this is exactly what broke HK 1.5.78 saving).
-
-    Robust scheme that works whether or not OutputPath aliases the intermediate
-    directory (the 1221 build outputs into its own obj tree, so its
-    intermediate assembly and final output are the SAME file - merging "from
-    the intermediate" there would double-merge):
-      * Run after the output DLL is in place (AfterTargets=CopyFilesToOutputDirectory).
-      * Record the merged DLL's last-write-time in a stamp after each merge.
-      * On the next build, skip the merge ONLY if the output DLL's write time
-        still matches the stamp (i.e. nothing recompiled/recopied it since we
-        merged). Any recompile or copy changes the time and forces a fresh
-        merge. This never double-merges and never ships an unmerged DLL.
-  -->
+  <!-- Merge SharpZipLib into the output DLL every build; a stamp-based skip once shipped it unmerged. -->
   <Target Name="ILRepackSharpZipLib"
           AfterTargets="CopyFilesToOutputDirectory"
           BeforeTargets="PrepareHKReleaseLayout"
@@ -118,9 +90,6 @@
       <_ILRepackStamp>$(IntermediateOutputPath)$(TargetName).ilrepack.stamp</_ILRepackStamp>
     </PropertyGroup>
 
-    <!-- Probe the output DLL's current modified time and the time recorded
-         after the last merge. MSBuild forbids System.IO.File property
-         functions, so use well-known item metadata + ReadLinesFromFile. -->
     <ItemGroup>
       <_OutDllProbe Include="$(TargetPath)" Condition="Exists('$(TargetPath)')" />
     </ItemGroup>
@@ -136,15 +105,12 @@
     <Message Importance="normal" Condition="'$(_AlreadyMerged)' == 'true'"
              Text="ReplayTimerMod: SharpZipLib already merged into $(TargetFileName); skipping ILRepack." />
 
-    <!-- A merge is needed: the output DLL is the freshly produced, unmerged
-         compiler output. Merge SharpZipLib into it in place. -->
     <Copy Condition="'$(_AlreadyMerged)' != 'true'"
           SourceFiles="$(TargetPath)" DestinationFiles="$(_ILRepackInput)" />
     <Exec Condition="'$(_AlreadyMerged)' != 'true'"
           Command="&quot;$(_ILRepackExe)&quot; /internalize /lib:&quot;$(TargetDir).&quot; /lib:&quot;$(HollowKnightManagedFolder)&quot; /out:&quot;$(TargetPath)&quot; &quot;$(_ILRepackInput)&quot; &quot;$(TargetDir)ICSharpCode.SharpZipLib.dll&quot;"
           IgnoreStandardErrorWarningFormat="true" />
     <Delete Condition="'$(_AlreadyMerged)' != 'true'" Files="$(_ILRepackInput)" />
-    <!-- Re-probe the merged DLL's new modified time and record it. -->
     <ItemGroup Condition="'$(_AlreadyMerged)' != 'true'">
       <_MergedProbe Include="$(TargetPath)" />
     </ItemGroup>
@@ -157,7 +123,6 @@
   <Target Name="PrepareHKReleaseLayout" AfterTargets="Build">
     <RemoveDir Directories="$(HKPackageOutputDir)" Condition="Exists('$(HKPackageOutputDir)')" />
     <MakeDir Directories="$(HKPackageOutputDir)" />
-    <!-- SharpZipLib is embedded by ILRepack; only the merged DLL (and optional PDB) are needed. -->
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(HKPackageOutputDir)" />
     <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="$(HKPackageOutputDir)" Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
   </Target>

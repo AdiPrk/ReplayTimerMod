@@ -1,7 +1,4 @@
 #if HOLLOW_KNIGHT_BUILD
-// Minimal BepInEx.Logging reimplementation over the Modding API logger so the
-// shared code in src/General (which logs via ManualLogSource) compiles on the
-// Hollow Knight builds, where there is no real BepInEx.
 namespace BepInEx.Logging
 {
     public sealed class ManualLogSource
