@@ -3,13 +3,9 @@
     Unit tests for the shared (src/General) logic. Runs on plain .NET — no
     game install, no Unity, no BepInEx. The Unity/BepInEx surface the shared
     code touches is re-implemented by small test stubs in Stubs/ (the same
-    trick the HK builds use via BepInExStubs.HK.cs), and HttpService is
-    replaced by a recording fake so UploadWorker can be driven synchronously.
+    trick the HK builds use via BepInExStubs.HK.cs).
 
     Only pure-logic product files are compiled in (cherry-picked below).
-    No game build constant is defined, so ModifierRegistry compiles with an
-    empty table — registry-dependent behavior (probes, crest/tool mapping)
-    can only be verified in-game; see VERIFICATION.md.
   -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -21,9 +17,8 @@
     <!-- CS1591: product doc-comments reference types we don't compile in.
          CS8600/8604: net8's BCL has stricter nullable annotations than the
          game TFMs (e.g. Path.GetDirectoryName) — noise here, absent in the
-         real builds. CS0649: UploadPayload's assigner (NetworkClient) isn't
-         compiled into the test project. -->
-    <NoWarn>$(NoWarn);CS1591;CS8600;CS8604;CS0649</NoWarn>
+         real builds. -->
+    <NoWarn>$(NoWarn);CS1591;CS8600;CS8604</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -34,24 +29,15 @@
 
   <ItemGroup>
     <!-- Product sources under test (pure logic only — no Unity scene/game APIs). -->
-    <Compile Include="..\..\src\General\ApiJson.cs" Link="Product\ApiJson.cs" />
-    <Compile Include="..\..\src\General\ApiTypes.cs" Link="Product\ApiTypes.cs" />
-    <Compile Include="..\..\src\General\ConnectionHealth.cs" Link="Product\ConnectionHealth.cs" />
     <Compile Include="..\..\src\General\DataStore.cs" Link="Product\DataStore.cs" />
     <Compile Include="..\..\src\General\FrameCodec.cs" Link="Product\FrameCodec.cs" />
     <Compile Include="..\..\src\General\GhostSettings.cs" Link="Product\GhostSettings.cs" />
     <Compile Include="..\..\src\General\JsonText.cs" Link="Product\JsonText.cs" />
-    <Compile Include="..\..\src\General\LeaderboardCache.cs" Link="Product\LeaderboardCache.cs" />
     <Compile Include="..\..\src\General\MiniJson.cs" Link="Product\MiniJson.cs" />
-    <Compile Include="..\..\src\General\ModifierMask.cs" Link="Product\ModifierMask.cs" />
-    <Compile Include="..\..\src\General\NameValidator.cs" Link="Product\NameValidator.cs" />
     <Compile Include="..\..\src\General\PBManager.cs" Link="Product\PBManager.cs" />
     <Compile Include="..\..\src\General\ReplayData.cs" Link="Product\ReplayData.cs" />
     <Compile Include="..\..\src\General\ReplaySelectionState.cs" Link="Product\ReplaySelectionState.cs" />
     <Compile Include="..\..\src\General\ReplayShareEncoder.cs" Link="Product\ReplayShareEncoder.cs" />
-    <Compile Include="..\..\src\General\ReplaySharing.cs" Link="Product\ReplaySharing.cs" />
-    <Compile Include="..\..\src\General\RouteView.cs" Link="Product\RouteView.cs" />
-    <Compile Include="..\..\src\General\UploadWorker.cs" Link="Product\UploadWorker.cs" />
     <!-- The Silksong Compress (System.IO.Compression Deflate) — same wire
          format as the SharpZipLib HK variant. -->
     <Compile Include="..\..\src\Silksong\Compress.cs" Link="Product\Compress.cs" />

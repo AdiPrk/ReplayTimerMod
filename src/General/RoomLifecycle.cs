@@ -3,13 +3,12 @@ using BepInEx.Logging;
 namespace ReplayTimerMod
 {
     /// <summary>
-    /// Drives the per-room record → evaluate → upload pipeline in response to
+    /// Drives the per-room record → evaluate pipeline in response to
     /// <see cref="RoomTracker"/> events. Shared by both platform entry points
     /// (Silksong and Hollow Knight) so the logic never diverges between them.
     ///
-    /// The entry point constructs one of these, points
-    /// <see cref="RoomTracker"/>'s events at its handlers, and updates
-    /// <see cref="Network"/> as the network client starts/stops.
+    /// The entry point constructs one of these and points
+    /// <see cref="RoomTracker"/>'s events at its handlers.
     /// </summary>
     internal sealed class RoomLifecycle
     {
@@ -19,13 +18,6 @@ namespace ReplayTimerMod
         private readonly FrameRecorder _recorder;
         private readonly GhostPlayback _ghost;
         private readonly ReplayUI _ui;
-
-        /// <summary>
-        /// The active network client, or null while offline. The entry point
-        /// assigns this once the client is created; a stopped client is left in
-        /// place (its own methods no-op until restarted).
-        /// </summary>
-        public NetworkClient? Network { get; set; }
 
         public RoomLifecycle(FrameRecorder recorder, GhostPlayback ghost, ReplayUI ui)
         {
@@ -40,7 +32,6 @@ namespace ReplayTimerMod
                 _recorder.StartRecording();
 
             _ghost.StartPlayback(sceneName, entryFromScene);
-            Network?.PrefetchRoom(sceneName);
         }
 
         public void HandleRoomExit(string sceneName, string entryFromScene,
@@ -56,7 +47,7 @@ namespace ReplayTimerMod
 
             // Belt-and-suspenders: RoomTracker cancels the run the instant a
             // DebugMod cheat/debug ability is detected, so this should never
-            // actually be true here - but if it ever is, never save/upload it.
+            // actually be true here - but if it ever is, never save it.
             if (RoomTracker.RoomUsedDebugAbilities)
             {
                 Log.LogInfo("[RoomLifecycle] Discarding room exit - debug abilities were used");
@@ -76,36 +67,20 @@ namespace ReplayTimerMod
 
             bool saveAllRuns = GhostSettings.SaveAllRunsEnabled;
 
-            // The run's modifier mask - valid until the next room's recording
-            // starts (ModifierTracker resets on room enter, after this handler).
-            int modifierMask = RoomTracker.CurrentRunModifierMask;
-
-            if (!saveAllRuns && !PBManager.WouldStoreRun(key, lrTime, modifierMask))
+            if (!saveAllRuns && !PBManager.WouldStoreRun(key, lrTime))
             {
                 _recorder.DiscardRecording();
                 return;
             }
 
-            RecordedRoom? recording = _recorder.FinishRecording(key, lrTime, modifierMask);
+            RecordedRoom? recording = _recorder.FinishRecording(key, lrTime);
             if (recording == null) return;
 
             var result = PBManager.Evaluate(recording, saveAllRuns);
             if (result.Kind == ResultKind.FirstRun
                 || result.Kind == ResultKind.NewPB
-                || result.Kind == ResultKind.NewMaskPB
                 || result.Kind == ResultKind.SavedHistory)
                 _ui.OnPBUpdated();
-
-            // Upload the snapshot that was actually stored for THIS run - for
-            // NewMaskPB that is not the overall-PB snapshot.
-            if (Network != null
-                && result.Snapshot != null
-                && (result.Kind == ResultKind.FirstRun
-                    || result.Kind == ResultKind.NewPB
-                    || result.Kind == ResultKind.NewMaskPB))
-            {
-                Network.EnqueueUpload(result.Snapshot, result);
-            }
         }
 
         public void HandleRecordingDiscarded()

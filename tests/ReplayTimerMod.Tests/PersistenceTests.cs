@@ -24,12 +24,8 @@ namespace ReplayTimerMod.Tests
             // values can't bleed between tests.
             GhostSettings.MaxSavedReplaysPerRoute = 5;
             GhostSettings.SaveAllRunsEnabled = false;
-            GhostSettings.DisplayName = "";
-            GhostSettings.OnlineEnabled = false;
+            GhostSettings.ChainRoomTimers = false;
             GhostSettings.GhostAlpha = 0.4f;
-            GhostSettings.ModifierRequireMask = 0;
-            GhostSettings.ModifierExcludeMask = 0;
-            GhostSettings.DeviceId = "";
 
             DataStore.Init(Path.Combine(Dir.Path, "data"));
             PBManager.Init();
@@ -44,7 +40,7 @@ namespace ReplayTimerMod.Tests
         [Fact]
         public void FirstRun_IsStored_AndBecomesPB()
         {
-            var run = Rooms.Room(frames: 30, time: 5f, modifiers: 0);
+            var run = Rooms.Room(frames: 30, time: 5f);
             var result = PBManager.Evaluate(run);
 
             Assert.Equal(ResultKind.FirstRun, result.Kind);
@@ -56,9 +52,9 @@ namespace ReplayTimerMod.Tests
         [Fact]
         public void FasterRun_IsNewPB_WithImprovement()
         {
-            PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, modifiers: 0, seed: 1));
+            PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, seed: 1));
             var result = PBManager.Evaluate(
-                Rooms.Room(frames: 28, time: 4.25f, modifiers: 0, seed: 2));
+                Rooms.Room(frames: 28, time: 4.25f, seed: 2));
 
             Assert.Equal(ResultKind.NewPB, result.Kind);
             Assert.Equal(5f, result.OldPBTime);
@@ -67,11 +63,11 @@ namespace ReplayTimerMod.Tests
         }
 
         [Fact]
-        public void SlowerRun_SameMask_IsMissedPB_NotStored()
+        public void SlowerRun_IsMissedPB_NotStored()
         {
-            PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, modifiers: 0, seed: 1));
+            PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, seed: 1));
             var result = PBManager.Evaluate(
-                Rooms.Room(frames: 40, time: 6f, modifiers: 0, seed: 2));
+                Rooms.Room(frames: 40, time: 6f, seed: 2));
 
             Assert.Equal(ResultKind.MissedPB, result.Kind);
             Assert.Null(result.Snapshot);
@@ -79,50 +75,22 @@ namespace ReplayTimerMod.Tests
         }
 
         [Fact]
-        public void SlowerRun_NewMask_IsNewMaskPB_StoredAndUploadable()
-        {
-            PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, modifiers: 0b1, seed: 1));
-            var result = PBManager.Evaluate(
-                Rooms.Room(frames: 40, time: 6f, modifiers: 0b11, seed: 2));
-
-            Assert.Equal(ResultKind.NewMaskPB, result.Kind);
-            Assert.NotNull(result.Snapshot);
-            Assert.Equal(0b11, result.Snapshot!.Modifiers);
-            // Delta is still computed vs the overall PB.
-            Assert.Equal(1f, result.Delta!.Value, 3);
-            // Overall PB unchanged — mask PB is not the PB snapshot.
-            Assert.Equal(5f, PBManager.GetPBSnapshot(Rooms.Key())!.TotalTime);
-            Assert.Equal(2, PBManager.GetHistory(Rooms.Key()).Count);
-        }
-
-        [Fact]
-        public void SlowerRun_UnknownMask_NeverMaskPB()
-        {
-            PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, modifiers: 0, seed: 1));
-            var result = PBManager.Evaluate(Rooms.Room(frames: 40, time: 6f,
-                modifiers: ModifierMask.Unknown, seed: 2));
-            Assert.Equal(ResultKind.MissedPB, result.Kind);
-        }
-
-        [Fact]
         public void WouldStoreRun_MatchesEvaluateDecisions()
         {
             var key = Rooms.Key();
-            Assert.True(PBManager.WouldStoreRun(key, 9f, 0));       // first run
+            Assert.True(PBManager.WouldStoreRun(key, 9f));       // first run
 
-            PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, modifiers: 0, seed: 1));
-            Assert.True(PBManager.WouldStoreRun(key, 4f, 0));       // faster
-            Assert.False(PBManager.WouldStoreRun(key, 6f, 0));      // slower, same mask
-            Assert.True(PBManager.WouldStoreRun(key, 6f, 0b10));    // new mask
-            Assert.False(PBManager.WouldStoreRun(key, 6f, ModifierMask.Unknown));
+            PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, seed: 1));
+            Assert.True(PBManager.WouldStoreRun(key, 4f));       // faster
+            Assert.False(PBManager.WouldStoreRun(key, 6f));      // slower
         }
 
         [Fact]
         public void SaveAllRuns_StoresHistory_AndDetectsDuplicates()
         {
-            PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, modifiers: 0, seed: 1));
+            PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, seed: 1));
 
-            var slower = Rooms.Room(frames: 40, time: 6f, modifiers: 0, seed: 2);
+            var slower = Rooms.Room(frames: 40, time: 6f, seed: 2);
             var stored = PBManager.Evaluate(slower, saveAllRuns: true);
             Assert.Equal(ResultKind.SavedHistory, stored.Kind);
 
@@ -133,51 +101,34 @@ namespace ReplayTimerMod.Tests
         }
 
         [Fact]
-        public void Prune_KeepsBestN_PlusPerMaskBests()
+        public void Prune_KeepsBestN()
         {
             GhostSettings.MaxSavedReplaysPerRoute = 2;
 
-            PBManager.Evaluate(Rooms.Room(frames: 30, time: 1.0f, modifiers: 0, seed: 1));
-            PBManager.Evaluate(Rooms.Room(frames: 30, time: 2.0f, modifiers: 0, seed: 2),
+            PBManager.Evaluate(Rooms.Room(frames: 30, time: 1.0f, seed: 1));
+            PBManager.Evaluate(Rooms.Room(frames: 30, time: 2.0f, seed: 2),
                 saveAllRuns: true);
-            // Mask-1 best: slower than everything, but prune-exempt.
-            PBManager.Evaluate(Rooms.Room(frames: 30, time: 3.0f, modifiers: 1, seed: 3));
-            // Beyond the limit and not a mask best → pruned immediately.
-            PBManager.Evaluate(Rooms.Room(frames: 30, time: 2.5f, modifiers: 0, seed: 4),
+            // Beyond the limit → pruned immediately.
+            PBManager.Evaluate(Rooms.Room(frames: 30, time: 2.5f, seed: 4),
                 saveAllRuns: true);
 
             var history = PBManager.GetHistory(Rooms.Key());
-            Assert.Equal(3, history.Count); // 1.0, 2.0 (window) + 3.0 (mask best)
-            Assert.Equal(new[] { 1.0f, 2.0f, 3.0f },
+            Assert.Equal(new[] { 1.0f, 2.0f },
                 history.Select(s => s.TotalTime).ToArray());
         }
 
         [Fact]
-        public void Prune_MaskExemptions_AreCapped()
+        public void Persistence_SurvivesReload()
         {
-            GhostSettings.MaxSavedReplaysPerRoute = 1;
-
-            // 10 distinct masks, ascending times. Only 8 exemptions allowed.
-            for (int i = 0; i < 10; i++)
-                PBManager.Evaluate(Rooms.Room(frames: 30, time: 1f + i,
-                    modifiers: 1 << i, seed: i));
-
-            var history = PBManager.GetHistory(Rooms.Key());
-            Assert.Equal(8, history.Count); // MaxMaskBestExemptions
-        }
-
-        [Fact]
-        public void Persistence_SurvivesReload_IncludingModifierMask()
-        {
-            PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, modifiers: 0b101, seed: 1));
-            PBManager.Evaluate(Rooms.Room(frames: 30, time: 6f, modifiers: 0b1, seed: 2));
+            PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, seed: 1));
+            PBManager.Evaluate(Rooms.Room(frames: 30, time: 6f, seed: 2),
+                saveAllRuns: true);
 
             PBManager.Init(); // reload everything from DataStore
 
             var history = PBManager.GetHistory(Rooms.Key());
             Assert.Equal(2, history.Count);
-            Assert.Equal(0b101, history[0].Modifiers);
-            Assert.Equal(0b1, history[1].Modifiers);
+            Assert.Equal(6f, history[1].TotalTime);
             Assert.Equal(5f, PBManager.GetPB(Rooms.Key())!.TotalTime);
         }
 
@@ -189,45 +140,20 @@ namespace ReplayTimerMod.Tests
             Assert.Equal(PBManager.ImportOutcome.Duplicate, PBManager.ImportPB(room));
 
             GhostSettings.MaxSavedReplaysPerRoute = 1;
-            // Slower than every kept replay, unknown mask → won't be kept.
+            // Slower than every kept replay → won't be kept.
             var slow = Rooms.Room(frames: 40, time: 60f, seed: 2);
             Assert.Equal(PBManager.ImportOutcome.RouteFull, PBManager.ImportPB(slow));
-
-            // But a slower run with a NEW known mask is prune-exempt → kept.
-            var masked = Rooms.Room(frames: 40, time: 60f, modifiers: 2, seed: 3);
-            Assert.Equal(PBManager.ImportOutcome.Imported, PBManager.ImportPB(masked));
         }
 
         [Fact]
         public void DeleteSnapshot_PromotesNextBest()
         {
-            PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, modifiers: 0, seed: 1));
-            PBManager.Evaluate(Rooms.Room(frames: 30, time: 4f, modifiers: 0, seed: 2));
+            PBManager.Evaluate(Rooms.Room(frames: 30, time: 5f, seed: 1));
+            PBManager.Evaluate(Rooms.Room(frames: 30, time: 4f, seed: 2));
 
             var pb = PBManager.GetPBSnapshot(Rooms.Key())!;
             Assert.True(PBManager.DeleteSnapshot(Rooms.Key(), pb.SnapshotId));
             Assert.Equal(5f, PBManager.GetPB(Rooms.Key())!.TotalTime);
-        }
-
-        [Fact]
-        public void SetServerIds_PersistsRunIdAndShareCode()
-        {
-            var result = PBManager.Evaluate(
-                Rooms.Room(frames: 30, time: 5f, modifiers: 0, seed: 1));
-            var key = Rooms.Key();
-            string id = result.Snapshot!.SnapshotId;
-
-            PBManager.SetServerIds(key, id, "run-77", null);
-            PBManager.SetServerIds(key, id, null, "aZ9");
-
-            var snap = PBManager.GetSnapshot(key, id)!;
-            Assert.Equal("run-77", snap.ServerRunId);  // null left it unchanged
-            Assert.Equal("aZ9", snap.ShareCode);
-
-            PBManager.Init();
-            snap = PBManager.GetHistory(key).Single();
-            Assert.Equal("run-77", snap.ServerRunId);
-            Assert.Equal("aZ9", snap.ShareCode);
         }
     }
 
@@ -243,11 +169,10 @@ namespace ReplayTimerMod.Tests
         [Fact]
         public void SaveAndLoad_RoundTripsAllMetadata()
         {
-            var room = Rooms.Room(frames: 30, time: 5f, modifiers: 6, seed: 1);
+            var room = Rooms.Room(frames: 30, time: 5f, seed: 1);
             var snapshot = new ReplaySnapshot("snap01", 638000000000000000L, room,
                 encodedData: null, hasVisualOverride: true,
-                colorR: 0.25f, colorG: 0.5f, colorB: 0.75f, alpha: 0.9f,
-                serverRunId: "run-1", shareCode: "aZ9");
+                colorR: 0.25f, colorG: 0.5f, colorB: 0.75f, alpha: 0.9f);
             DataStore.SaveSnapshot(snapshot);
 
             var loaded = DataStore.LoadAll().Single();
@@ -255,41 +180,9 @@ namespace ReplayTimerMod.Tests
             Assert.Equal(638000000000000000L, loaded.CapturedAtUtcTicks);
             Assert.Equal(room.Key, loaded.Key);
             Assert.Equal(5f, loaded.TotalTime);
-            Assert.Equal(6, loaded.Modifiers);
             Assert.True(loaded.HasVisualOverride);
             Assert.Equal(0.25f, loaded.ColorR);
             Assert.Equal(0.9f, loaded.Alpha);
-            Assert.Equal("run-1", loaded.ServerRunId);
-            Assert.Equal("aZ9", loaded.ShareCode);
-        }
-
-        [Fact]
-        public void Load_JsonModifiersField_IsFallbackWhenBlobHasNoTrailer()
-        {
-            // Pre-feature blob (no RTMX trailer) + hand-set JSON field.
-            var room = Rooms.Room(frames: 20, time: 3f,
-                modifiers: ModifierMask.Unknown, seed: 1);
-            DataStore.SaveSnapshot(ReplaySnapshot.CreateNew(room));
-
-            string file = Path.Combine(_dataDir, room.Key.SceneName + ".json");
-            File.WriteAllText(file, File.ReadAllText(file)
-                .Replace("\"modifiers\":-1", "\"modifiers\":3"));
-
-            Assert.Equal(3, DataStore.LoadAll().Single().Modifiers);
-        }
-
-        [Fact]
-        public void Load_BlobTrailer_WinsOverJsonField()
-        {
-            var room = Rooms.Room(frames: 20, time: 3f, modifiers: 5, seed: 1);
-            DataStore.SaveSnapshot(ReplaySnapshot.CreateNew(room));
-
-            string file = Path.Combine(_dataDir, room.Key.SceneName + ".json");
-            File.WriteAllText(file, File.ReadAllText(file)
-                .Replace("\"modifiers\":5", "\"modifiers\":9"));
-
-            // The RTM3 blob is the authority.
-            Assert.Equal(5, DataStore.LoadAll().Single().Modifiers);
         }
 
         [Fact]
@@ -359,28 +252,22 @@ namespace ReplayTimerMod.Tests
             // save the wanted state, snapshot the file, clobber every asserted
             // property with sentinels (overwriting the file), restore the
             // snapshot, and only then Init.
-            GhostSettings.DisplayName = "Hornet";
-            GhostSettings.OnlineEnabled = true;
+            GhostSettings.ChainRoomTimers = true;
             GhostSettings.GhostAlpha = 0.7f;
             GhostSettings.Flush(); // alpha saves are throttled
-            GhostSettings.ModifierRequireMask = 0b101;
 
             string file = Path.Combine(Dir.Path, "ReplayMod", "settings.txt");
             string saved = File.ReadAllText(file);
 
-            GhostSettings.DisplayName = "Sentinel";
-            GhostSettings.OnlineEnabled = false;
+            GhostSettings.ChainRoomTimers = false;
             GhostSettings.GhostAlpha = 0.1f;
             GhostSettings.Flush();
-            GhostSettings.ModifierRequireMask = 0;
 
             File.WriteAllText(file, saved);
             GhostSettings.Init(Dir.Path);
 
-            Assert.Equal("Hornet", GhostSettings.DisplayName);
-            Assert.True(GhostSettings.OnlineEnabled);
+            Assert.True(GhostSettings.ChainRoomTimers);
             Assert.Equal(0.7f, GhostSettings.GhostAlpha, 3);
-            Assert.Equal(0b101, GhostSettings.ModifierRequireMask);
         }
 
         [Fact]
@@ -393,25 +280,11 @@ namespace ReplayTimerMod.Tests
                 "GhostEnabled=maybe",
                 "linewithoutequals",
                 "UnknownField=whatever",
-                "DisplayName=Still Works",
             });
             GhostSettings.Init(Dir.Path);
 
             Assert.Equal(5, GhostSettings.MaxSavedReplaysPerRoute); // default
             Assert.True(GhostSettings.GhostEnabled);                 // default
-            Assert.Equal("Still Works", GhostSettings.DisplayName);
-        }
-
-        [Fact]
-        public void EnsureDeviceId_Generates32HexOnce()
-        {
-            GhostSettings.DeviceId = "";
-            GhostSettings.EnsureDeviceId();
-            string id = GhostSettings.DeviceId;
-
-            Assert.Matches("^[0-9a-f]{32}$", id);
-            GhostSettings.EnsureDeviceId();
-            Assert.Equal(id, GhostSettings.DeviceId); // stable
         }
 
         [Fact]

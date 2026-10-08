@@ -146,124 +146,20 @@ namespace ReplayTimerMod.Tests
             Assert.Equal("Clip254", decoded.Frames[299].animClip);
         }
 
-        [Fact]
-        public void Decode_RawBytesOverload_MatchesStringOverload()
-        {
-            var room = Rooms.Room(frames: 50, time: 1.7f);
-            string encoded = ReplayShareEncoder.Encode(room);
-            byte[] compressed = Convert.FromBase64String(encoded);
-
-            AssertRoomsEquivalent(room, ReplayShareEncoder.Decode(compressed));
-        }
-
-        // ── Modifier trailer (RTMX) ─────────────────────────────────────────
-
-        [Theory]
-        [InlineData(0)]
-        [InlineData(1)]
-        [InlineData(0b1011)]
-        [InlineData(0x7FFFFFFF)]
-        public void Modifiers_KnownMask_RoundTrips(int mask)
-        {
-            var room = Rooms.Room(frames: 30, time: 1f, modifiers: mask);
-            var decoded = ReplayShareEncoder.Decode(ReplayShareEncoder.Encode(room));
-            Assert.Equal(mask, decoded!.Modifiers);
-        }
+        // ── Trailing bytes ──────────────────────────────────────────────────
 
         [Fact]
-        public void Modifiers_UnknownMask_WritesNoTrailer_DecodesUnknown()
+        public void Decode_IgnoresTrailingBytes()
         {
-            var room = Rooms.Room(frames: 30, time: 1f,
-                modifiers: ModifierMask.Unknown);
-            string encoded = ReplayShareEncoder.Encode(room);
-
-            var decoded = ReplayShareEncoder.Decode(encoded);
-            Assert.Equal(ModifierMask.Unknown, decoded!.Modifiers);
-
-            // And the blob is byte-identical to a mask-free encode (legacy
-            // data must round-trip unchanged).
-            var legacyTwin = new RecordedRoom(room.Key, room.TotalTime, room.Frames);
-            Assert.Equal(ReplayShareEncoder.Encode(legacyTwin), encoded);
-        }
-
-        [Fact]
-        public void Modifiers_MaskedBlob_IsDecodableByTrailerIgnorantReader()
-        {
-            // Old clients read to the end of the anim block and stop; the
-            // trailer must strictly append. Verify a masked and an unmasked
-            // encode share an identical prefix.
-            var frames = Rooms.Room(frames: 40, time: 2f).Frames;
-            var plain = new RecordedRoom(Rooms.Key(), 2f, frames);
-            var masked = new RecordedRoom(Rooms.Key(), 2f, frames, 0b101);
-
-            byte[] plainRaw = Inflate(ReplayShareEncoder.Encode(plain));
-            byte[] maskedRaw = Inflate(ReplayShareEncoder.Encode(masked));
-
-            Assert.True(maskedRaw.Length > plainRaw.Length);
-            Assert.Equal(plainRaw, maskedRaw.Take(plainRaw.Length).ToArray());
-
-            // Trailer = "RTMX" + type 0x01 + len 4 LE + int32 LE mask.
-            byte[] trailer = maskedRaw.Skip(plainRaw.Length).ToArray();
-            Assert.Equal(new byte[] { (byte)'R', (byte)'T', (byte)'M', (byte)'X',
-                0x01, 0x04, 0x00, 0x05, 0x00, 0x00, 0x00 }, trailer);
-        }
-
-        [Fact]
-        public void Modifiers_TruncatedTrailer_DecodesAsUnknown()
-        {
-            var room = Rooms.Room(frames: 20, time: 1f, modifiers: 7);
-            byte[] raw = Inflate(ReplayShareEncoder.Encode(room));
-
-            // Chop the trailer mid-record (leave "RTMX" + type but cut payload).
-            byte[] truncated = raw.Take(raw.Length - 4).ToArray();
-            var decoded = ReplayShareEncoder.Decode(Deflate(truncated));
-            Assert.NotNull(decoded);
-            Assert.Equal(ModifierMask.Unknown, decoded!.Modifiers);
-        }
-
-        [Fact]
-        public void Modifiers_UnknownTlvType_IsSkipped_MaskStillRead()
-        {
+            // Older builds appended an "RTMX" modifier section after the anim
+            // block; those blobs must keep decoding.
             var room = Rooms.Room(frames: 20, time: 1f);
             byte[] raw = Inflate(ReplayShareEncoder.Encode(room));
+            byte[] trailer = { (byte)'R', (byte)'T', (byte)'M', (byte)'X',
+                0x01, 0x04, 0x00, 0x05, 0x00, 0x00, 0x00 };
 
-            // Hand-append: RTMX, unknown type 0x7E (3-byte payload), then the
-            // modifiers record.
-            using var ms = new MemoryStream();
-            ms.Write(raw, 0, raw.Length);
-            using (var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
-            {
-                w.Write(new[] { (byte)'R', (byte)'T', (byte)'M', (byte)'X' });
-                w.Write((byte)0x7E);
-                w.Write((ushort)3);
-                w.Write(new byte[] { 1, 2, 3 });
-                w.Write((byte)0x01);
-                w.Write((ushort)4);
-                w.Write(42);
-            }
-
-            var decoded = ReplayShareEncoder.Decode(Deflate(ms.ToArray()));
-            Assert.Equal(42, decoded!.Modifiers);
-        }
-
-        [Fact]
-        public void Modifiers_NegativeValueInTrailer_DecodesAsUnknown()
-        {
-            var room = Rooms.Room(frames: 20, time: 1f);
-            byte[] raw = Inflate(ReplayShareEncoder.Encode(room));
-
-            using var ms = new MemoryStream();
-            ms.Write(raw, 0, raw.Length);
-            using (var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
-            {
-                w.Write(new[] { (byte)'R', (byte)'T', (byte)'M', (byte)'X' });
-                w.Write((byte)0x01);
-                w.Write((ushort)4);
-                w.Write(-5);
-            }
-
-            var decoded = ReplayShareEncoder.Decode(Deflate(ms.ToArray()));
-            Assert.Equal(ModifierMask.Unknown, decoded!.Modifiers);
+            AssertRoomsEquivalent(room,
+                ReplayShareEncoder.Decode(Deflate(raw.Concat(trailer).ToArray())));
         }
 
         // ── Malformed input ─────────────────────────────────────────────────
@@ -315,7 +211,7 @@ namespace ReplayTimerMod.Tests
             var rooms = new List<RecordedRoom>
             {
                 Rooms.Room(frames: 30, time: 1f, seed: 1),
-                Rooms.Room(frames: 60, time: 2f, seed: 2, modifiers: 5,
+                Rooms.Room(frames: 60, time: 2f, seed: 2,
                     key: Rooms.Key("Dust_05", "Dust_04", "Dust_06")),
                 Rooms.Room(frames: 90, time: 3f, seed: 3),
             };
@@ -326,7 +222,6 @@ namespace ReplayTimerMod.Tests
             Assert.Equal(3, decoded!.Count);
             for (int i = 0; i < 3; i++)
                 AssertRoomsEquivalent(rooms[i], decoded[i]);
-            Assert.Equal(5, decoded[1].Modifiers);
         }
 
         [Fact]

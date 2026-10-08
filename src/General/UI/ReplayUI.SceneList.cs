@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
@@ -20,28 +19,10 @@ namespace ReplayTimerMod
 
             string filter = (_searchFilter ?? "").Trim().ToLowerInvariant();
 
-            // ── Merge local + server rooms ──────────────────────────────────
-            //
-            // Local: rooms where the player has recorded at least one run.
-            // Server: all rooms known to the leaderboard scene index.
-            // The union ensures rooms you haven't visited but others have
-            // still appear in the scene list.
-
-            var localScenes = PBManager.AllPBs()
+            // Rooms where the player has recorded at least one run.
+            var scenes = PBManager.AllPBs()
                 .Select(p => p.Key.SceneName)
                 .Distinct()
-                .ToList();
-
-            var localSet = new HashSet<string>(localScenes);
-
-            var serverScenes = _leaderboardCache.GetServerScenes();
-
-            // Record what server-scene version this build reflects, so
-            // HandleSceneIndexReady can skip rebuilds when nothing changed.
-            _renderedServerScenesVersion = _leaderboardCache.ServerScenesVersion;
-
-            var scenes = localSet
-                .Union(serverScenes)
                 .OrderBy(s => s)
                 .ToList();
 
@@ -63,27 +44,15 @@ namespace ReplayTimerMod
 
             if (scenes.Count == 0)
             {
-                string msg;
-                if (!string.IsNullOrEmpty(filter))
-                    msg = "No rooms match filter.";
-                else if (GhostSettings.OnlineEnabled && !_leaderboardCache.SceneIndexLoaded
-                    && _networkClient != null
-                    && _networkClient.CurrentSceneIndexStatus
-                        == NetworkClient.SceneIndexStatus.Failed)
-                    msg = "No replays yet.\nRoom sync failed - retrying...";
-                else if (GhostSettings.OnlineEnabled && !_leaderboardCache.SceneIndexLoaded)
-                    msg = "No replays yet.\nSyncing rooms...";
-                else
-                    msg = "No replays recorded yet.";
+                string msg = !string.IsNullOrEmpty(filter)
+                    ? "No rooms match filter."
+                    : "No replays recorded yet.";
                 AddCenteredMessage(_sceneListContent, msg);
             }
             else
             {
                 foreach (string scene in scenes)
-                {
-                    bool isServerOnly = !localSet.Contains(scene);
-                    AddSceneRow(_sceneListContent, scene, isServerOnly);
-                }
+                    AddSceneRow(_sceneListContent, scene);
             }
 
             ForceLayout(_sceneListContent);
@@ -92,8 +61,7 @@ namespace ReplayTimerMod
                 _sceneListScroll.verticalNormalizedPosition = Mathf.Clamp01(keepScroll);
         }
 
-        private void AddSceneRow(Transform parent, string scene,
-            bool isServerOnly = false)
+        private void AddSceneRow(Transform parent, string scene)
         {
             bool selected = scene == _selectedScene;
             bool current = scene == RoomTracker.CurrentScene;
@@ -105,13 +73,6 @@ namespace ReplayTimerMod
             {
                 bgColor = UIStyle.Gold with { a = selected ? 0.28f : 0.12f };
                 textColor = UIStyle.Gold;
-            }
-            else if (isServerOnly)
-            {
-                bgColor = selected
-                    ? UIStyle.Accent with { a = 0.18f }
-                    : Color.clear;
-                textColor = selected ? UIStyle.Accent : UIStyle.Overlay;
             }
             else
             {
@@ -142,9 +103,8 @@ namespace ReplayTimerMod
             int labelX = M;
             int labelW = LW - M * 2;
 
-            // Server-only rooms (no local runs yet) are distinguished by
-            // their dimmer text color alone - no glyph prefix, so the label
-            // is always exactly the scene name.
+            // No glyph prefix - the label is always exactly the scene name
+            // (ScrollToScene matches rows by label text).
             MakeLbl(row.transform, scene,
                 UIStyle.FontSizeRow, textColor, TextAnchor.MiddleLeft,
                 x: labelX, w: labelW, h: RH);

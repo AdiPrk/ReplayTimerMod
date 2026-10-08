@@ -35,11 +35,6 @@ namespace ReplayTimerMod
         public float colorG = 1f;
         public float colorB = 1f;
         public float alpha = 0.4f;
-        public string serverRunId = "";
-        public string shareCode = "";
-        // Modifier bitmask (see ModifierMask); absent in pre-feature files,
-        // which the field default maps to Unknown (-1).
-        public int modifiers = ModifierMask.Unknown;
     }
 
     public static class DataStore
@@ -200,10 +195,7 @@ namespace ReplayTimerMod
                 colorR = snapshot.ColorR,
                 colorG = snapshot.ColorG,
                 colorB = snapshot.ColorB,
-                alpha = snapshot.Alpha,
-                serverRunId = snapshot.ServerRunId ?? "",
-                shareCode = snapshot.ShareCode ?? "",
-                modifiers = snapshot.Modifiers
+                alpha = snapshot.Alpha
             };
 
         // ── Public API ────────────────────────────────────────────────────────
@@ -265,32 +257,6 @@ namespace ReplayTimerMod
             catch (Exception ex)
             {
                 Log.LogError($"[DataStore] UpdateSnapshotVisuals failed {key}#{snapshotId}: {ex.Message}");
-            }
-        }
-
-        public static void UpdateSnapshotServerIds(RoomKey key, string snapshotId,
-            string? serverRunId, string? shareCode)
-        {
-            string path = FilePath(key.SceneName);
-            try
-            {
-                var idx = LoadIndexAndUpgrade(path);
-                var entry = idx.entries.Find(e =>
-                    MatchesRoute(e, key) && e.snapshotId == snapshotId);
-                if (entry == null)
-                {
-                    Log.LogWarning($"[DataStore] UpdateSnapshotServerIds missing {key}#{snapshotId}");
-                    return;
-                }
-
-                if (serverRunId != null) entry.serverRunId = serverRunId;
-                if (shareCode != null) entry.shareCode = shareCode;
-                WriteIndex(path, idx);
-                Log.LogInfo($"[DataStore] Updated snapshot server ids {key}#{snapshotId}");
-            }
-            catch (Exception ex)
-            {
-                Log.LogError($"[DataStore] UpdateSnapshotServerIds failed {key}#{snapshotId}: {ex.Message}");
             }
         }
 
@@ -383,16 +349,6 @@ namespace ReplayTimerMod
                             continue;
                         }
 
-                        // The RTM3 blob is the authority on the modifier mask;
-                        // fall back to the JSON field only when the blob has no
-                        // trailer (e.g. a hand-edited entry).
-                        if (!ModifierMask.IsKnown(room.Modifiers)
-                            && ModifierMask.IsKnown(entry.modifiers))
-                        {
-                            room = new RecordedRoom(room.Key, room.TotalTime,
-                                room.Frames, entry.modifiers);
-                        }
-
                         result.Add(new ReplaySnapshot(
                             entry.snapshotId,
                             entry.capturedAtUtcTicks,
@@ -402,9 +358,7 @@ namespace ReplayTimerMod
                             entry.colorR,
                             entry.colorG,
                             entry.colorB,
-                            entry.alpha,
-                            entry.serverRunId,
-                            entry.shareCode));
+                            entry.alpha));
                     }
                     catch (Exception ex)
                     {

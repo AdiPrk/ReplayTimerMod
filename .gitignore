@@ -437,8 +437,3 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
-
-# Supabase: local CLI scratch plus (deliberately) the whole backend tree.
-# NOTE: the deno-tests CI job needs supabase/ tracked to run on a fresh
-# checkout - drop this line to version the backend, or drop that CI job.
-supabase/

@@ -42,8 +42,7 @@ namespace ReplayTimerMod.Tests
         /// <summary>Builds a plausible recorded room: a deterministic walk with
         /// direction flips and a couple of animation clips.</summary>
         public static RecordedRoom Room(int frames = 90, float time = 3f,
-            int modifiers = ModifierMask.Unknown, RoomKey? key = null,
-            int seed = 12345)
+            RoomKey? key = null, int seed = 12345)
         {
             var rng = new Random(seed);
             var data = new FrameData[frames];
@@ -63,7 +62,7 @@ namespace ReplayTimerMod.Tests
                     animFrame = i % 12
                 };
             }
-            return new RecordedRoom(key ?? Key(), time, data, modifiers);
+            return new RecordedRoom(key ?? Key(), time, data);
         }
 
         /// <summary>A temp directory that cleans itself up.</summary>

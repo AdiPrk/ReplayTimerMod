@@ -23,13 +23,6 @@ namespace ReplayTimerMod
         public bool  ChainRoomTimers         = false;
         public bool  SkipBacktrackRuns       = false;
         public bool  SkipBacktrackTimer      = false;
-        public bool  OnlineEnabled           = false;
-        public string DeviceId    = "";
-        public string DisplayName = "";
-        public string ApiBaseUrl  = "https://oqsfhqbakarleqahxiyo.supabase.co/functions/v1";
-        // Modifier filter (shared by Runs + Leaderboard tabs; see ModifierMask).
-        public int ModifierRequireMask = 0;
-        public int ModifierExcludeMask = 0;
         // Experimental features (Config > Experimental).
         public bool RoomWarpEnabled = false;
         public bool CameraFollowEnabled = false;
@@ -118,7 +111,7 @@ namespace ReplayTimerMod
 
         /// <summary>
         /// When true, runs that exit back through the same transition they
-        /// entered from (exitTo == entryFrom) are not saved or uploaded.
+        /// entered from (exitTo == entryFrom) are not saved.
         /// </summary>
         public static bool SkipBacktrackRuns
         {
@@ -135,44 +128,6 @@ namespace ReplayTimerMod
         {
             get => _d.SkipBacktrackTimer;
             set { _d.SkipBacktrackTimer = value; Save(); }
-        }
-
-        public static bool OnlineEnabled
-        {
-            get => _d.OnlineEnabled;
-            set { _d.OnlineEnabled = value; Save(); }
-        }
-
-        public static string DeviceId
-        {
-            get => _d.DeviceId;
-            set { _d.DeviceId = value; Save(); }
-        }
-
-        public static string DisplayName
-        {
-            get => _d.DisplayName;
-            set { _d.DisplayName = value; Save(); }
-        }
-
-        public static string ApiBaseUrl
-        {
-            get => _d.ApiBaseUrl;
-            set { _d.ApiBaseUrl = value; Save(); }
-        }
-
-        /// <summary>Modifier bits a run must HAVE to pass the UI filter.</summary>
-        public static int ModifierRequireMask
-        {
-            get => _d.ModifierRequireMask;
-            set { _d.ModifierRequireMask = value; Save(); }
-        }
-
-        /// <summary>Modifier bits a run must NOT have to pass the UI filter.</summary>
-        public static int ModifierExcludeMask
-        {
-            get => _d.ModifierExcludeMask;
-            set { _d.ModifierExcludeMask = value; Save(); }
         }
 
         /// <summary>
@@ -194,17 +149,6 @@ namespace ReplayTimerMod
         {
             get => _d.CameraFollowEnabled;
             set { _d.CameraFollowEnabled = value; Save(); }
-        }
-
-        /// <summary>
-        /// Ensures a device ID exists, generating one if needed.
-        /// Called when online features are first enabled.
-        /// </summary>
-        public static void EnsureDeviceId()
-        {
-            if (!string.IsNullOrEmpty(_d.DeviceId)) return;
-            _d.DeviceId = Guid.NewGuid().ToString("N");
-            Save();
         }
 
         // ── Init ─────────────────────────────────────────────────────────────

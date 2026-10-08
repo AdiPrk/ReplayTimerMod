@@ -148,10 +148,6 @@ namespace ReplayTimerMod
                 () => SwitchTab(TabKind.Runs));
             x += btnW;
 
-            _tabButtons[TabKind.Leaderboard] = AddTabButton(bar.transform, "Leaderboard", x, h, UIStyle.W(96),
-                () => SwitchTab(TabKind.Leaderboard));
-            x += UIStyle.W(96);
-
             _tabButtons[TabKind.Config] = AddTabButton(bar.transform, "Config", x, h, btnW,
                 () => SwitchTab(TabKind.Config));
         }
@@ -181,7 +177,6 @@ namespace ReplayTimerMod
             var hdr = MakeGO("RightSubHeader", _panelGO!.transform);
             Img(hdr, UIStyle.Surface);
             Rect(hdr, LW + 1, y, RW, h);
-            _rightSubHeader = hdr;
 
             int btnH = UIStyle.H(20);
             int btnY = (h - btnH) / 2;
@@ -189,10 +184,9 @@ namespace ReplayTimerMod
             _runsActionButtons = MakeGO("RunsActions", hdr.transform);
             Fill(_runsActionButtons);
 
-            // Right-packed action cluster, each button sized to its text
-            // (same fit-the-content idiom as the filter chips). Clear is
-            // sized to also fit its "Sure?" confirm state so the button
-            // doesn't jump when armed.
+            // Right-packed action cluster, each button sized to its text.
+            // Clear is sized to also fit its "Sure?" confirm state so the
+            // button doesn't jump when armed.
             int padX = UIStyle.W(9);
             int clearW = Mathf.CeilToInt(Mathf.Max(
                 MeasureTextWidth("Clear", UIStyle.FontSizeBtn),
@@ -219,13 +213,10 @@ namespace ReplayTimerMod
                 UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
                 expX, btnY, expW, btnH, OnExportSceneClicked);
 
-            // The Filters toggle (built on demand by ShowFilterToggle) packs
-            // against the left of the cluster on the Runs tab.
-            _filterRunsRightEdge = expX - M;
-
+            int statusW = UIStyle.W(100);
             _pasteStatusLbl = MakeLbl(_runsActionButtons.transform, "",
                 UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleRight,
-                x: _filterRunsRightEdge - PasteStatusWidth, w: PasteStatusWidth, h: h);
+                x: expX - M - statusW, w: statusW, h: h);
 
             _rightHeaderLbl = MakeLbl(hdr.transform, "Select a room",
                 UIStyle.FontSizeSm, UIStyle.Subtext, TextAnchor.MiddleLeft,

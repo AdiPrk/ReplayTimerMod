@@ -14,21 +14,8 @@ namespace ReplayTimerMod
         private ReplayUI replayUI = null!;
         private RoomTimerHUD roomTimerHUD = null!;
         private ReplaySelectionState replaySelectionState = null!;
-        private NetworkClient? networkClient;
         private RoomLifecycle roomLifecycle = null!;
         private bool lateInitDone = false;
-
-        private static string GameTag
-        {
-            get
-            {
-#if V1221
-                return "hk_1221";
-#else
-                return "hk_1578";
-#endif
-            }
-        }
 
         public override string GetVersion() =>
             Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0";
@@ -91,7 +78,6 @@ namespace ReplayTimerMod
             try { ghostPlayback.Tick(shouldTick); } catch (Exception ex) { LogTickError("GhostPlayback", ex); }
             try { replayUI.Tick(); } catch (Exception ex) { LogTickError("ReplayUI", ex); }
             try { roomTimerHUD.Tick(shouldTick); } catch (Exception ex) { LogTickError("RoomTimerHUD", ex); }
-            try { if (networkClient != null) networkClient.Tick(); } catch (Exception ex) { LogTickError("NetworkClient", ex); }
         }
 
         // Throttled per-subsystem error log so a persistent per-frame fault
@@ -118,76 +104,6 @@ namespace ReplayTimerMod
             Log("Hero ready - setting up UI and ghost");
             replayUI.Setup();
             roomTimerHUD.Setup();
-
-            replayUI.SetGameTag(GameTag);
-
-            replayUI.SetOnlineToggleHandler(OnOnlineToggled);
-
-            replayUI.OnDisplayNameSet += OnDisplayNameSet;
-
-            if (GhostSettings.OnlineEnabled
-                && !string.IsNullOrEmpty(GhostSettings.DisplayName))
-                StartNetworking();
-        }
-
-        private void StartNetworking()
-        {
-            if (networkClient != null && networkClient.IsStarted)
-                return;
-
-            GhostSettings.EnsureDeviceId();
-
-            if (networkClient == null)
-            {
-                networkClient = new NetworkClient(
-                    GhostSettings.DeviceId,
-                    GameTag,
-                    GetVersion(),
-                    GhostSettings.ApiBaseUrl);
-                networkClient.OnRankReceived += roomTimerHUD.ShowRank;
-                networkClient.OnDisplayNameReceived += name =>
-                {
-                    if (string.IsNullOrEmpty(GhostSettings.DisplayName))
-                        GhostSettings.DisplayName = name;
-                };
-
-                // Wire leaderboard: NetworkClient writes to ReplayUI's cache.
-                // ReplayUI subscribes to events internally via SetNetworkClient.
-                networkClient.SetLeaderboardCache(replayUI.LeaderboardCacheRef);
-                replayUI.SetNetworkClient(networkClient);
-            }
-
-            roomLifecycle.Network = networkClient;
-            networkClient.Start();
-            Log("Online features started");
-        }
-
-        private void OnOnlineToggled(bool enabled)
-        {
-            if (enabled)
-            {
-                if (!string.IsNullOrEmpty(GhostSettings.DisplayName))
-                    StartNetworking();
-            }
-            else if (networkClient != null)
-            {
-                networkClient.Stop();
-                Log("Online features stopped");
-            }
-        }
-
-        private void OnDisplayNameSet(string name)
-        {
-            GhostSettings.DisplayName = name;
-            GhostSettings.Save();
-            Log("Display name set: " + name);
-
-            if (GhostSettings.OnlineEnabled)
-                StartNetworking();
-
-            // Force refresh so leaderboards show the new name immediately
-            if (networkClient != null)
-                networkClient.ForceRefreshAll();
         }
 
         // No teardown counterpart to ReplayTimerModSS.OnDestroy on purpose:

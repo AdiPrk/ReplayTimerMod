@@ -8,12 +8,10 @@ using Xunit;
 namespace ReplayTimerMod.Tests
 {
     /// <summary>
-    /// Cross-stack fixtures: real RTM3 blobs produced by the C# encoder,
-    /// committed to tests/shared/rtm3-fixtures.json and consumed by BOTH
-    /// this suite (decode round-trip) and the Deno suite
-    /// (supabase/functions/tests/replay_test.ts, which runs the server's
-    /// verifyReplayConsistency against them). If the wire format drifts on
-    /// either side, one of the two suites fails.
+    /// Format-regression fixtures: real RTM3 blobs produced by the C# encoder
+    /// and committed to tests/shared/rtm3-fixtures.json. Decoding the
+    /// PREVIOUSLY-committed blobs catches encoder/decoder drift that pure
+    /// in-memory round-trip tests cannot (old blobs must keep decoding).
     ///
     /// To regenerate after an intentional format change:
     ///   RTM_WRITE_FIXTURES=1 dotnet test tests/ReplayTimerMod.Tests
@@ -29,11 +27,6 @@ namespace ReplayTimerMod.Tests
             new FixtureSpec("basic", "rtm3", new[]
             {
                 Tests.Rooms.Room(frames: 90, time: 3f, seed: 101),
-            }),
-            new FixtureSpec("masked", "rtm3", new[]
-            {
-                Tests.Rooms.Room(frames: 120, time: 4.5f, modifiers: 0b101,
-                    seed: 202),
             }),
             new FixtureSpec("single-frame", "rtm3", new[]
             {
@@ -84,8 +77,6 @@ namespace ReplayTimerMod.Tests
                         room!.TotalTime, 3);
                     Assert.Equal(f.GetProperty("frames").GetInt32(),
                         room.FrameCount);
-                    Assert.Equal(f.GetProperty("modifiers").GetInt32(),
-                        room.Modifiers);
                     Assert.Equal(f.GetProperty("scene").GetString(),
                         room.Key.SceneName);
                 }
@@ -97,7 +88,7 @@ namespace ReplayTimerMod.Tests
                 }
             }
 
-            Assert.True(seen >= 4, "fixture file unexpectedly small");
+            Assert.True(seen >= 3, "fixture file unexpectedly small");
         }
 
         private static void WriteFixtures()
@@ -115,7 +106,6 @@ namespace ReplayTimerMod.Tests
                         base64 = ReplayShareEncoder.Encode(room),
                         time = room.TotalTime,
                         frames = room.FrameCount,
-                        modifiers = room.Modifiers,
                         scene = room.Key.SceneName,
                         entryFrom = room.Key.EntryFromScene,
                         exitTo = room.Key.ExitToScene,

@@ -73,7 +73,6 @@ namespace ReplayTimerMod
             }
 
             PBManager.DeleteAll();
-            InvalidateDownloadStates();
             _selectedScene = null;
             _clearAllPending = false;
             RefreshCurrentView();
@@ -145,7 +144,6 @@ namespace ReplayTimerMod
             }
 
             PBManager.DeleteScene(_selectedScene);
-            InvalidateDownloadStates();
             ClearSelectedScene();
             RebuildSceneList();
             ResetSceneClearConfirm();
@@ -159,51 +157,6 @@ namespace ReplayTimerMod
             if (string.IsNullOrEmpty(clip))
             {
                 ShowPasteStatus("Clipboard empty", UIStyle.Red);
-                return;
-            }
-
-            // Share code / link → resolve via the server, then import.
-            if (ReplaySharing.TryExtractCode(clip, out string code))
-            {
-                if (_networkClient == null || !_networkClient.IsStarted)
-                {
-                    ShowPasteStatus("Go online to import links", UIStyle.Red);
-                    return;
-                }
-
-                ShowPasteStatus("Resolving...", UIStyle.Subtext);
-                _networkClient.ResolveShare(code, replayBytes =>
-                {
-                    if (replayBytes == null || replayBytes.Length == 0)
-                    {
-                        ShowPasteStatus("Link not found", UIStyle.Red);
-                        return;
-                    }
-
-                    var room = ReplayShareEncoder.Decode(replayBytes);
-                    if (room == null)
-                    {
-                        ShowPasteStatus("Invalid data", UIStyle.Red);
-                        return;
-                    }
-
-                    var outcome = PBManager.ImportPB(room);
-                    if (outcome == PBManager.ImportOutcome.RouteFull)
-                    {
-                        ShowPasteStatus("Route full - raise the per-route limit in Config",
-                            UIStyle.Red);
-                        Log.LogInfo($"[ReplayUI] Resolved share {code} but route is full");
-                        return;
-                    }
-
-                    SelectScene(room.Key.SceneName);
-
-                    bool ok = outcome == PBManager.ImportOutcome.Imported;
-                    ShowPasteStatus(ok ? room.Key.SceneName : "Duplicate replay",
-                        ok ? UIStyle.Gold : UIStyle.Subtext);
-                    Log.LogInfo($"[ReplayUI] Resolved share {code}: " +
-                        (ok ? "imported" : "duplicate"));
-                });
                 return;
             }
 
@@ -272,85 +225,14 @@ namespace ReplayTimerMod
                 return;
             }
 
-            // 1. Already have a code → copy instantly, no network round trip.
-            if (!string.IsNullOrEmpty(snapshot.ShareCode))
-            {
-                GUIUtility.systemCopyBuffer =
-                    ReplaySharing.BuildShareText(snapshot.ShareCode!);
-                Log.LogInfo($"[ReplayUI] Copied share code for {key}#{snapshotId}");
-                return;
-            }
-
-            // 2. Online → mint a code (by run id if uploaded, else by data),
-            //    cache it on the snapshot, then copy.
-            if (_networkClient != null && _networkClient.IsStarted
-                && GhostSettings.OnlineEnabled)
-            {
-                System.Action<ShareResponse?> onShared = resp =>
-                {
-                    if (resp != null && resp.HasCode)
-                    {
-                        PBManager.SetServerIds(key, snapshotId, null, resp.Code);
-                        GUIUtility.systemCopyBuffer =
-                            ReplaySharing.BuildShareText(resp.Code);
-                        Log.LogInfo($"[ReplayUI] Shared {key}#{snapshotId} as {resp.Code}");
-                    }
-                    else
-                    {
-                        // Fall back to the full blob so the user still gets something.
-                        GUIUtility.systemCopyBuffer = snapshot.EncodedData;
-                        Log.LogWarning($"[ReplayUI] Share failed for {key}#{snapshotId}; copied full replay");
-                    }
-                };
-
-                if (!string.IsNullOrEmpty(snapshot.ServerRunId))
-                    _networkClient.CreateShareByRunId(snapshot.ServerRunId!, onShared);
-                else
-                    _networkClient.CreateShareByData(snapshot, onShared);
-                return;
-            }
-
-            // 3. Offline → copy the full self-contained blob (legacy behavior).
+            // Copy the full self-contained blob.
             GUIUtility.systemCopyBuffer = snapshot.EncodedData;
-            Log.LogInfo($"[ReplayUI] Offline: copied full replay for {key}#{snapshotId}");
-        }
-
-        /// <summary>
-        /// Leaderboard "copy link": mints a share code for a run id and copies it.
-        /// Optionally flashes a label with the outcome.
-        /// </summary>
-        private void OnCopyLinkClicked(string runId, Text? feedback)
-        {
-            if (_networkClient == null || !_networkClient.IsStarted
-                || string.IsNullOrEmpty(runId))
-                return;
-
-            if (feedback != null) feedback.text = "...";
-
-            _networkClient.CreateShareByRunId(runId, resp =>
-            {
-                if (resp != null && resp.HasCode)
-                {
-                    GUIUtility.systemCopyBuffer = ReplaySharing.BuildShareText(resp.Code);
-                    if (feedback != null)
-                    {
-                        feedback.text = "Copied";
-                        feedback.color = UIStyle.Gold;
-                    }
-                    Log.LogInfo($"[ReplayUI] Copied link for run {runId}: {resp.Code}");
-                }
-                else if (feedback != null)
-                {
-                    feedback.text = "Failed";
-                    feedback.color = UIStyle.Red;
-                }
-            });
+            Log.LogInfo($"[ReplayUI] Copied full replay for {key}#{snapshotId}");
         }
 
         private void DeleteSnapshot(RoomKey key, string snapshotId)
         {
             PBManager.DeleteSnapshot(key, snapshotId);
-            InvalidateDownloadStates();
             RebuildSceneList();
             if (_selectedScene != null && _activeTab == TabKind.Runs)
                 RebuildRightContent();
@@ -359,7 +241,6 @@ namespace ReplayTimerMod
         private void DeleteRoute(RoomKey key)
         {
             PBManager.DeletePB(key);
-            InvalidateDownloadStates();
             RebuildSceneList();
             if (_selectedScene != null && _activeTab == TabKind.Runs)
                 RebuildRightContent();
@@ -478,16 +359,6 @@ namespace ReplayTimerMod
             if (_activeTab == TabKind.Config) RefreshConfigValues();
         }
 
-        private void OnOnlineToggle()
-        {
-            bool enabling = !GhostSettings.OnlineEnabled;
-            GhostSettings.OnlineEnabled = enabling;
-            _onOnlineToggle?.Invoke(enabling);
-            // Rebuild (not just refresh) because the name input row is
-            // conditionally created based on OnlineEnabled.
-            if (_activeTab == TabKind.Config) RebuildRightContent();
-        }
-
         private void OnMaxSavedReplaysMinus() => AdjustMaxSaved(-1);
         private void OnMaxSavedReplaysPlus() => AdjustMaxSaved(1);
 
@@ -526,9 +397,9 @@ namespace ReplayTimerMod
         }
 
         /// <summary>
-        /// Experimental room-warp toggle. Warp buttons in the Runs and
-        /// Leaderboard tabs only render when this is on, so no extra rebuild
-        /// is needed here - those tabs rebuild on switch.
+        /// Experimental room-warp toggle. Warp buttons in the Runs tab only
+        /// render when this is on, so no extra rebuild is needed here - the
+        /// tab rebuilds on switch.
         /// </summary>
         private void OnRoomWarpToggle()
         {

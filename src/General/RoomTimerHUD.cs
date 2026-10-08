@@ -8,7 +8,7 @@ namespace ReplayTimerMod
     // ─────────────────────────────────────────────────────────────────────────
     // RoomTimerHUD – Per-room timer with PB comparison.
     //
-    // Each room gets its own self-contained "card" (timer + delta + PB + rank).
+    // Each room gets its own self-contained "card" (timer + delta + PB).
     // At most two cards are alive at once:
     //
     //   * Base mode (GhostSettings.ChainRoomTimers == false):
@@ -50,7 +50,6 @@ namespace ReplayTimerMod
             public Text delta  = null!;
             public Text pbLbl  = null!;
             public Text pbTime = null!;
-            public Text rank   = null!;
             public Text status = null!;   // small tag, e.g. "not saved"
 
             public CardState state;
@@ -61,7 +60,7 @@ namespace ReplayTimerMod
             //         is timed in the background).
             public bool liveDisplay;
 
-            // Identity of the room this card represents (for rank matching).
+            // Identity of the room this card represents.
             public string scene     = "";
             public string entryFrom = "";
             public string exitTo    = "";
@@ -467,18 +466,10 @@ namespace ReplayTimerMod
                 x: pbTimeX, y: pbRowTop, w: _pbTimeW, h: _pbRowH);
             pbTime.alignByGeometry = false;
 
-            int rankRowTop = pbRowTop + _pbRowH + _rowGap;
-            var rank = MakeLbl(go.transform, "",
-                _pbFontSz, UIStyle.Accent, TextAnchor.MiddleLeft,
-                x: 0, y: rankRowTop, w: _cardW, h: _pbRowH);
-            rank.alignByGeometry = false;
-            rank.gameObject.SetActive(false);
-
-            // Status tag shares the rank row (the two are mutually exclusive:
-            // a skipped backtrack is never uploaded, so it never gets a rank).
+            int statusRowTop = pbRowTop + _pbRowH + _rowGap;
             var status = MakeLbl(go.transform, "",
                 _pbFontSz, UIStyle.Red, TextAnchor.MiddleLeft,
-                x: 0, y: rankRowTop, w: _cardW, h: _pbRowH);
+                x: 0, y: statusRowTop, w: _cardW, h: _pbRowH);
             status.alignByGeometry = false;
             status.gameObject.SetActive(false);
 
@@ -486,7 +477,7 @@ namespace ReplayTimerMod
             {
                 go = go, rt = rt,
                 timer = timer, delta = delta,
-                pbLbl = pbLbl, pbTime = pbTime, rank = rank, status = status,
+                pbLbl = pbLbl, pbTime = pbTime, status = status,
                 currentX = slotX, targetX = slotX,
             };
             _cards.Add(card);
@@ -513,7 +504,6 @@ namespace ReplayTimerMod
             card.isNewPb     = false;
             card.counts      = true;
             card.notSaved    = false;
-            card.rank.gameObject.SetActive(false);
             SetCardStatus(card, null);
             RefreshRunning(card);
         }
@@ -648,8 +638,7 @@ namespace ReplayTimerMod
                 _readyGO.SetActive(v);
         }
 
-        /// <summary>Shows or hides the small status tag on a card. Showing it
-        /// hides the rank line (they share the same row and never co-occur).</summary>
+        /// <summary>Shows or hides the small status tag on a card.</summary>
         private void SetCardStatus(TimerCard card, string? text)
         {
             if (card.status == null) return;
@@ -661,36 +650,10 @@ namespace ReplayTimerMod
                 return;
             }
 
-            if (card.rank != null) card.rank.gameObject.SetActive(false);
             card.status.text  = text;
             card.status.color = UIStyle.Red with { a = 0.9f };
             if (!card.status.gameObject.activeSelf)
                 card.status.gameObject.SetActive(true);
-        }
-
-        // ── Rank ────────────────────────────────────────────────────────────────
-        /// <summary>
-        /// Shows the global rank on whichever finished card matches the room the
-        /// rank is for. Called from the main thread when the upload response
-        /// arrives. With two cards on screen this targets the correct one.
-        /// </summary>
-        public void ShowRank(RankInfo rankInfo)
-        {
-            PruneDeadCards();
-            for (int i = _cards.Count - 1; i >= 0; i--)
-            {
-                TimerCard c = _cards[i];
-                if (c.state != CardState.Finished) continue;
-                if (c.scene != rankInfo.SceneName) continue;
-                if (c.entryFrom != rankInfo.EntryFrom) continue;
-                if (!string.IsNullOrEmpty(c.exitTo) && c.exitTo != rankInfo.ExitTo) continue;
-
-                if (c.status != null) c.status.gameObject.SetActive(false);
-                c.rank.text  = $"#{rankInfo.Rank} / {rankInfo.TotalRunners}";
-                c.rank.color = UIStyle.Accent;
-                c.rank.gameObject.SetActive(true);
-                return;
-            }
         }
 
         // ── Cancellation banner ──────────────────────────────────────────────────

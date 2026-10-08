@@ -1,6 +1,7 @@
 // Minimal re-implementations of the UnityEngine surface the pure-logic
 // product sources touch, so they compile and run on plain .NET.
-// Time.realtimeSinceStartup is settable so tests can control freshness logic.
+// Time.realtimeSinceStartup is settable so tests can control time-based
+// logic (GhostSettings' throttled saves).
 
 // ReSharper disable all
 #pragma warning disable IDE0060

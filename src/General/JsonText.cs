@@ -4,11 +4,10 @@ using System.Text;
 namespace ReplayTimerMod
 {
     /// <summary>
-    /// Shared JSON string primitives. The mod has several small hand-rolled
-    /// JSON writers and readers (network DTOs in <see cref="ApiJson"/>, on-disk
-    /// data in <see cref="MiniJson"/>, the owners sidecar) that must work on
-    /// net35; string escaping and the ref-int string/whitespace readers live
-    /// here once instead of being copy-pasted per file. (MiniJson's stateful
+    /// Shared JSON string primitives. The mod's hand-rolled JSON writers and
+    /// readers (on-disk data in <see cref="MiniJson"/>) must work on net35;
+    /// string escaping and the ref-int string/whitespace readers live here
+    /// once instead of being copy-pasted per file. (MiniJson's stateful
     /// parser is the deliberate exception.)
     /// </summary>
     internal static class JsonText

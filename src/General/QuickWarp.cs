@@ -13,7 +13,7 @@ namespace ReplayTimerMod
     /// Resolves warp targets from a static, bundled transition map — the same
     /// authoritative door data that Benchwarp / RandomizerMod use. The map is
     /// embedded as a resource and loaded once at startup, so warps work
-    /// immediately for any route (including shared/leaderboard routes the
+    /// immediately for any route (including imported routes the
     /// player has never visited). No runtime scanning, no learned cache, no
     /// room visits required.
     ///

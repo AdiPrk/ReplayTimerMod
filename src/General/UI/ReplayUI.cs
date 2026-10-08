@@ -1,12 +1,11 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 using BepInEx.Logging;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace ReplayTimerMod
 {
-    public enum TabKind { Runs, Leaderboard, Config }
+    public enum TabKind { Runs, Config }
 
     public partial class ReplayUI
     {
@@ -46,7 +45,6 @@ namespace ReplayTimerMod
             new Dictionary<TabKind, ButtonRef>();
 
         // Right panel - sub-header
-        private GameObject? _rightSubHeader;
         private Text? _rightHeaderLbl;
         private Text? _pasteStatusLbl;
         private GameObject? _runsActionButtons;
@@ -91,94 +89,17 @@ namespace ReplayTimerMod
         private Image? _clearAllCfgBg;
         private Text? _copyAllCfgLbl;
         private Image? _copyAllCfgBg;
-        private Text? _onlineToggleLbl;
-        private Image? _onlineToggleBg;
         private Text? _warpToggleLbl;
         private Image? _warpToggleBg;
         private Text? _camFollowToggleLbl;
         private Image? _camFollowToggleBg;
-        private InputField? _nameInput;
-        private Text? _nameStatusLbl;
-        private Image? _nameSaveBg;
-        private Text? _nameSaveLbl;
-        // Name-save transport (see ReplayUI.ConfigTab.OnNameSave): its own
-        // HttpService because networking hasn't started before a name exists.
-        private HttpService? _nameHttp;
-        private bool _nameSaveInFlight;
-        private string _lastSavedName = "";
-
-        /// <summary>
-        /// Fired when the user successfully saves a new display name
-        /// via the config tab. The mod entry point subscribes to this
-        /// to persist the name and start networking if needed.
-        /// </summary>
-        public event System.Action<string>? OnDisplayNameSet;
 
         // Layout dimensions (computed once in Setup)
         private int PW, PH, LW, RW, M, RH;
 
-        // Online toggle handler (set by mod entry point)
-        private System.Action<bool>? _onOnlineToggle;
-
-        // Leaderboard dependencies
-        private readonly LeaderboardCache _leaderboardCache = new LeaderboardCache();
-        private string _gameTag = "";
-        private NetworkClient? _networkClient;
-
-        // ── Rebuild gating state ───────────────────────────────────────
-        // Version stamps of what's currently rendered, so background data
-        // refreshes that produce identical content can be skipped entirely
-        // (preserving hover states, animations, and scroll position).
-
-        private string? _renderedLbScene;
-        private int _renderedLbVersion = -1;
-        private int _renderedServerScenesVersion = -1;
-
         // Last-built view, for deciding whether to preserve scroll position
         private TabKind _lastContentTab = (TabKind)(-1);
         private string? _lastContentScene;
-
-        public void SetOnlineToggleHandler(System.Action<bool> handler)
-        {
-            _onOnlineToggle = handler;
-        }
-
-        public void SetNetworkClient(NetworkClient? client)
-        {
-            if (_networkClient != null)
-            {
-                _networkClient.OnLeaderboardUpdated -= HandleLeaderboardUpdated;
-                _networkClient.OnSceneIndexReady -= HandleSceneIndexReady;
-                _networkClient.OnSceneIndexFailed -= HandleSceneIndexFailed;
-                _networkClient.OnRunIdAssigned -= HandleRunIdAssigned;
-            }
-
-            _networkClient = client;
-
-            if (_networkClient != null)
-            {
-                _networkClient.OnLeaderboardUpdated += HandleLeaderboardUpdated;
-                _networkClient.OnSceneIndexReady += HandleSceneIndexReady;
-                _networkClient.OnSceneIndexFailed += HandleSceneIndexFailed;
-                _networkClient.OnRunIdAssigned += HandleRunIdAssigned;
-            }
-        }
-
-        private void HandleRunIdAssigned(string snapshotId, RoomKey key, string runId)
-        {
-            PBManager.SetServerIds(key, snapshotId, runId, null);
-        }
-
-        public void SetGameTag(string gameTag)
-        {
-            _gameTag = gameTag ?? "";
-        }
-
-        /// <summary>
-        /// The leaderboard cache, owned by this ReplayUI instance.
-        /// NetworkClient writes into it; BuildLeaderboardContent reads from it.
-        /// </summary>
-        public LeaderboardCache LeaderboardCacheRef => _leaderboardCache;
 
         public void Setup()
         {
@@ -225,9 +146,6 @@ namespace ReplayTimerMod
                 _wasPaused = false;
                 _rebuildPending = false;
                 _rightScroll = null;
-                _renderedLbScene = null;
-                _renderedLbVersion = -1;
-                _renderedServerScenesVersion = -1;
                 _lastContentTab = (TabKind)(-1);
                 _lastContentScene = null;
                 ClearConfigRefs();
@@ -243,10 +161,6 @@ namespace ReplayTimerMod
                 _tabGO.SetActive(true);
                 _wasPaused = true;
 
-                // Scene list is only visible (and worth syncing) when expanded.
-                if (_networkClient != null)
-                    _networkClient.SetMenuOpen(_expanded);
-
                 if (_expanded)
                     RefreshCurrentView();
             }
@@ -254,14 +168,8 @@ namespace ReplayTimerMod
             if (!paused && _wasPaused)
             {
                 _canvasGO.SetActive(false);
-                if (_networkClient != null)
-                {
-                    _networkClient.StopLeaderboardPolling();
-                    _networkClient.SetMenuOpen(false);
-                }
                 ResetClearAllConfirm();
                 ClosePicker();
-                CloseFilterPopup();
                 GhostSettings.Flush(); // write any throttled color/alpha change
                 _wasPaused = false;
                 return;
@@ -277,15 +185,7 @@ namespace ReplayTimerMod
                 RefreshCurrentView();
             }
 
-            // Revert expired Saved/Retry download states back to idle (in place)
-            TickGhostStateExpiry();
-
-            TickNameSave();
-
             TickTooltip();
-
-            // Close the (non-modal) filter popup on outside clicks
-            TickFilterPopup();
         }
 
         /// <summary>
@@ -300,54 +200,6 @@ namespace ReplayTimerMod
 
         public void OnPBUpdated() => _rebuildPending = true;
 
-        // ── Network event handlers ─────────────────────────────────────
-
-        /// <summary>
-        /// Called when leaderboard data has been written to the cache
-        /// (per-room poll or scene-index refresh). Rebuilds the content area
-        /// ONLY if the data for the currently-viewed room actually changed.
-        /// Identical polling responses are skipped entirely, so hover
-        /// states, the reveal animation, and scroll position survive.
-        /// </summary>
-        private void HandleLeaderboardUpdated()
-        {
-            if (!_expanded) return;
-            if (_activeTab != TabKind.Leaderboard) return;
-            if (_selectedScene == null) return;
-
-            int version = _leaderboardCache.GetVersion(_gameTag, _selectedScene);
-            if (_selectedScene == _renderedLbScene && version == _renderedLbVersion)
-                return; // nothing changed — don't touch the UI
-
-            RebuildLeaderboardContentOnly();
-        }
-
-        /// <summary>
-        /// Called when the scene index has been fetched or refreshed.
-        /// Rebuilds the scene list only when the set of server rooms
-        /// actually changed (not on every 60s refresh).
-        /// </summary>
-        private void HandleSceneIndexReady()
-        {
-            if (!_expanded) return;
-
-            if (_leaderboardCache.ServerScenesVersion == _renderedServerScenesVersion)
-                return;
-
-            RebuildSceneList();
-        }
-
-        /// <summary>
-        /// Called when a scene-index fetch fails. Currently a no-op on the UI
-        /// side — retries happen automatically with backoff in NetworkClient
-        /// and the error is logged there.
-        /// </summary>
-        private void HandleSceneIndexFailed()
-        {
-            // Intentionally empty — no footer label to update.
-            // The scene list empty-state message already shows sync status.
-        }
-
         // ── Panel & tab management ─────────────────────────────────────
 
         private void TogglePanel()
@@ -358,17 +210,10 @@ namespace ReplayTimerMod
             _routeClearConfirmKey = null;
             ResetSceneClearConfirm();
             ClosePicker();
-            CloseFilterPopup();
-            if (_networkClient != null)
-                _networkClient.SetMenuOpen(_expanded);
             if (_expanded)
                 RefreshCurrentView();
             else
-            {
-                if (_networkClient != null)
-                    _networkClient.StopLeaderboardPolling();
                 ResetClearAllConfirm();
-            }
         }
 
         private void SwitchTab(TabKind tab)
@@ -378,7 +223,6 @@ namespace ReplayTimerMod
             _deleteConfirmId = null;
             _routeClearConfirmKey = null;
             ClosePicker();
-            CloseFilterPopup();
             UpdateTabBarVisuals();
             UpdateRightSubHeader();
             RebuildRightContent();
@@ -403,7 +247,6 @@ namespace ReplayTimerMod
             switch (_activeTab)
             {
                 case TabKind.Runs:
-                case TabKind.Leaderboard:
                     _rightHeaderLbl.text = _selectedScene ?? "Select a room";
                     _rightHeaderLbl.color = _selectedScene != null ? UIStyle.Text : UIStyle.Subtext;
                     break;
@@ -465,14 +308,6 @@ namespace ReplayTimerMod
 
             ClearConfigRefs();
 
-            // Hidden by default; the Runs/Leaderboard builders re-show it
-            // on their filterable paths.
-            HideFilterToggle();
-
-            // Always stop polling — the leaderboard branch restarts if needed
-            if (_networkClient != null)
-                _networkClient.StopLeaderboardPolling();
-
             switch (_activeTab)
             {
                 case TabKind.Runs:
@@ -480,20 +315,6 @@ namespace ReplayTimerMod
                         BuildRunsContent(_selectedScene);
                     else
                         AddCenteredMessage(_rightContent, "Select a room to view runs.");
-                    break;
-
-                case TabKind.Leaderboard:
-                    BuildLeaderboardContent();
-                    // Polling keeps the active room live-updated; the cache
-                    // is already populated by the scene index so first paint
-                    // is instant.
-                    if (GhostSettings.OnlineEnabled
-                        && _selectedScene != null
-                        && _networkClient != null
-                        && _networkClient.IsStarted)
-                    {
-                        _networkClient.StartLeaderboardPolling(_selectedScene);
-                    }
                     break;
 
                 case TabKind.Config:
@@ -522,17 +343,6 @@ namespace ReplayTimerMod
             _deleteConfirmId = null;
             _routeClearConfirmKey = null;
             ClosePicker();
-            CloseFilterPopup();
-
-            // If this room has no local runs but exists on the server,
-            // the Runs tab would be empty — jump straight to the leaderboard.
-            if (_activeTab == TabKind.Runs
-                && GhostSettings.OnlineEnabled
-                && !PBManager.AllPBs().Any(p => p.Key.SceneName == scene)
-                && _leaderboardCache.HasServerScene(scene))
-            {
-                _activeTab = TabKind.Leaderboard;
-            }
 
             RebuildSceneList();
             UpdateTabBarVisuals();
@@ -543,7 +353,6 @@ namespace ReplayTimerMod
         private void ClearSelectedScene()
         {
             _selectedScene = null;
-            CloseFilterPopup(); // its header row is about to disappear
             UpdateRightSubHeader();
             if (_rightContent != null)
             {

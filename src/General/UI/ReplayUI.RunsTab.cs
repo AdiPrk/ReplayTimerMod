@@ -11,11 +11,6 @@ namespace ReplayTimerMod
         {
             if (_rightContent == null) return;
 
-            // Hidden unless this build reaches the filterable path below
-            // (covers the lightweight ContentOnly rebuilds, e.g. deleting
-            // the room's last run).
-            HideFilterToggle();
-
             var routes = PBManager.AllHistories()
                 .Where(h => h.Key.SceneName == scene)
                 .OrderBy(h => h.Key.EntryFromScene)
@@ -28,59 +23,42 @@ namespace ReplayTimerMod
                 return;
             }
 
-            ShowFilterToggle();
-
-            // Filtered view of each route's snapshots. The route header,
-            // PB deltas, and prune behavior stay based on the FULL
-            // history — the filter only hides rows. Collected up front so
-            // the time column can be sized to the widest visible time
-            // before any row is built.
-            var visibleRoutes = new List<RouteReplayHistory>();
-            var visibleLists =
-                new List<IList<ReplaySnapshot>>();
-            var visibleTimes = new List<float>();
-            _filterShownCount = 0;
-            _filterTotalCount = 0;
-            _filterCountUnit = "runs";
-            foreach (var route in routes)
-            {
-                _filterTotalCount += route.Snapshots.Count;
-
-                var visible = ModifierFilterActive
-                    ? route.Snapshots.Where(s => PassesModifierFilter(s.Modifiers)).ToList()
-                    : (IList<ReplaySnapshot>)route.Snapshots;
-                if (visible.Count == 0) continue;
-
-                _filterShownCount += visible.Count;
-                visibleRoutes.Add(route);
-                visibleLists.Add(visible);
-                foreach (var s in visible)
-                    visibleTimes.Add(s.TotalTime);
-            }
-
-            if (visibleRoutes.Count == 0)
-            {
-                AddCenteredMessage(_rightContent, "No runs match the modifier filter.");
-                return;
-            }
-
-            int timeColW = TimeColumnWidth(visibleTimes);
+            // Sized to the widest time in the room before any row is built.
+            int timeColW = TimeColumnWidth(
+                routes.SelectMany(r => r.Snapshots).Select(s => s.TotalTime));
 
             bool stripe = false;
-            for (int i = 0; i < visibleRoutes.Count; i++)
+            foreach (var route in routes)
             {
-                AddRouteGroup(_rightContent, visibleRoutes[i], visibleLists[i],
-                    stripe, timeColW);
+                AddRouteGroup(_rightContent, route, stripe, timeColW);
                 stripe = !stripe;
             }
         }
 
+        /// <summary>
+        /// Lightweight rebuild of just the Runs content area:
+        /// detached clear, scroll preserved.
+        /// </summary>
+        private void RebuildRunsContentOnly()
+        {
+            if (_rightContent == null || _selectedScene == null) return;
+
+            var scroll = RightScroll;
+            float keepScroll = scroll != null ? ScrollOffsetFromTop(scroll) : 0f;
+
+            ClearContentDetached(_rightContent);
+            BuildRunsContent(_selectedScene);
+            ForceLayout(_rightContent);
+
+            if (scroll != null)
+                RestoreScrollOffsetFromTop(scroll, keepScroll);
+        }
+
         private void AddRouteGroup(Transform parent, RouteReplayHistory route,
-            IList<ReplaySnapshot> visible, bool stripe,
-            int timeColW)
+            bool stripe, int timeColW)
         {
             int headerH = RH + 2;
-            int totalH = headerH + visible.Count * RH;
+            int totalH = headerH + route.Snapshots.Count * RH;
 
             var group = MakeGO("RouteGroup", parent);
             Img(group, stripe ? UIStyle.Surface with { a = 0.3f } : Color.clear);
@@ -89,8 +67,8 @@ namespace ReplayTimerMod
 
             AddRouteHeader(group.transform, route, headerH);
 
-            for (int i = 0; i < visible.Count; i++)
-                AddSnapshotRow(group.transform, route, visible[i], i, headerH,
+            for (int i = 0; i < route.Snapshots.Count; i++)
+                AddSnapshotRow(group.transform, route, route.Snapshots[i], i, headerH,
                     timeColW);
         }
 
@@ -224,8 +202,7 @@ namespace ReplayTimerMod
                 : ColorHex(resolved) + " (global)");
             x += swatchS + M;
 
-            // --- Right side: geometry comes from RowRightCluster (shared
-            // with the Leaderboard tab) so the two tabs stay in lockstep.
+            // --- Right side: geometry comes from RowRightCluster.
 
             var cluster = RowRightCluster.Begin(RW);
 
@@ -291,21 +268,11 @@ namespace ReplayTimerMod
                 UIStyle.FontSizeSm, UIStyle.Gold, TextAnchor.MiddleRight,
                 x: timeX, w: timeColW, h: h);
 
-            // "?" marker at the right end of the label slot — hovering it
-            // shows the run's full loadout.
-            int markerW = AddModifierMarker(row.transform, cluster.MarkerRight,
-                h, snapshot.Modifiers);
-
-            // Label — "#N" for your own runs; downloaded replays append
-            // the owner's runner name so it's clear whose run this is.
-            int labelW = cluster.LabelEnd(markerW) - x;
+            // Label — "#N"
+            int labelW = cluster.LabelEnd - x;
             Color labelColor = playbackOn ? UIStyle.Gold : UIStyle.Subtext;
 
             string labelText = "#" + (index + 1);
-
-            string? owner = ReplayOwners.Get(snapshot.SnapshotId);
-            if (!string.IsNullOrEmpty(owner))
-                labelText += "  by " + owner;
 
             MakeLbl(row.transform, labelText,
                 UIStyle.FontSizeRow, labelColor, TextAnchor.MiddleLeft,
@@ -323,7 +290,6 @@ namespace ReplayTimerMod
             if (_deleteConfirmId == snapshotId)
             {
                 _deleteConfirmId = null;
-                ReplayOwners.Remove(snapshotId); // drop owner tag with the replay
                 DeleteSnapshot(key, snapshotId);
             }
             else

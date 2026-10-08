@@ -113,15 +113,13 @@ namespace ReplayTimerMod
 
         // ── Shared run-row right-side layout ────────────────────────────
         //
-        // The Runs tab and the Leaderboard tab lay out the right side of a
-        // run row with the same language: action buttons pack flush against
-        // the right edge, the time slot sits left of the buttons separated
-        // by a double gap (flush right when a row has no buttons), optional
-        // extra slots (e.g. the WR delta) sit a gap left of the time, then
-        // the "?" loadout marker, then the name/label fills what remains.
-        // This struct is the single source of that geometry: row builders
-        // declare WHAT the row contains, right to left, and consume the
-        // returned columns - so the tabs cannot drift apart.
+        // Run rows lay out their right side with one language: action
+        // buttons pack flush against the right edge, the time slot sits
+        // left of the buttons separated by a double gap (flush right when a
+        // row has no buttons), optional extra slots sit a gap left of the
+        // time, then the name/label fills what remains. This struct is the single source of that geometry: row
+        // builders declare WHAT the row contains, right to left, and
+        // consume the returned columns - so rows cannot drift apart.
 
         private struct RowRightCluster
         {
@@ -170,23 +168,18 @@ namespace ReplayTimerMod
                 return x;
             }
 
-            /// <summary>Right edge for the "?" loadout marker.</summary>
-            public int MarkerRight => cursor;
-
-            /// <summary>Right edge available to the name/label once the
-            /// marker (of the given width) is placed.</summary>
-            public int LabelEnd(int markerWidth) =>
-                cursor - markerWidth - UIStyle.Gap;
+            /// <summary>Right edge available to the name/label.</summary>
+            public int LabelEnd => cursor;
         }
 
         /// <summary>
         /// Canonical width of the time column for a set of rendered rows:
         /// the widest formatted time among them, so the slot hugs its text
-        /// and the "?" marker's distance from the time matches the buttons'
+        /// and the label's distance from the time matches the buttons'
         /// distance on the other side. Time strings only contain digits
         /// (556/1000 em in Arial) and ':' '.' separators (278/1000 em), so
-        /// the width is deterministic without live text measurement. Both
-        /// tabs must size their time column with this.
+        /// the width is deterministic without live text measurement. All
+        /// row builders must size their time column with this.
         /// </summary>
         private static int TimeColumnWidth(IEnumerable<float> times)
         {
@@ -274,12 +267,10 @@ namespace ReplayTimerMod
             t.fontSize = fontSize;
             t.color = color;
             t.alignment = anchor;
-            // Never interpret rich-text markup in labels. Display names (and any
-            // server-supplied text) render through here; disabling rich text
-            // means a name like "<color=#f00>x" or "<size=400>" is shown as
-            // literal characters instead of being interpreted. Defense in depth:
-            // new names are ASCII-only and can't contain '<'/'>' anyway, but this
-            // also neutralizes any legacy name stored before validation existed.
+            // Never interpret rich-text markup in labels: markup like
+            // "<color=#f00>x" or "<size=400>" in any displayed string (scene
+            // names, imported data) is shown as literal characters instead of
+            // being interpreted.
             t.supportRichText = false;
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
             t.verticalOverflow = VerticalWrapMode.Truncate;
@@ -305,7 +296,7 @@ namespace ReplayTimerMod
 
         /// <summary>
         /// Subtle animated hover highlight for interactive ROWS
-        /// (leaderboard rows, scene list, expand rows).
+        /// (run rows, scene list rows).
         /// </summary>
         private static RowHover AddHoverEffect(GameObject row)
         {
@@ -338,8 +329,8 @@ namespace ReplayTimerMod
         }
 
         // ── Shared marker textures ──────────────────────────────────────────
-        // Drawn once, shared by every consumer (Runs rows, leaderboard
-        // headers, the filter toggle), and they survive canvas destruction
+        // Drawn once, shared by every consumer (Runs rows, route
+        // headers), and they survive canvas destruction
         // (textures aren't scene objects). Edges get a 1px alpha ramp so the
         // diagonals aren't jagged.
 
@@ -410,30 +401,37 @@ namespace ReplayTimerMod
             return _cameraMarkerTex;
         }
 
-        /// <summary>
-        /// Small drawn triangle caret (PlayMarkerTexture, tinted), centered
-        /// at (cx, cy) in the parent's top-left space. Points right at
-        /// rotation 0; pass -90 for down, 90 for up. Returns the
-        /// RectTransform so callers can re-rotate it later. Use this instead
-        /// of text glyphs - labels stay plain ASCII.
-        /// </summary>
-        private static RectTransform AddCaret(Transform parent, float cx,
-            float cy, int size, Color color, float rotation = 0f)
-        {
-            var go = MakeGO("Caret", parent);
-            var img = go.AddComponent<RawImage>();
-            img.texture = PlayMarkerTexture();
-            img.color = color;
-            img.raycastTarget = false;
+        // ── Text measurement ───────────────────────────────────────────────
 
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = rt.anchorMax = new Vector2(0, 1);
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(size, size);
-            rt.anchoredPosition = new Vector2(cx, -cy);
-            if (rotation != 0f)
-                rt.localEulerAngles = new Vector3(0, 0, rotation);
-            return rt;
+        private Text? _measureLbl;
+
+        /// <summary>
+        /// Width of rendered text in canvas px (the canvas uses
+        /// ConstantPixelSize, so preferredWidth is directly usable), via a
+        /// hidden reusable Text. Used to size the sub-header buttons to
+        /// their text.
+        /// </summary>
+        private float MeasureTextWidth(string text, int fontSize)
+        {
+            if (_measureLbl == null)
+            {
+                // Kept active with clear color: preferred-size queries are
+                // safest on an active Text across Unity versions, and a
+                // fully transparent zero-size label renders nothing.
+                var go = MakeGO("MeasureLbl", _canvasGO.transform);
+                _measureLbl = go.AddComponent<Text>();
+                _measureLbl.font = UIStyle.Arial;
+                _measureLbl.color = Color.clear;
+                _measureLbl.raycastTarget = false;
+                _measureLbl.supportRichText = false;
+                _measureLbl.horizontalOverflow = HorizontalWrapMode.Overflow;
+                _measureLbl.verticalOverflow = VerticalWrapMode.Overflow;
+                Rect(go, 0, 0, 0, 0);
+            }
+
+            _measureLbl.fontSize = fontSize;
+            _measureLbl.text = text;
+            return _measureLbl.preferredWidth;
         }
 
         private static ButtonRef MakeButton(
@@ -527,8 +525,8 @@ namespace ReplayTimerMod
         // ── Scroll preservation across content rebuilds ────────────────────
         //
         // Preserve the PIXEL offset from the top, not the normalized
-        // fraction: a rebuild can change the content height (filter panel
-        // expand/collapse, rows filtered away), and the same fraction of a
+        // fraction: a rebuild can change the content height (run deleted,
+        // confirm row armed), and the same fraction of a
         // different height lands the view somewhere else entirely.
 
         /// <summary>Current scroll offset from the top, in pixels.</summary>

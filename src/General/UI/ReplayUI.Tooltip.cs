@@ -9,10 +9,9 @@ namespace ReplayTimerMod
         // ── Hover tooltip ──────────────────────────────────────────────────
         //
         // A single shared tooltip panel on the mod canvas. Elements opt in
-        // via AttachModifierTooltip; after a short hover delay the tooltip
-        // appears near the cursor (clamped to the screen) and follows it
-        // until the pointer leaves. Used for the full loadout behind each
-        // row's "?" modifier marker.
+        // via AttachTooltip; after a short hover delay the tooltip appears
+        // near the cursor (clamped to the screen) and follows it until the
+        // pointer leaves.
 
         private const float TooltipDelaySec = 0.45f;
 
@@ -54,11 +53,6 @@ namespace ReplayTimerMod
             var trigger = go.AddComponent<TooltipTrigger>();
             trigger.text = text;
         }
-
-        /// <summary>Makes hovering the given element show a tooltip with the
-        /// full modifier names for <paramref name="mask"/>.</summary>
-        private static void AttachModifierTooltip(GameObject go, int mask) =>
-            AttachTooltip(go, ModifierMask.ToTooltip(mask));
 
         /// <summary>Called every frame from Tick. Shows/positions/hides the
         /// shared tooltip based on the current hover state.</summary>
@@ -113,7 +107,7 @@ namespace ReplayTimerMod
             if (_tooltipGO != null) return;
             if (_canvasGO == null) return;
 
-            _tooltipGO = MakeGO("ModifierTooltip", _canvasGO.transform);
+            _tooltipGO = MakeGO("Tooltip", _canvasGO.transform);
 
             // 1px frame: outer image is the border color, inner inset image
             // is the panel background.

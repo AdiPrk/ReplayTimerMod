@@ -94,18 +94,11 @@ namespace ReplayTimerMod
         public FrameData[] Frames { get; }
         public int FrameCount => Frames.Length;
 
-        /// <summary>Modifier bitmask for this run (see <see cref="ModifierMask"/>),
-        /// or <see cref="ModifierMask.Unknown"/> for runs recorded before the
-        /// feature existed (old local files / old share blobs).</summary>
-        public int Modifiers { get; }
-
-        public RecordedRoom(RoomKey key, float totalTime, FrameData[] frames,
-            int modifiers = ModifierMask.Unknown)
+        public RecordedRoom(RoomKey key, float totalTime, FrameData[] frames)
         {
             Key = key;
             TotalTime = totalTime;
             Frames = frames;
-            Modifiers = modifiers;
         }
     }
 
@@ -116,10 +109,6 @@ namespace ReplayTimerMod
         public RecordedRoom Room { get; }
         public RoomKey Key => Room.Key;
         public float TotalTime => Room.TotalTime;
-        /// <summary>Modifier bitmask of the underlying run (see
-        /// <see cref="ModifierMask"/>); <see cref="ModifierMask.Unknown"/> for
-        /// pre-feature data.</summary>
-        public int Modifiers => Room.Modifiers;
         public string EncodedData { get; }
         public bool HasCapturedAt => CapturedAtUtcTicks > 0;
         public bool HasVisualOverride { get; }
@@ -129,17 +118,10 @@ namespace ReplayTimerMod
         public float Alpha { get; }
         public Color OverrideColor => new Color(ColorR, ColorG, ColorB, Alpha);
 
-        /// <summary>Server run id once this replay has been uploaded (else null).</summary>
-        public string? ServerRunId { get; }
-
-        /// <summary>Public share code once one has been minted (else null).</summary>
-        public string? ShareCode { get; }
-
         public ReplaySnapshot(string snapshotId, long capturedAtUtcTicks,
             RecordedRoom room, string? encodedData = null,
             bool hasVisualOverride = false,
-            float colorR = 1f, float colorG = 1f, float colorB = 1f, float alpha = 0.4f,
-            string? serverRunId = null, string? shareCode = null)
+            float colorR = 1f, float colorG = 1f, float colorB = 1f, float alpha = 0.4f)
         {
             SnapshotId = string.IsNullOrEmpty(snapshotId)
                 ? System.Guid.NewGuid().ToString("N")
@@ -152,8 +134,6 @@ namespace ReplayTimerMod
             ColorG = Mathf.Clamp01(colorG);
             ColorB = Mathf.Clamp01(colorB);
             Alpha = Mathf.Clamp01(alpha);
-            ServerRunId = string.IsNullOrEmpty(serverRunId) ? null : serverRunId;
-            ShareCode = string.IsNullOrEmpty(shareCode) ? null : shareCode;
         }
 
         public Color ResolveGhostColor(Color globalColor) =>
@@ -171,28 +151,7 @@ namespace ReplayTimerMod
                 color.r,
                 color.g,
                 color.b,
-                color.a,
-                ServerRunId,
-                ShareCode);
-
-        /// <summary>
-        /// Returns a copy with server ids set. Either argument may be null to
-        /// leave that id unchanged — e.g. set the run id at upload time, then
-        /// the share code later, without clobbering the other.
-        /// </summary>
-        public ReplaySnapshot WithServerIds(string? serverRunId, string? shareCode) =>
-            new ReplaySnapshot(
-                SnapshotId,
-                CapturedAtUtcTicks,
-                Room,
-                EncodedData,
-                HasVisualOverride,
-                ColorR,
-                ColorG,
-                ColorB,
-                Alpha,
-                serverRunId ?? ServerRunId,
-                shareCode ?? ShareCode);
+                color.a);
 
         public static ReplaySnapshot CreateNew(RecordedRoom room,
             string? encodedData = null, long? capturedAtUtcTicks = null) =>

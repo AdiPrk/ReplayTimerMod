@@ -31,14 +31,6 @@ namespace ReplayTimerMod
         /// </summary>
         public static bool RoomUsedDebugAbilities { get; private set; } = false;
 
-        /// <summary>
-        /// Modifier bitmask accumulated for the room run in progress (see
-        /// <see cref="ModifierMask"/>). Valid while <see cref="IsRecording"/>
-        /// and, for the just-finished run, during <see cref="OnRoomExit"/>
-        /// handling - the mask resets when the next room's recording starts.
-        /// </summary>
-        public static int CurrentRunModifierMask => ModifierTracker.CurrentMask;
-
         // ── Events ───────────────────────────────────────────────────────────
         public static event Action<string, string>? OnRoomEnter;
         public static event Action<string, string, string, float>? OnRoomExit;
@@ -70,7 +62,7 @@ namespace ReplayTimerMod
         /// a short, human-readable reason suitable for display in the timer
         /// UI. <see cref="OnRecordingDiscarded"/> always fires first (with
         /// <see cref="KeepGhostPlaybackOnDiscard"/> set to true), so the
-        /// cancelled run is never saved or uploaded, but ghost playback for
+        /// cancelled run is never saved, but ghost playback for
         /// the room keeps going.
         /// </summary>
         public static event Action<string>? OnRunCancelled;
@@ -190,7 +182,7 @@ namespace ReplayTimerMod
                     string exitedTo = toName;
                     float exitedTime = CurrentRoomTime;
 
-                    Log.LogInfo($"[RoomTracker] Exit: {exitedScene} [{exitedFromScene}->{exitedTo}] {TimeUtil.Format(exitedTime)} mods=0x{ModifierTracker.CurrentMask:X} [{ModifierMask.ToBadge(ModifierTracker.CurrentMask, 32)}]");
+                    Log.LogInfo($"[RoomTracker] Exit: {exitedScene} [{exitedFromScene}->{exitedTo}] {TimeUtil.Format(exitedTime)}");
 
                     IsRecording = false;
                     CurrentRoomTime = 0f;
@@ -223,7 +215,6 @@ namespace ReplayTimerMod
                 CurrentRoomTime = 0f;
                 IsRecording = true;
                 RoomUsedDebugAbilities = false;
-                ModifierTracker.Reset();
 
                 Log.LogInfo($"[RoomTracker] Enter: {CurrentScene} from {EntryFromScene}");
                 OnRoomEnter?.Invoke(CurrentScene, EntryFromScene);
@@ -298,11 +289,6 @@ namespace ReplayTimerMod
                     return;
                 }
             }
-
-            // Accumulate the run's modifier loadout every frame (regardless of
-            // shouldTick - possession/equipment can change while the timer is
-            // gated, e.g. during an in-room bench menu).
-            ModifierTracker.Poll();
 
             if (shouldTick)
             {
