@@ -1,8 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- 
-  Imports silksong path properties only if present in order to allow CI builds. The file should be gitignored.
-  If you are checking out from git and need to create a new one, you can use `dotnet new silksongpath` to generate one.
-  -->
   <Import Condition="Exists('..\..\.config\local\SilksongPath.props')" Project="..\..\.config\local\SilksongPath.props" />
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
@@ -13,10 +9,8 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableNETAnalyzers>True</EnableNETAnalyzers>
     <AnalysisMode>recommended</AnalysisMode>
-    <!-- Ignore warning about processor architecture mismatch with PlayMaker ConditionalExpression -->
     <NoWarn>$(NoWarn);MSB3270</NoWarn>
 
-    <!-- Shortens and anonymizes paths in debug symbols relative to the project directory. Breakpoints will not work, however. -->
     <PathMap Condition="'$(Configuration)' == 'Release'">$(MSBuildProjectDirectory)=/</PathMap>
 
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -30,7 +24,6 @@
     <PackageReference Include="Harmonize" Version="1.0.3" PrivateAssets="all" />
     <PackageReference Include="Hamunii.BepInEx.AutoPlugin" Version="2.0.1" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Unity.Analyzers" Version="1.25.0" PrivateAssets="all" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="UnityEngine.Modules" Version="6000.0.50" IncludeAssets="compile" />
     <PackageReference Include="Silksong.GameLibs" Version="1.2.0-silksong1.0.28324" PrivateAssets="all" />
   </ItemGroup>
@@ -39,16 +32,18 @@
     <Compile Include="**\*.cs" />
     <Compile Include="..\General\**\*.cs" />
 
-    <Folder Remove="..\..\thunderstore/temp;..\..\thunderstore/dist" />
     <None Include="..\..\README.md" Pack="True" PackagePath="README.md" />
     <None Include="..\..\thunderstore/icon.png" Pack="True" PackagePath="icon.png" />
   </ItemGroup>
 
   <ItemGroup>
       <EmbeddedResource Include="..\..\Resources\Arial.ttf" />
+      <EmbeddedResource Include="..\..\Resources\ss_transitions.json" />
+      <EmbeddedResource Include="..\..\Reese\*.jpg;..\..\Reese\*.png" LogicalName="Reese.%(Filename)%(Extension)" />
   </ItemGroup>
 
-  <Target Name="CopyAndPackageMod" AfterTargets="PostBuildEvent">
+  <Target Name="CopyAndPackageMod" AfterTargets="PostBuildEvent"
+          Condition="'$(SkipModPackaging)' != 'true'">
     <ItemGroup>
       <Binaries Include="$(TargetPath)" LocalDir="/" PackDir="/" />
       <Binaries Include="$(TargetDir)/$(TargetName).pdb" LocalDir="/" PackDir="/" />
@@ -57,10 +52,8 @@
       <ThunderstoreDir>$(MSBuildProjectDirectory)\..\..\thunderstore</ThunderstoreDir>
     </PropertyGroup>
 
-    <!-- Local install -->
     <Copy SourceFiles="@(Binaries)" DestinationFolder="$(SilksongPluginsFolder)/$(AssemblyTitle)/%(Binaries.LocalDir)" Condition="'$(SilksongPluginsFolder)' != '' And Exists('$(SilksongPluginsFolder)')" />
 
-    <!-- Thunderstore packaging -->
     <RemoveDir Directories="$(ThunderstoreDir)/temp;$(ThunderstoreDir)/dist" />
     <MakeDir Directories="$(ThunderstoreDir)/temp" />
     <Copy SourceFiles="@(Binaries)" DestinationFolder="$(ThunderstoreDir)/temp/%(Binaries.PackDir)" />

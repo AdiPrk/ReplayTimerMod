@@ -3,114 +3,108 @@ using UnityEngine;
 
 namespace ReplayTimerMod
 {
-    // Records Hornet's position at a fixed LR-time rate of RECORD_FPS,
-    // regardless of actual frame rate. At 200fps actual, we still only
-    // store 30 frames per second of gameplay - 1800 max for a 60s run.
     public class FrameRecorder
     {
         public const float RECORD_FPS = 30f;
         public const float RECORD_INTERVAL = 1f / RECORD_FPS;
 
-        private readonly List<FrameData> frames = new List<FrameData>();
-        private bool recording = false;
-        private float accumulatedTime = 0f;
+        private readonly List<FrameData> _frames = new List<FrameData>();
+        private bool _recording = false;
+        private float _accumulatedTime = 0f;
 
-        // Cached animator reference
-        private tk2dSpriteAnimator? cachedAnim = null;
+        private tk2dSpriteAnimator? _cachedAnim = null;
 
         public void StartRecording()
         {
-            frames.Clear();
-            recording = true;
-            cachedAnim = null;
-            // Pre-fill the accumulator so the very first Tick() captures a frame immediately
-            accumulatedTime = RECORD_INTERVAL;
+            _frames.Clear();
+            _recording = true;
+            _cachedAnim = null;
+            _accumulatedTime = RECORD_INTERVAL;
         }
 
         public void DiscardRecording()
         {
-            frames.Clear();
-            recording = false;
-            accumulatedTime = 0f;
-            cachedAnim = null;
+            _frames.Clear();
+            _recording = false;
+            _accumulatedTime = 0f;
+            _cachedAnim = null;
         }
 
         public RecordedRoom? FinishRecording(RoomKey key, float totalLRTime)
         {
-            if (!recording || frames.Count == 0)
+            if (!_recording || _frames.Count == 0)
             {
-                frames.Clear();
-                recording = false;
-                cachedAnim = null;
+                _frames.Clear();
+                _recording = false;
+                _cachedAnim = null;
                 return null;
             }
 
-            recording = false;
-            cachedAnim = null;
-            var result = new RecordedRoom(key, totalLRTime, frames.ToArray());
-            frames.Clear();
+            _recording = false;
+            _cachedAnim = null;
+            var result = new RecordedRoom(key, totalLRTime, _frames.ToArray());
+            _frames.Clear();
             return result;
         }
 
-        // Called every LateUpdate if LoadRemover.ShouldTick() 
         public void Tick(bool shouldTick)
         {
-            if (!recording) return;
+            if (!_recording) return;
             if (HeroController.instance == null) return;
             if (!shouldTick) return;
 
-            // Use Time.deltaTime (scaled) to match the playback cursor
-            accumulatedTime += Time.deltaTime;
-            if (accumulatedTime < RECORD_INTERVAL) return;
-            accumulatedTime -= RECORD_INTERVAL;
+            _accumulatedTime += Time.deltaTime;
+            if (_accumulatedTime < RECORD_INTERVAL) return;
 
             bool facingRight = HeroController.instance.transform.localScale.x > 0f;
             Vector3 pos = HeroController.instance.transform.position;
 
-            if (cachedAnim == null)
-                cachedAnim = ResolveHeroAnimator();
+            if (_cachedAnim == null)
+                _cachedAnim = ResolveHeroAnimator();
 
             string clipName = "";
             int clipFrame = 0;
             try
             {
-                if (cachedAnim?.CurrentClip != null)
+                if (_cachedAnim?.CurrentClip != null)
                 {
-                    clipName = cachedAnim.CurrentClip.name;
-                    clipFrame = cachedAnim.CurrentFrame;
+                    clipName = _cachedAnim.CurrentClip.name;
+                    clipFrame = _cachedAnim.CurrentFrame;
                 }
                 else
                 {
-                    // Some states swap sprite/animator ownership; re-resolve when clip is missing.
-                    cachedAnim = ResolveHeroAnimator();
-                    if (cachedAnim?.CurrentClip != null)
+                    _cachedAnim = ResolveHeroAnimator();
+                    if (_cachedAnim?.CurrentClip != null)
                     {
-                        clipName = cachedAnim.CurrentClip.name;
-                        clipFrame = cachedAnim.CurrentFrame;
+                        clipName = _cachedAnim.CurrentClip.name;
+                        clipFrame = _cachedAnim.CurrentFrame;
                     }
                 }
             }
-            catch { cachedAnim = null; } // guh
+            catch { _cachedAnim = null; }
 
-            frames.Add(new FrameData
+            while (_accumulatedTime >= RECORD_INTERVAL)
             {
-                x = pos.x,
-                y = pos.y,
-                facingRight = facingRight,
-                animClip = clipName,
-                animFrame = clipFrame
-            });
+                _accumulatedTime -= RECORD_INTERVAL;
+                _frames.Add(new FrameData
+                {
+                    x = pos.x,
+                    y = pos.y,
+                    facingRight = facingRight,
+                    animClip = clipName,
+                    animFrame = clipFrame
+                });
+            }
         }
 
-        public bool IsRecording => recording;
-        public int FrameCount => frames.Count;
+        public bool IsRecording => _recording;
+        public int FrameCount => _frames.Count;
 
         private static tk2dSpriteAnimator? ResolveHeroAnimator()
         {
             var hero = HeroController.instance;
             if (hero == null) return null;
 
-            // Prefer animator on the same GO as the visible hero sprite.
             var heroSprite = hero.GetComponent<tk2dSprite>()
                           ?? hero.GetComponentInChildren<tk2dSprite>();
 

@@ -1,0 +1,623 @@
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+namespace ReplayTimerMod
+{
+    internal sealed class PickerDrag : MonoBehaviour,
+        IPointerDownHandler, IDragHandler, IPointerUpHandler
+    {
+        public System.Action<float, float>? onValue;
+        public System.Action? onRelease;
+
+        public void OnPointerDown(PointerEventData e) => Report(e);
+        public void OnDrag(PointerEventData e) => Report(e);
+        public void OnPointerUp(PointerEventData e) => onRelease?.Invoke();
+
+        private void Report(PointerEventData e)
+        {
+            var rt = (RectTransform)transform;
+            Vector2 lp;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                rt, e.position, e.pressEventCamera, out lp))
+                return;
+            Rect r = rt.rect;
+            onValue?.Invoke(
+                Mathf.Clamp01((lp.x - r.xMin) / Mathf.Max(1f, r.width)),
+                Mathf.Clamp01((lp.y - r.yMin) / Mathf.Max(1f, r.height)));
+        }
+    }
+
+    public partial class ReplayUI
+    {
+        private static readonly Color[] GhostColorPresets =
+        {
+            new Color(1.00f, 1.00f, 1.00f),
+            new Color(0.40f, 0.80f, 1.00f),
+            new Color(0.93f, 0.83f, 0.62f),
+            new Color(0.40f, 0.85f, 0.40f),
+            new Color(0.93f, 0.53f, 0.59f),
+            new Color(0.75f, 0.55f, 1.00f),
+            new Color(1.00f, 0.67f, 0.35f),
+            new Color(1.00f, 0.92f, 0.47f),
+        };
+
+        private const float DefaultGhostAlpha = 0.4f;
+
+        private GameObject? _pickerGO;
+        private GameObject? _pickerScrim;
+        private Text? _pickerContextLbl;
+        private Text? _pickerAlphaValueLbl;
+        private Image? _pickerPreviewFill;
+        private Image? _pickerPreviewAlphaFill;
+        private GameObject?[] _pickerPresetRings = new GameObject?[0];
+        private RawImage? _pickerSVImg;
+        private RawImage? _pickerAlphaImg;
+        private RectTransform? _pickerSVRect;
+        private RectTransform? _pickerHueRect;
+        private RectTransform? _pickerAlphaRect;
+        private RectTransform? _pickerSVHandle;
+        private RectTransform? _pickerHueHandle;
+        private RectTransform? _pickerAlphaHandle;
+        private GameObject? _pickerActionGO;
+        private Text? _pickerActionLbl;
+        private Texture2D? _pickerSVTex;
+        private Texture2D? _pickerHueTex;
+        private Texture2D? _pickerAlphaTex;
+
+        private int _pickerWidth;
+        private int pickerHeight;
+        private int _pickerHeightFull;
+        private int _pickerHeightCompact;
+
+        private float _pickerHue, _pickerSat, _pickerVal, _pickerA;
+        private bool _pickerIsGlobal;
+        private RoomKey _pickerKey;
+        private string? _pickerSnapshotId;
+
+        private void OpenGlobalColorPicker(GameObject anchor)
+        {
+            EnsurePicker();
+            _pickerIsGlobal = true;
+            _pickerSnapshotId = null;
+
+            if (_pickerContextLbl != null)
+                _pickerContextLbl.text = "Global ghost color";
+            SetPickerAction("Reset to default");
+
+            LoadPickerColor(GhostSettings.GhostColor);
+            ShowPicker(anchor);
+        }
+
+        private void OpenSnapshotColorPicker(GameObject anchor,
+            RoomKey key, string snapshotId)
+        {
+            var snapshot = PBManager.GetSnapshot(key, snapshotId);
+            if (snapshot == null) return;
+
+            EnsurePicker();
+            _pickerIsGlobal = false;
+            _pickerKey = key;
+            _pickerSnapshotId = snapshotId;
+
+            UpdatePickerContext(snapshot.HasVisualOverride);
+
+            LoadPickerColor(snapshot.ResolveGhostColor(GhostSettings.GhostColor));
+            ShowPicker(anchor);
+        }
+
+        private void ClosePicker()
+        {
+            if (_pickerScrim != null) _pickerScrim.SetActive(false);
+            if (_pickerGO != null) _pickerGO.SetActive(false);
+            _pickerSnapshotId = null;
+            GhostSettings.Flush();
+        }
+
+        private void ShowPicker(GameObject anchor)
+        {
+            if (_pickerGO == null || _pickerScrim == null) return;
+
+            _pickerScrim.transform.SetAsLastSibling();
+            _pickerGO.transform.SetAsLastSibling();
+            _pickerScrim.SetActive(true);
+            _pickerGO.SetActive(true);
+
+            var art = anchor.GetComponent<RectTransform>();
+            Vector3 p = art.position;
+            float x = p.x + art.rect.width + UIStyle.W(10);
+            float yTop = p.y + UIStyle.H(6);
+            x = Mathf.Clamp(x, 4, Screen.width - _pickerWidth - 4);
+            yTop = Mathf.Clamp(yTop, pickerHeight + 4, Screen.height - 4);
+            _pickerGO.GetComponent<RectTransform>().anchoredPosition =
+                new Vector2(x, yTop);
+        }
+
+        private void LoadPickerColor(Color c)
+        {
+            Color.RGBToHSV(c, out _pickerHue, out _pickerSat, out _pickerVal);
+            _pickerA = c.a;
+            RegenSVTexture();
+            UpdatePickerVisuals();
+        }
+
+        private Color PickerColor()
+        {
+            Color c = Color.HSVToRGB(_pickerHue, _pickerSat, _pickerVal);
+            c.a = _pickerA;
+            return c;
+        }
+
+        private void UpdatePickerContext(bool hasOverride)
+        {
+            if (_pickerContextLbl != null)
+                _pickerContextLbl.text = hasOverride
+                    ? "Custom for this run"
+                    : "Following global color";
+            SetPickerAction(hasOverride ? "Use global color" : null);
+        }
+
+        private void SetPickerAction(string? label)
+        {
+            if (_pickerGO == null || _pickerActionGO == null) return;
+
+            _pickerActionGO.SetActive(label != null);
+            if (label != null && _pickerActionLbl != null)
+                _pickerActionLbl.text = label;
+
+            pickerHeight = label != null ? _pickerHeightFull : _pickerHeightCompact;
+            var rt = _pickerGO.GetComponent<RectTransform>();
+            rt.sizeDelta = new Vector2(_pickerWidth, pickerHeight);
+
+            if (_pickerGO.activeSelf)
+            {
+                Vector2 pos = rt.anchoredPosition;
+                pos.y = Mathf.Max(pos.y, pickerHeight + 4);
+                rt.anchoredPosition = pos;
+            }
+        }
+
+        private void OnPickerSV(float nx, float ny)
+        {
+            _pickerSat = nx;
+            _pickerVal = ny;
+            UpdatePickerVisuals();
+        }
+
+        private void OnPickerHue(float nx, float _)
+        {
+            _pickerHue = Mathf.Min(nx, 0.999f);
+            RegenSVTexture();
+            UpdatePickerVisuals();
+        }
+
+        private void OnPickerAlpha(float nx, float _)
+        {
+            _pickerA = Mathf.Round(nx * 100f) / 100f;
+            UpdatePickerVisuals();
+        }
+
+        private void OnPickerPreset(Color rgb)
+        {
+            Color.RGBToHSV(rgb, out _pickerHue, out _pickerSat, out _pickerVal);
+            RegenSVTexture();
+            UpdatePickerVisuals();
+            CommitPickerColor();
+        }
+
+        private void OnPickerAction()
+        {
+            if (_pickerIsGlobal)
+            {
+                LoadPickerColor(new Color(1f, 1f, 1f, DefaultGhostAlpha));
+                CommitPickerColor();
+            }
+            else if (_pickerSnapshotId != null)
+            {
+                PBManager.UpdateSnapshotVisuals(_pickerKey, _pickerSnapshotId,
+                    false, GhostSettings.GhostColor);
+                LoadPickerColor(GhostSettings.GhostColor);
+                UpdatePickerContext(false);
+                RefreshAfterPickerCommit();
+            }
+        }
+
+        private void CommitPickerColor()
+        {
+            Color c = PickerColor();
+            if (_pickerIsGlobal)
+            {
+                GhostSettings.GhostColor = c;
+            }
+            else if (_pickerSnapshotId != null)
+            {
+                PBManager.UpdateSnapshotVisuals(_pickerKey, _pickerSnapshotId,
+                    true, c);
+                UpdatePickerContext(true);
+            }
+            RefreshAfterPickerCommit();
+        }
+
+        private void RefreshAfterPickerCommit()
+        {
+            UpdatePickerVisuals();
+            if (_pickerIsGlobal)
+            {
+                RefreshGhostColorChip();
+            }
+            else if (_activeTab == TabKind.Runs
+                && _selectedScene == _pickerKey.SceneName)
+            {
+                RebuildRunsContentOnly();
+            }
+        }
+
+        private void RefreshGhostColorChip()
+        {
+            Color g = GhostSettings.GhostColor;
+            if (_cfgGhostColorFill != null)
+                _cfgGhostColorFill.color = new Color(g.r, g.g, g.b, 1f);
+            if (_cfgGhostAlphaLbl != null)
+                _cfgGhostAlphaLbl.text = OpacityText(g.a);
+        }
+
+        private void UpdatePickerVisuals()
+        {
+            Color rgb = Color.HSVToRGB(_pickerHue, _pickerSat, _pickerVal);
+
+            if (_pickerSVHandle != null && _pickerSVRect != null)
+                _pickerSVHandle.anchoredPosition = new Vector2(
+                    _pickerSat * _pickerSVRect.rect.width,
+                    _pickerVal * _pickerSVRect.rect.height);
+
+            if (_pickerHueHandle != null && _pickerHueRect != null)
+                _pickerHueHandle.anchoredPosition = new Vector2(
+                    _pickerHue * _pickerHueRect.rect.width,
+                    _pickerHueRect.rect.height / 2f);
+
+            if (_pickerAlphaHandle != null && _pickerAlphaRect != null)
+                _pickerAlphaHandle.anchoredPosition = new Vector2(
+                    _pickerA * _pickerAlphaRect.rect.width,
+                    _pickerAlphaRect.rect.height / 2f);
+
+            if (_pickerAlphaImg != null)
+                _pickerAlphaImg.color = new Color(rgb.r, rgb.g, rgb.b, 1f);
+
+            if (_pickerPreviewFill != null)
+                _pickerPreviewFill.color = new Color(rgb.r, rgb.g, rgb.b, 1f);
+            if (_pickerPreviewAlphaFill != null)
+                _pickerPreviewAlphaFill.color = new Color(rgb.r, rgb.g, rgb.b, _pickerA);
+
+            if (_pickerAlphaValueLbl != null)
+                _pickerAlphaValueLbl.text = Mathf.RoundToInt(_pickerA * 100f) + "%";
+
+            for (int i = 0; i < _pickerPresetRings.Length; i++)
+            {
+                Color p = GhostColorPresets[i];
+                bool selected = Mathf.Abs(p.r - rgb.r) < 0.01f
+                    && Mathf.Abs(p.g - rgb.g) < 0.01f
+                    && Mathf.Abs(p.b - rgb.b) < 0.01f;
+                _pickerPresetRings[i]?.SetActive(selected);
+            }
+        }
+
+        private static string OpacityText(float a) => Mathf.RoundToInt(a * 100f) + "% opacity";
+
+        private const int SVTexSize = 48;
+
+        private void RegenSVTexture()
+        {
+            if (_pickerSVTex == null)
+            {
+                _pickerSVTex = new Texture2D(SVTexSize, SVTexSize,
+                    TextureFormat.RGBA32, false);
+                _pickerSVTex.wrapMode = TextureWrapMode.Clamp;
+                if (_pickerSVImg != null) _pickerSVImg.texture = _pickerSVTex;
+            }
+            var px = new Color[SVTexSize * SVTexSize];
+            for (int y = 0; y < SVTexSize; y++)
+            {
+                float v = y / (float)(SVTexSize - 1);
+                for (int x = 0; x < SVTexSize; x++)
+                    px[y * SVTexSize + x] = Color.HSVToRGB(_pickerHue,
+                        x / (float)(SVTexSize - 1), v);
+            }
+            _pickerSVTex.SetPixels(px);
+            _pickerSVTex.Apply();
+        }
+
+        private Texture2D EnsureHueTexture()
+        {
+            if (_pickerHueTex == null)
+            {
+                const int n = 128;
+                _pickerHueTex = new Texture2D(n, 1, TextureFormat.RGBA32, false);
+                _pickerHueTex.wrapMode = TextureWrapMode.Clamp;
+                var px = new Color[n];
+                for (int x = 0; x < n; x++)
+                    px[x] = Color.HSVToRGB(x / (float)(n - 1), 1f, 1f);
+                _pickerHueTex.SetPixels(px);
+                _pickerHueTex.Apply();
+            }
+            return _pickerHueTex;
+        }
+
+        private Texture2D EnsureAlphaTexture()
+        {
+            if (_pickerAlphaTex == null)
+            {
+                const int n = 64;
+                _pickerAlphaTex = new Texture2D(n, 1, TextureFormat.RGBA32, false);
+                _pickerAlphaTex.wrapMode = TextureWrapMode.Clamp;
+                var px = new Color[n];
+                for (int x = 0; x < n; x++)
+                    px[x] = new Color(1f, 1f, 1f, x / (float)(n - 1));
+                _pickerAlphaTex.SetPixels(px);
+                _pickerAlphaTex.Apply();
+            }
+            return _pickerAlphaTex;
+        }
+
+        private void EnsurePicker()
+        {
+            if (_pickerGO != null) return;
+            if (_canvasGO == null) return;
+
+            _pickerScrim = MakeGO("PickerScrim", _canvasGO.transform);
+            var scrimImg = _pickerScrim.AddComponent<Image>();
+            scrimImg.color = Color.clear;
+            Btn(_pickerScrim, ClosePicker);
+            Fill(_pickerScrim);
+
+            _pickerGO = MakeGO("ColorPicker", _canvasGO.transform);
+
+            int pad = UIStyle.W(12);
+            int pw = UIStyle.W(214);
+            int innerW = pw - pad * 2;
+
+            var borderImg = _pickerGO.AddComponent<Image>();
+            borderImg.color = UIStyle.Overlay with { a = 0.9f };
+
+            var rt = _pickerGO.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = Vector2.zero;
+            rt.pivot = new Vector2(0f, 1f);
+
+            var innerBg = MakeGO("Inner", _pickerGO.transform);
+            var innerImg = innerBg.AddComponent<Image>();
+            innerImg.color = UIStyle.Base with { a = 0.98f };
+            var innerRt = innerBg.GetComponent<RectTransform>();
+            innerRt.anchorMin = Vector2.zero;
+            innerRt.anchorMax = Vector2.one;
+            innerRt.offsetMin = new Vector2(1, 1);
+            innerRt.offsetMax = new Vector2(-1, -1);
+
+            int y = UIStyle.H(10);
+
+            int hdrH = UIStyle.H(18);
+            int closeW = UIStyle.W(44);
+            int prevW = UIStyle.W(30);
+
+            _pickerContextLbl = MakeLbl(_pickerGO.transform, "",
+                UIStyle.FontSizeTiny, UIStyle.Subtext, TextAnchor.MiddleLeft,
+                x: pad, y: y, w: innerW - prevW - closeW - UIStyle.Gap * 2,
+                h: hdrH);
+
+            var preview = MakeGO("Preview", _pickerGO.transform);
+            Img(preview, UIStyle.Overlay with { a = 0.9f });
+            Rect(preview, pw - pad - closeW - UIStyle.Gap - prevW, y, prevW, hdrH);
+            preview.GetComponent<Graphic>().raycastTarget = false;
+            int prevInW = prevW - 2, prevInH = hdrH - 2, halfW = prevInW / 2;
+            var prevChecker = MakeGO("Checker", preview.transform);
+            AddChecker(prevChecker, prevInW, prevInH);
+            Rect(prevChecker, 1, 1, prevInW, prevInH);
+            _pickerPreviewFill = AddPlainFill(preview.transform, "Solid", 1, 1, halfW, prevInH);
+            _pickerPreviewAlphaFill = AddPlainFill(preview.transform, "Alpha",
+                1 + halfW, 1, prevInW - halfW, prevInH);
+
+            MakeButton(_pickerGO.transform, "Close", "Close",
+                UIStyle.FontSizeBtn, UIStyle.Text, UIStyle.Overlay with { a = 0.6f },
+                pw - pad - closeW, y, closeW, hdrH, ClosePicker);
+            y += hdrH + UIStyle.H(8);
+
+            int svH = UIStyle.H(96);
+            _pickerSVRect = AddPickerSurface(_pickerGO.transform, "SV",
+                pad, y, innerW, svH, out _pickerSVImg,
+                OnPickerSV, CommitPickerColor);
+            RegenSVTexture();
+            _pickerSVImg.texture = _pickerSVTex;
+            _pickerSVHandle = MakePickerRing(_pickerSVRect, UIStyle.H(12));
+            y += svH + UIStyle.H(8);
+
+            int barH = UIStyle.H(12);
+            _pickerHueRect = AddPickerSurface(_pickerGO.transform, "Hue",
+                pad, y, innerW, barH, out RawImage hueImg,
+                OnPickerHue, CommitPickerColor);
+            hueImg.texture = EnsureHueTexture();
+            _pickerHueHandle = MakePickerMarker(_pickerHueRect,
+                UIStyle.W(5), barH + UIStyle.H(4));
+            y += barH + UIStyle.H(8);
+
+            int alphaLblW = UIStyle.W(32);
+            int alphaBarW = innerW - alphaLblW - UIStyle.Gap;
+            _pickerAlphaRect = AddPickerSurface(_pickerGO.transform, "Alpha",
+                pad, y, alphaBarW, barH, out _pickerAlphaImg,
+                OnPickerAlpha, CommitPickerColor, checker: true);
+            _pickerAlphaImg.texture = EnsureAlphaTexture();
+            _pickerAlphaHandle = MakePickerMarker(_pickerAlphaRect,
+                UIStyle.W(5), barH + UIStyle.H(4));
+            _pickerAlphaValueLbl = MakeLbl(_pickerGO.transform, "40%",
+                UIStyle.FontSizeBtn, UIStyle.Text, TextAnchor.MiddleRight,
+                x: pad + alphaBarW + UIStyle.Gap, y: y,
+                w: alphaLblW, h: barH);
+            y += barH + UIStyle.H(10);
+
+            int presetCount = GhostColorPresets.Length;
+            int swGap = UIStyle.W(6);
+            int swS = Mathf.Min(UIStyle.H(18), (innerW - swGap * (presetCount - 1)) / presetCount);
+            _pickerPresetRings = new GameObject?[presetCount];
+            for (int i = 0; i < presetCount; i++)
+            {
+                Color c = GhostColorPresets[i];
+                int sx = pad + i * (swS + swGap);
+
+                var ring = MakeGO("Ring", _pickerGO.transform);
+                Img(ring, UIStyle.Text);
+                Rect(ring, sx - 3, y - 3, swS + 6, swS + 6);
+                ring.GetComponent<Graphic>().raycastTarget = false;
+                var ringGap = MakeGO("Gap", ring.transform);
+                Img(ringGap, UIStyle.Base);
+                Rect(ringGap, 1, 1, swS + 4, swS + 4);
+                ringGap.GetComponent<Graphic>().raycastTarget = false;
+                ring.SetActive(false);
+                _pickerPresetRings[i] = ring;
+
+                var sw = MakeGO("Preset", _pickerGO.transform);
+                Img(sw, UIStyle.Overlay with { a = 0.9f });
+                Btn(sw, () => OnPickerPreset(c));
+                Rect(sw, sx, y, swS, swS);
+                var fill = MakeGO("Fill", sw.transform);
+                Img(fill, c);
+                Rect(fill, 1, 1, swS - 2, swS - 2);
+                fill.GetComponent<Graphic>().raycastTarget = false;
+                AddButtonHover(sw);
+            }
+            y += swS + UIStyle.H(10);
+
+            _pickerHeightCompact = y;
+            int actH = UIStyle.H(20);
+            var actRef = MakeButton(_pickerGO.transform, "PickerAction", "",
+                UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
+                pad, y, innerW, actH, OnPickerAction);
+            _pickerActionGO = actRef.bg.gameObject;
+            _pickerActionLbl = actRef.label;
+            _pickerHeightFull = y + actH + UIStyle.H(10);
+
+            _pickerWidth = pw;
+            pickerHeight = _pickerHeightFull;
+            rt.sizeDelta = new Vector2(pw, pickerHeight);
+
+            _pickerScrim.SetActive(false);
+            _pickerGO.SetActive(false);
+        }
+
+        private static RectTransform AddPickerSurface(Transform parent,
+            string name, int x, int y, int w, int h, out RawImage img,
+            System.Action<float, float> onValue, System.Action onRelease,
+            bool checker = false)
+        {
+            var border = MakeGO(name + "Border", parent);
+            Img(border, UIStyle.Overlay with { a = 0.9f });
+            Rect(border, x, y, w, h);
+            border.GetComponent<Graphic>().raycastTarget = false;
+
+            var back = MakeGO("Back", border.transform);
+            if (checker)
+                AddChecker(back, w - 2, h - 2);
+            else
+                Img(back, UIStyle.Base);
+            Rect(back, 1, 1, w - 2, h - 2);
+            back.GetComponent<Graphic>().raycastTarget = false;
+
+            var surf = MakeGO(name, border.transform);
+            img = surf.AddComponent<RawImage>();
+            Rect(surf, 1, 1, w - 2, h - 2);
+
+            var drag = surf.AddComponent<PickerDrag>();
+            drag.onValue = (nx, ny) => onValue(nx, ny);
+            drag.onRelease = () => onRelease();
+
+            return surf.GetComponent<RectTransform>();
+        }
+
+        private static Image AddPlainFill(Transform parent, string name,
+            int x, int y, int w, int h)
+        {
+            var go = MakeGO(name, parent);
+            Img(go, Color.white);
+            Rect(go, x, y, w, h);
+            var img = go.GetComponent<Image>();
+            img.raycastTarget = false;
+            return img;
+        }
+
+        private static Texture2D? _checkerTex;
+
+        private static void AddChecker(GameObject go, float w, float h)
+        {
+            if (_checkerTex == null)
+            {
+                _checkerTex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                _checkerTex.wrapMode = TextureWrapMode.Repeat;
+                _checkerTex.filterMode = FilterMode.Point;
+                Color light = new Color(0.60f, 0.61f, 0.65f), dark = new Color(0.42f, 0.43f, 0.47f);
+                _checkerTex.SetPixels(new[] { light, dark, dark, light });
+                _checkerTex.Apply();
+            }
+            var img = go.AddComponent<RawImage>();
+            img.texture = _checkerTex;
+            img.raycastTarget = false;
+            float cells = UIStyle.H(4) * 2f;
+            img.uvRect = new UnityEngine.Rect(0f, 0f, w / cells, h / cells);
+        }
+
+        private static Texture2D? _pickerRingTex;
+
+        private static RectTransform MakePickerRing(Transform parent, float size)
+        {
+            if (_pickerRingTex == null)
+            {
+                const int n = 32;
+                const float r = n / 2f;
+                _pickerRingTex = new Texture2D(n, n, TextureFormat.RGBA32, true);
+                _pickerRingTex.wrapMode = TextureWrapMode.Clamp;
+                _pickerRingTex.filterMode = FilterMode.Trilinear;
+                var px = new Color[n * n];
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++)
+                    {
+                        float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(r, r));
+                        float light = Mathf.Clamp01(r - 3f - d) * Mathf.Clamp01(d - (r - 7f));
+                        Color c = Color.Lerp(UIStyle.Base, UIStyle.Text, light);
+                        c.a = Mathf.Clamp01(r - d) * Mathf.Clamp01(d - (r - 9f));
+                        px[y * n + x] = c;
+                    }
+                _pickerRingTex.SetPixels(px);
+                _pickerRingTex.Apply();
+            }
+
+            var go = MakeGO("Marker", parent);
+            var img = go.AddComponent<RawImage>();
+            img.texture = _pickerRingTex;
+            img.raycastTarget = false;
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = Vector2.zero;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(size, size);
+            return rt;
+        }
+
+        private static RectTransform MakePickerMarker(Transform parent,
+            float w, float h)
+        {
+            var go = MakeGO("Marker", parent);
+            var img = go.AddComponent<Image>();
+            img.color = UIStyle.Base with { a = 0.95f };
+            img.raycastTarget = false;
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = Vector2.zero;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(w, h);
+
+            var inner = MakeGO("Inner", go.transform);
+            var innerImg = inner.AddComponent<Image>();
+            innerImg.color = UIStyle.Text;
+            innerImg.raycastTarget = false;
+            var irt = inner.GetComponent<RectTransform>();
+            irt.anchorMin = Vector2.zero;
+            irt.anchorMax = Vector2.one;
+            irt.offsetMin = new Vector2(1, 1);
+            irt.offsetMax = new Vector2(-1, -1);
+            return rt;
+        }
+    }
+}

@@ -1,7 +1,9 @@
 #if SILKSONG_BUILD
-using BepInEx;
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using BepInEx;
 using HarmonyLib;
 using UnityEngine;
 
@@ -11,7 +13,6 @@ namespace ReplayTimerMod
     [BepInAutoPlugin(id: "io.github.adiprk.replaytimermod")]
     public partial class ReplayTimerModSS : BaseUnityPlugin
     {
-        internal static ReplayTimerModSS Instance { get; private set; } = null!;
         private static GameManager? cachedGameManager;
 
         private FrameRecorder frameRecorder = null!;
@@ -19,21 +20,21 @@ namespace ReplayTimerMod
         private ReplayUI replayUI = null!;
         private RoomTimerHUD roomTimerHUD = null!;
         private ReplaySelectionState replaySelectionState = null!;
-
+        private RoomLifecycle roomLifecycle = null!;
         private bool lateInitDone = false;
 
         private void Awake()
         {
-            Instance = this;
             Logger.LogInfo($"Plugin {Name} ({Id}) has loaded!");
 
             new Harmony(Id).PatchAll(Assembly.GetExecutingAssembly());
 
-            // Bind GhostSettings to BepInEx config before any other system
-            // reads those properties.
-            string baseDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
+            string baseDirectory = Path.GetDirectoryName(
+                Assembly.GetExecutingAssembly().Location) ?? ".";
 
+            ManualInstallImport.Run(baseDirectory);
             GhostSettings.Init(baseDirectory);
+            QuickWarp.Init();
 
             string dataDir = Path.Combine(baseDirectory, "ReplayMod", "data");
             DataStore.Init(dataDir);
@@ -47,66 +48,13 @@ namespace ReplayTimerMod
             replayUI = new ReplayUI();
             roomTimerHUD = new RoomTimerHUD();
             replayUI.SetTimerHUD(roomTimerHUD);
+            roomLifecycle = new RoomLifecycle(frameRecorder, ghostPlayback, replayUI);
 
             RoomTracker.Init();
 
-            RoomTracker.OnRoomEnter += OnRoomEnter;
-            RoomTracker.OnRoomExit += OnRoomExit;
-            RoomTracker.OnRecordingDiscarded += OnRecordingDiscarded;
-        }
-
-        private void OnRoomEnter(string sceneName, string entryFromScene)
-        {
-            if (!GhostSettings.TrackingEnabled)
-            {
-                // Start playback, but don't record
-                ghostPlayback.StartPlayback(sceneName, entryFromScene);
-                return;
-            }
-
-            frameRecorder.StartRecording();
-            ghostPlayback.StartPlayback(sceneName, entryFromScene);
-        }
-
-        private void OnRoomExit(string sceneName, string entryFromScene,
-                                 string exitToScene, float lrTime)
-        {
-            ghostPlayback.StopPlayback();
-
-            if (!GhostSettings.TrackingEnabled)
-            {
-                frameRecorder.DiscardRecording();
-                return;
-            }
-
-            RoomKey key = new RoomKey(sceneName, entryFromScene, exitToScene);
-
-            bool saveAllRuns = GhostSettings.SaveAllRunsEnabled;
-
-            // PB-only mode preserves the existing fast path so we avoid paying the
-            // cost of frames.ToArray() on missed attempts. Save-all mode opts into
-            // materializing every completed run and relies on PBManager dedupe.
-            if (!saveAllRuns && !PBManager.WouldBePB(key, lrTime))
-            {
-                frameRecorder.DiscardRecording();
-                return;
-            }
-
-            RecordedRoom? recording = frameRecorder.FinishRecording(key, lrTime);
-            if (recording == null)
-                return;
-
-            var result = PBManager.Evaluate(recording, saveAllRuns);
-            if (result.Kind == ResultKind.FirstRun
-                || result.Kind == ResultKind.NewPB
-                || result.Kind == ResultKind.SavedHistory)
-                replayUI.OnPBUpdated();
-        }
-
-        private void OnRecordingDiscarded()
-        {
-            ghostPlayback.StopPlayback();
-            frameRecorder.DiscardRecording();
+            RoomTracker.OnRoomEnter += roomLifecycle.HandleRoomEnter;
+            RoomTracker.OnRoomExit += roomLifecycle.HandleRoomExit;
+            RoomTracker.OnRecordingDiscarded += roomLifecycle.HandleRecordingDiscarded;
         }
 
         private void LateUpdate()
@@ -117,13 +65,25 @@ namespace ReplayTimerMod
                 return;
 
             bool shouldTick = false;
-            try { shouldTick = LoadRemover.ShouldTick(); } catch { }
+            try { shouldTick = LoadRemover.ShouldTick(); } catch (Exception ex) { LogTickError("LoadRemover", ex); }
 
-            RoomTracker.Tick(shouldTick);
-            frameRecorder.Tick(shouldTick);
-            ghostPlayback.Tick(shouldTick);
-            replayUI.Tick();
-            roomTimerHUD.Tick(shouldTick);
+            try { RoomTracker.Tick(shouldTick); } catch (Exception ex) { LogTickError("RoomTracker", ex); }
+            try { frameRecorder.Tick(shouldTick); } catch (Exception ex) { LogTickError("FrameRecorder", ex); }
+            try { ghostPlayback.Tick(shouldTick); } catch (Exception ex) { LogTickError("GhostPlayback", ex); }
+            try { replayUI.Tick(); } catch (Exception ex) { LogTickError("ReplayUI", ex); }
+            try { roomTimerHUD.Tick(shouldTick); } catch (Exception ex) { LogTickError("RoomTimerHUD", ex); }
+        }
+
+        private readonly Dictionary<string, float> _lastTickErrorLog =
+            new Dictionary<string, float>();
+
+        private void LogTickError(string subsystem, Exception ex)
+        {
+            float now = Time.realtimeSinceStartup;
+            if (_lastTickErrorLog.TryGetValue(subsystem, out float last) && now - last < 5f)
+                return;
+            _lastTickErrorLog[subsystem] = now;
+            Logger.LogError("[Tick] " + subsystem + " failed: " + ex);
         }
 
         private void TryLateInit()
@@ -133,7 +93,6 @@ namespace ReplayTimerMod
 
             lateInitDone = true;
             Logger.LogInfo("Hero ready - setting up UI and ghost");
-            ghostPlayback.Setup();
             replayUI.Setup();
             roomTimerHUD.Setup();
         }
@@ -141,9 +100,10 @@ namespace ReplayTimerMod
         private void OnDestroy()
         {
             roomTimerHUD.Teardown();
+            GhostSettings.Flush();
         }
 
-        private static bool TryGetGameManager(out GameManager gm)
+        private static bool TryGetGameManager(out GameManager? gm)
         {
             if (cachedGameManager != null)
             {
@@ -151,7 +111,7 @@ namespace ReplayTimerMod
                 return true;
             }
 
-            gm = Object.FindFirstObjectByType<GameManager>();
+            gm = UnityEngine.Object.FindFirstObjectByType<GameManager>();
             if (gm == null) return false;
 
             cachedGameManager = gm;

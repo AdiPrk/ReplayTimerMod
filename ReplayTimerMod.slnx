@@ -2,4 +2,5 @@
   <Project Path="src/Silksong/ReplayTimerMod.SS.csproj" />
   <Project Path="src/HollowKnight/ReplayTimerMod.HK.1578.csproj" />
   <Project Path="src/HollowKnight/ReplayTimerMod.HK.1221.csproj" />
+  <Project Path="tests/ReplayTimerMod.Tests/ReplayTimerMod.Tests.csproj" />
 </Solution>

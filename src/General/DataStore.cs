@@ -5,15 +5,6 @@ using BepInEx.Logging;
 
 namespace ReplayTimerMod
 {
-    // Persists replays to disk, one JSON file per scene.
-    //
-    // File layout: <DataDirectory>/<sceneName>.json
-    // JSON: { "entries": [ { snapshotId, capturedAtUtcTicks, sceneName,
-    //                         entryFromScene, exitToScene, totalTime, data }, ... ] }
-    //
-    // "data" is an RTM3 string - identical to what [Copy] puts on the clipboard.
-    // Loading or saving a replay goes through ReplayShareEncoder exclusively.
-
     [Serializable]
     internal class SceneIndex
     {
@@ -29,12 +20,13 @@ namespace ReplayTimerMod
         public string entryFromScene = "";
         public string exitToScene = "";
         public float totalTime = 0f;
-        public string data = "";   // RTM3 string
+        public string data = "";
         public bool hasVisualOverride = false;
         public float colorR = 1f;
         public float colorG = 1f;
         public float colorB = 1f;
         public float alpha = 0.4f;
+        public bool usedCheats = false;
     }
 
     public static class DataStore
@@ -42,98 +34,60 @@ namespace ReplayTimerMod
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("DataStore");
 
-        private static string DataDirectory = "";
-
-        // ── Init ──────────────────────────────────────────────────────────────
+        private static string _dataDirectory = "";
 
         public static void Init(string baseDirectory)
         {
-            DataDirectory = baseDirectory;
-            Directory.CreateDirectory(DataDirectory);
-            Log.LogInfo($"[DataStore] Directory: {DataDirectory}");
+            _dataDirectory = baseDirectory;
+            Directory.CreateDirectory(_dataDirectory);
+            Log.LogInfo($"[DataStore] Directory: {_dataDirectory}");
 
             MigrateFromLegacy();
         }
 
+        private static void MigrateFromLegacy()
+        {
+            try
+            {
+                string assemblyDir = Path.GetDirectoryName(
+                    System.Reflection.Assembly.GetExecutingAssembly().Location);
+
+                string legacyDir = Path.GetFullPath(LegacyDataDirectory(assemblyDir));
+
+                if (!Directory.Exists(legacyDir)) return;
+                if (legacyDir == Path.GetFullPath(_dataDirectory)) return;
+
+                string[] files = Directory.GetFiles(legacyDir, "*.json");
+                if (files.Length == 0) return;
+
+                int moved = 0;
+                foreach (string src in files)
+                {
+                    string dest = Path.Combine(_dataDirectory, Path.GetFileName(src));
+                    if (File.Exists(dest)) continue;
+                    File.Move(src, dest);
+                    moved++;
+                }
+
+                if (moved > 0)
+                    Log.LogInfo($"[DataStore] Migrated {moved} file(s) from legacy path: {legacyDir}");
+            }
+            catch (Exception ex)
+            {
+                Log.LogWarning($"[DataStore] Legacy migration failed: {ex.Message}");
+            }
+        }
+
 #if SILKSONG_BUILD
-        private static void MigrateFromLegacy()
-        {
-            try
-            {
-                // Old Silksong path: <AssemblyDir>/../../data/ReplayMod
-                string assemblyDir = Path.GetDirectoryName(
-                    System.Reflection.Assembly.GetExecutingAssembly().Location);
-
-                // holy ugly
-                string legacyDir = Path.Combine(Path.Combine(Path.Combine(assemblyDir, ".."), ".."), Path.Combine("data", "ReplayMod"));
-                legacyDir = Path.GetFullPath(legacyDir);
-
-                if (!Directory.Exists(legacyDir)) return;
-                if (Path.GetFullPath(legacyDir) == Path.GetFullPath(DataDirectory)) return;
-
-                string[] files = Directory.GetFiles(legacyDir, "*.json");
-                if (files.Length == 0) return;
-
-                int moved = 0;
-                foreach (string src in files)
-                {
-                    string dest = Path.Combine(DataDirectory, Path.GetFileName(src));
-                    if (File.Exists(dest)) continue;  // never overwrite newer data
-                    File.Move(src, dest);
-                    moved++;
-                }
-
-                if (moved > 0)
-                    Log.LogInfo($"[DataStore] Migrated {moved} file(s) from legacy path: {legacyDir}");
-            }
-            catch (Exception ex)
-            {
-                Log.LogWarning($"[DataStore] Legacy migration failed: {ex.Message}");
-            }
-        }
-
+        private static string LegacyDataDirectory(string assemblyDir) =>
+            Path.Combine(assemblyDir, "..", "..", "data", "ReplayMod");
 #else
-        private static void MigrateFromLegacy()
-        {
-            try
-            {
-                // Old Silksong path: <AssemblyDir>/../../data/ReplayMod
-                string assemblyDir = Path.GetDirectoryName(
-                    System.Reflection.Assembly.GetExecutingAssembly().Location);
-
-                string legacyDir = Path.Combine(assemblyDir, "ReplayMod");
-                legacyDir = Path.GetFullPath(legacyDir);
-
-                if (!Directory.Exists(legacyDir)) return;
-                if (Path.GetFullPath(legacyDir) == Path.GetFullPath(DataDirectory)) return;
-
-                string[] files = Directory.GetFiles(legacyDir, "*.json");
-                if (files.Length == 0) return;
-
-                int moved = 0;
-                foreach (string src in files)
-                {
-                    string dest = Path.Combine(DataDirectory, Path.GetFileName(src));
-                    if (File.Exists(dest)) continue;  // never overwrite newer data
-                    File.Move(src, dest);
-                    moved++;
-                }
-
-                if (moved > 0)
-                    Log.LogInfo($"[DataStore] Migrated {moved} file(s) from legacy path: {legacyDir}");
-            }
-            catch (Exception ex)
-            {
-                Log.LogWarning($"[DataStore] Legacy migration failed: {ex.Message}");
-            }
-        }
-
+        private static string LegacyDataDirectory(string assemblyDir) =>
+            Path.Combine(assemblyDir, "ReplayMod");
 #endif
 
-        // ── Index I/O ─────────────────────────────────────────────────────────
-
         private static string FilePath(string sceneName) =>
-            Path.Combine(DataDirectory, $"{sceneName}.json");
+            Path.Combine(_dataDirectory, $"{sceneName}.json");
 
         private static SceneIndex LoadIndex(string path)
         {
@@ -225,10 +179,9 @@ namespace ReplayTimerMod
                 colorR = snapshot.ColorR,
                 colorG = snapshot.ColorG,
                 colorB = snapshot.ColorB,
-                alpha = snapshot.Alpha
+                alpha = snapshot.Alpha,
+                usedCheats = snapshot.UsedCheats
             };
-
-        // ── Public API ────────────────────────────────────────────────────────
 
         public static void SaveSnapshot(ReplaySnapshot snapshot)
         {
@@ -357,9 +310,9 @@ namespace ReplayTimerMod
         public static List<ReplaySnapshot> LoadAll()
         {
             var result = new List<ReplaySnapshot>();
-            if (!Directory.Exists(DataDirectory)) return result;
+            if (!Directory.Exists(_dataDirectory)) return result;
 
-            foreach (string path in Directory.GetFiles(DataDirectory, "*.json"))
+            foreach (string path in Directory.GetFiles(_dataDirectory, "*.json"))
             {
                 string sceneName = Path.GetFileNameWithoutExtension(path);
                 foreach (var entry in LoadIndexAndUpgrade(path).entries)
@@ -372,7 +325,6 @@ namespace ReplayTimerMod
                             continue;
                         }
 
-                        NormalizeMetadata(entry);
                         var room = ReplayShareEncoder.Decode(entry.data);
                         if (room == null)
                         {
@@ -389,7 +341,8 @@ namespace ReplayTimerMod
                             entry.colorR,
                             entry.colorG,
                             entry.colorB,
-                            entry.alpha));
+                            entry.alpha,
+                            entry.usedCheats));
                     }
                     catch (Exception ex)
                     {

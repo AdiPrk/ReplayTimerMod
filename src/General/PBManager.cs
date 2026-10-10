@@ -5,27 +5,25 @@ using UnityEngine;
 
 namespace ReplayTimerMod
 {
-    // In-memory PB store. Loaded from disk on Init(), persisted on every new PB.
-    // All calls happen on the Unity main thread - no thread-safety needed.
     public static class PBManager
     {
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("PBManager");
 
-        private static readonly Dictionary<RoomKey, List<ReplaySnapshot>> histories =
+        private static readonly Dictionary<RoomKey, List<ReplaySnapshot>> _histories =
             new Dictionary<RoomKey, List<ReplaySnapshot>>();
 
-        private static readonly Dictionary<RoomKey, ReplaySnapshot> currentPbs =
+        private static readonly Dictionary<RoomKey, ReplaySnapshot> _currentPbs =
             new Dictionary<RoomKey, ReplaySnapshot>();
 
-        private static ReplaySelectionState? selectionState;
+        private static ReplaySelectionState? _selectionState;
 
         public static IEnumerable<KeyValuePair<RoomKey, RecordedRoom>> AllPBs() =>
-            currentPbs.Select(kvp =>
+            _currentPbs.Select(kvp =>
                 new KeyValuePair<RoomKey, RecordedRoom>(kvp.Key, kvp.Value.Room));
 
         public static IEnumerable<RouteReplayHistory> AllHistories() =>
-            histories
+            _histories
                 .OrderBy(kvp => kvp.Key.SceneName)
                 .ThenBy(kvp => kvp.Key.EntryFromScene)
                 .ThenBy(kvp => kvp.Key.ExitToScene)
@@ -37,9 +35,9 @@ namespace ReplayTimerMod
 
         public static void Init()
         {
-            histories.Clear();
-            currentPbs.Clear();
-            selectionState?.ClearAll();
+            _histories.Clear();
+            _currentPbs.Clear();
+            _selectionState?.ClearAll();
 
             foreach (var snapshot in DataStore.LoadAll())
                 AddSnapshot(snapshot, persist: false, allowDuplicate: false,
@@ -47,36 +45,40 @@ namespace ReplayTimerMod
 
             int pruned = PruneAllHistories(GhostSettings.MaxSavedReplaysPerRoute,
                 persist: true);
-            Log.LogInfo($"[PBManager] Loaded {currentPbs.Count} active PBs from disk ({histories.Values.Sum(list => list.Count)} snapshots)"
+            Log.LogInfo($"[PBManager] Loaded {_currentPbs.Count} active PBs from disk ({_histories.Values.Sum(list => list.Count)} snapshots)"
                 + (pruned > 0 ? $", pruned {pruned} overflow snapshots" : string.Empty));
         }
 
-        public static ReplaySelectionState? SelectionState => selectionState;
+        public static ReplaySelectionState? SelectionState => _selectionState;
 
         public static void SetSelectionState(ReplaySelectionState? state)
         {
-            selectionState = state;
-            selectionState?.PruneToExisting(histories.Values.SelectMany(list => list));
+            _selectionState = state;
+            _selectionState?.PruneToExisting(_histories.Values.SelectMany(list => list));
         }
-
-        // ── Read ──────────────────────────────────────────────────────────────
 
         public static RecordedRoom? GetPB(RoomKey key)
         {
-            currentPbs.TryGetValue(key, out var snapshot);
+            _currentPbs.TryGetValue(key, out var snapshot);
             return snapshot?.Room;
+        }
+
+        public static ReplaySnapshot? GetPBSnapshot(RoomKey key)
+        {
+            ReplaySnapshot snapshot;
+            return _currentPbs.TryGetValue(key, out snapshot) ? snapshot : null;
         }
 
         public static IList<ReplaySnapshot> GetHistory(RoomKey key)
         {
-            if (!histories.TryGetValue(key, out var history))
+            if (!_histories.TryGetValue(key, out var history))
                 return new ReplaySnapshot[0]; // Array.Empty doesn't work net35
             return OrderSnapshots(history);
         }
 
         public static RouteReplayHistory? GetRouteHistory(RoomKey key)
         {
-            if (!histories.TryGetValue(key, out var history) || history.Count == 0)
+            if (!_histories.TryGetValue(key, out var history) || history.Count == 0)
                 return null;
 
             var ordered = OrderSnapshots(history);
@@ -85,7 +87,7 @@ namespace ReplayTimerMod
 
         public static ReplaySnapshot? GetSnapshot(RoomKey key, string snapshotId)
         {
-            if (!histories.TryGetValue(key, out var history))
+            if (!_histories.TryGetValue(key, out var history))
                 return null;
 
             return history.FirstOrDefault(snapshot => snapshot.SnapshotId == snapshotId);
@@ -94,7 +96,7 @@ namespace ReplayTimerMod
         public static IList<ReplaySnapshot> GetPlaybackCandidates(string sceneName,
             string entryFromScene)
         {
-            return OrderSnapshots(histories
+            return OrderSnapshots(_histories
                 .Where(kvp => kvp.Key.SceneName == sceneName
                     && kvp.Key.EntryFromScene == entryFromScene)
                 .SelectMany(kvp => kvp.Value)
@@ -104,7 +106,7 @@ namespace ReplayTimerMod
         public static bool UpdateSnapshotVisuals(RoomKey key, string snapshotId,
             bool hasVisualOverride, Color color)
         {
-            if (!histories.TryGetValue(key, out var history))
+            if (!_histories.TryGetValue(key, out var history))
                 return false;
 
             int index = history.FindIndex(snapshot => snapshot.SnapshotId == snapshotId);
@@ -118,22 +120,19 @@ namespace ReplayTimerMod
             return true;
         }
 
-        // Returns true if the given time would be stored by Evaluate() - i.e.
-        // it's either the first run for this key or faster than the existing PB.
-        public static bool WouldBePB(RoomKey key, float time)
+        public static bool WouldStoreRun(RoomKey key, float time)
         {
-            if (!currentPbs.TryGetValue(key, out var existing)) return true;
+            if (!_currentPbs.TryGetValue(key, out var existing)) return true;
             return time < existing.TotalTime;
         }
 
-        // ── Evaluate (called after a live run) ────────────────────────────────
-
-        public static EvaluationResult Evaluate(RecordedRoom run, bool saveAllRuns = false)
+        public static EvaluationResult Evaluate(RecordedRoom run, bool saveAllRuns = false,
+            bool usedCheats = false)
         {
             float newTime = run.TotalTime;
-            var snapshot = ReplaySnapshot.CreateNew(run);
+            var snapshot = ReplaySnapshot.CreateNew(run, usedCheats: usedCheats);
 
-            if (currentPbs.TryGetValue(run.Key, out var existing))
+            if (_currentPbs.TryGetValue(run.Key, out var existing))
             {
                 if (newTime < existing.TotalTime)
                 {
@@ -158,7 +157,7 @@ namespace ReplayTimerMod
 
                 if (!AddSnapshot(snapshot, persist: true, allowDuplicate: false))
                 {
-                    Log.LogInfo($"[PBManager] Skipped duplicate history for {run.Key}: {TimeUtil.Format(newTime)} (+{TimeUtil.Format(delta)})");
+                    Log.LogInfo($"[PBManager] Did not store history for {run.Key}: {TimeUtil.Format(newTime)} (+{TimeUtil.Format(delta)})");
                     return new EvaluationResult(ResultKind.DuplicateRun, newTime, existing.TotalTime, delta);
                 }
 
@@ -176,24 +175,43 @@ namespace ReplayTimerMod
             return new EvaluationResult(ResultKind.FirstRun, newTime, null, null);
         }
 
-        // ── Import ────────────────────────────────────────────────────────────
-        // Appends a decoded replay to local history (used for clipboard paste).
+        public enum ImportOutcome { Imported, Duplicate, RouteFull }
 
-        public static bool ImportPB(RecordedRoom room)
+        public static bool WouldKeepReplay(RoomKey key, float time)
+        {
+            int max = Mathf.Max(1, GhostSettings.MaxSavedReplaysPerRoute);
+            if (!_histories.TryGetValue(key, out var history) || history.Count < max)
+                return true;
+            var ordered = OrderSnapshots(history);
+            return time < ordered[max - 1].TotalTime;
+        }
+
+        public static ImportOutcome ImportPB(RecordedRoom room)
         {
             var snapshot = ReplaySnapshot.CreateNew(room);
-            bool added = AddSnapshot(snapshot, persist: true, allowDuplicate: false);
-            if (!added)
+
+            if (_histories.TryGetValue(room.Key, out var history)
+                && HasDuplicate(history, snapshot))
             {
                 Log.LogInfo($"[PBManager] Skipped duplicate import for {room.Key} ({TimeUtil.Format(room.TotalTime)})");
-                return false;
+                return ImportOutcome.Duplicate;
             }
 
-            bool isCurrent = currentPbs.TryGetValue(room.Key, out var current)
+            if (!WouldKeepReplay(room.Key, room.TotalTime))
+            {
+                Log.LogInfo($"[PBManager] Import skipped — route {room.Key} is full "
+                    + $"({GhostSettings.MaxSavedReplaysPerRoute} max) and "
+                    + $"{TimeUtil.Format(room.TotalTime)} is slower than all kept replays");
+                return ImportOutcome.RouteFull;
+            }
+
+            AddSnapshot(snapshot, persist: true, allowDuplicate: true);
+
+            bool isCurrent = _currentPbs.TryGetValue(room.Key, out var current)
                 && current.SnapshotId == snapshot.SnapshotId;
             Log.LogInfo($"[PBManager] Imported {room.Key} ({room.FrameCount} frames, {TimeUtil.Format(room.TotalTime)})"
                 + (isCurrent ? " [current]" : " [history]"));
-            return true;
+            return ImportOutcome.Imported;
         }
 
         public static int PruneRouteHistory(RoomKey key, List<ReplaySnapshot> history,
@@ -210,12 +228,12 @@ namespace ReplayTimerMod
                 history.RemoveAll(snapshot => prunedIds.Contains(snapshot.SnapshotId));
 
                 foreach (var snapshot in pruned)
-                    selectionState?.RemoveSnapshot(snapshot.SnapshotId);
+                    _selectionState?.RemoveSnapshot(snapshot.SnapshotId);
             }
 
             RefreshCurrent(key, history);
 
-            if (persist)
+            if (persist && pruned.Length > 0)
                 DataStore.ReplaceRouteSnapshots(key, OrderSnapshots(history));
 
             return pruned.Length;
@@ -224,9 +242,9 @@ namespace ReplayTimerMod
         public static int PruneAllHistories(int limit, bool persist)
         {
             int pruned = 0;
-            foreach (var key in histories.Keys.ToArray())
+            foreach (var key in _histories.Keys.ToArray())
             {
-                if (!histories.TryGetValue(key, out var history))
+                if (!_histories.TryGetValue(key, out var history))
                     continue;
 
                 pruned += PruneRouteHistory(key, history, limit, persist);
@@ -235,16 +253,14 @@ namespace ReplayTimerMod
             return pruned;
         }
 
-        // ── Delete ────────────────────────────────────────────────────────────
-
         public static bool DeleteSnapshot(RoomKey key, string snapshotId)
         {
-            if (!histories.TryGetValue(key, out var history)) return false;
+            if (!_histories.TryGetValue(key, out var history)) return false;
 
             int removed = history.RemoveAll(snapshot => snapshot.SnapshotId == snapshotId);
             if (removed == 0) return false;
 
-            selectionState?.RemoveSnapshot(snapshotId);
+            _selectionState?.RemoveSnapshot(snapshotId);
             DataStore.DeleteSnapshot(key, snapshotId);
             RefreshCurrent(key, history);
             Log.LogInfo($"[PBManager] Deleted snapshot {key}#{snapshotId}");
@@ -253,11 +269,11 @@ namespace ReplayTimerMod
 
         public static bool DeletePB(RoomKey key)
         {
-            if (!histories.TryGetValue(key, out var history)) return false;
+            if (!_histories.TryGetValue(key, out var history)) return false;
 
-            selectionState?.RemoveRoute(history);
-            histories.Remove(key);
-            currentPbs.Remove(key);
+            _selectionState?.RemoveRoute(history);
+            _histories.Remove(key);
+            _currentPbs.Remove(key);
             DataStore.DeleteRoute(key);
             Log.LogInfo($"[PBManager] Deleted route {key}");
             return true;
@@ -265,18 +281,22 @@ namespace ReplayTimerMod
 
         public static int DeleteScene(string sceneName)
         {
-            var routeHistories = histories
+            var routeHistories = _histories
                 .Where(kvp => kvp.Key.SceneName == sceneName)
-                .Select(kvp => new RouteReplayHistory(kvp.Key, OrderSnapshots(kvp.Value), OrderSnapshots(kvp.Value)[0]))
+                .Select(kvp =>
+                {
+                    var ordered = OrderSnapshots(kvp.Value);
+                    return new RouteReplayHistory(kvp.Key, ordered, ordered[0]);
+                })
                 .ToList();
             int removedSnapshots = routeHistories.Sum(history => history.Count);
 
-            selectionState?.RemoveScene(routeHistories);
+            _selectionState?.RemoveScene(routeHistories);
 
             foreach (var history in routeHistories)
             {
-                histories.Remove(history.Key);
-                currentPbs.Remove(history.Key);
+                _histories.Remove(history.Key);
+                _currentPbs.Remove(history.Key);
             }
 
             DataStore.DeleteScene(sceneName);
@@ -286,23 +306,21 @@ namespace ReplayTimerMod
 
         public static void DeleteAll()
         {
-            var scenes = histories.Keys.Select(k => k.SceneName).Distinct().ToList();
-            histories.Clear();
-            currentPbs.Clear();
-            selectionState?.ClearAll();
+            var scenes = _histories.Keys.Select(k => k.SceneName).Distinct().ToList();
+            _histories.Clear();
+            _currentPbs.Clear();
+            _selectionState?.ClearAll();
             foreach (var scene in scenes) DataStore.DeleteScene(scene);
             Log.LogInfo($"[PBManager] Deleted all entries ({scenes.Count} scenes)");
         }
 
-        // ── Internals ─────────────────────────────────────────────────────────
-
         private static bool AddSnapshot(ReplaySnapshot snapshot, bool persist,
             bool allowDuplicate, bool enforceLimit = true)
         {
-            if (!histories.TryGetValue(snapshot.Key, out var history))
+            if (!_histories.TryGetValue(snapshot.Key, out var history))
             {
                 history = new List<ReplaySnapshot>();
-                histories[snapshot.Key] = history;
+                _histories[snapshot.Key] = history;
             }
 
             if (!allowDuplicate && HasDuplicate(history, snapshot))
@@ -318,9 +336,13 @@ namespace ReplayTimerMod
                 return true;
             }
 
-            PruneRouteHistory(snapshot.Key, history,
+            int pruned = PruneRouteHistory(snapshot.Key, history,
                 GhostSettings.MaxSavedReplaysPerRoute, persist);
-            return true;
+
+            if (persist && pruned == 0)
+                DataStore.SaveSnapshot(snapshot);
+
+            return pruned == 0 || history.Contains(snapshot);
         }
 
         private static bool HasDuplicate(List<ReplaySnapshot> history,
@@ -339,12 +361,12 @@ namespace ReplayTimerMod
         {
             if (history.Count == 0)
             {
-                histories.Remove(key);
-                currentPbs.Remove(key);
+                _histories.Remove(key);
+                _currentPbs.Remove(key);
                 return;
             }
 
-            currentPbs[key] = OrderSnapshots(history)[0];
+            _currentPbs[key] = OrderSnapshots(history)[0];
         }
     }
 

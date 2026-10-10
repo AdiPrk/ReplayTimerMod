@@ -1,31 +1,44 @@
-﻿#if SILKSONG_BUILD
+#if SILKSONG_BUILD
 using UnityEngine;
 using GlobalEnums;
 using System.Reflection;
 
 namespace ReplayTimerMod
 {
-    // Ported directly from TimerMod's LoadRemover.
-    // Determines whether the in-game clock should be ticking.
-    // All the edge-case logic (teleport from menu, cutscenes, hero transition
-    // state, etc.) is preserved exactly as-is.
+    // Ported from TimerMod's LoadRemover.
     public static class LoadRemover
     {
-        private const string MENU_TITLE = "Menu_Title";
-        private const string QUIT_TO_MENU = "Quit_To_Menu";
+        private const BindingFlags AnyInstance =
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
         private static GameState prevGameState = GameState.PLAYING;
         private static bool lookForTele = false;
 
+        private static bool gameStateResolved;
+        private static PropertyInfo? gameStateProp;
+        private static FieldInfo? gameStateField;
+
+        private static bool sceneLoadResolved;
+        private static PropertyInfo? sceneLoadProp;
+        private static FieldInfo? sceneLoadField;
+
+        private static bool activationResolved;
+        private static PropertyInfo? activationProp;
+        private static FieldInfo? activationField;
+
         public static bool ShouldTick()
         {
-            UIState ui_state = GameManager.instance.ui.uiState;
-            string scene_name = GameManager.instance.GetSceneNameString();
-            string next_scene = GameManager.instance.nextSceneName;
+            var gm = GameManager.instance;
+            if (gm == null || gm.ui == null || gm.inputHandler == null)
+                return false;
 
-            bool loading_menu = (scene_name != MENU_TITLE && next_scene == "")
-                || (scene_name != MENU_TITLE && next_scene == MENU_TITLE
-                    || scene_name == QUIT_TO_MENU);
+            UIState ui_state = gm.ui.uiState;
+            string scene_name = gm.GetSceneNameString();
+            string next_scene = gm.nextSceneName;
+
+            bool loading_menu = (scene_name != KnownScenes.MenuTitle && next_scene == "")
+                || (scene_name != KnownScenes.MenuTitle && next_scene == KnownScenes.MenuTitle
+                    || scene_name == KnownScenes.QuitToMenu);
 
             GameState game_state = ReadGameState();
 
@@ -35,12 +48,12 @@ namespace ReplayTimerMod
             if (lookForTele && (game_state != GameState.PLAYING && game_state != GameState.ENTERING_LEVEL))
                 lookForTele = false;
 
-            bool accepting_input = GameManager.instance.inputHandler.acceptingInput;
+            bool accepting_input = gm.inputHandler.acceptingInput;
 
             HeroTransitionState hero_transition_state;
             try
             {
-                hero_transition_state = GameManager.instance.hero_ctrl.transitionState;
+                hero_transition_state = gm.hero_ctrl.transitionState;
             }
             catch
             {
@@ -73,22 +86,31 @@ namespace ReplayTimerMod
         {
             try
             {
-                object gm = GameManager.instance;
+                var gm = GameManager.instance;
                 if (gm == null) return prevGameState;
 
-                const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-                var t = gm.GetType();
-
-                foreach (string name in new[] { "GameState", "gameState" })
+                if (!gameStateResolved)
                 {
-                    var prop = t.GetProperty(name, flags);
-                    if (prop != null && prop.PropertyType == typeof(GameState))
-                        return (GameState)prop.GetValue(gm, null);
+                    gameStateResolved = true;
+                    var t = gm.GetType();
+                    foreach (string name in new[] { "GameState", "gameState" })
+                    {
+                        gameStateProp = t.GetProperty(name, AnyInstance);
+                        if (gameStateProp != null && gameStateProp.PropertyType == typeof(GameState))
+                            break;
+                        gameStateProp = null;
 
-                    var field = t.GetField(name, flags);
-                    if (field != null && field.FieldType == typeof(GameState))
-                        return (GameState)field.GetValue(gm);
+                        gameStateField = t.GetField(name, AnyInstance);
+                        if (gameStateField != null && gameStateField.FieldType == typeof(GameState))
+                            break;
+                        gameStateField = null;
+                    }
                 }
+
+                if (gameStateProp != null)
+                    return (GameState)gameStateProp.GetValue(gm, null);
+                if (gameStateField != null)
+                    return (GameState)gameStateField.GetValue(gm);
             }
             catch { }
 
@@ -99,43 +121,49 @@ namespace ReplayTimerMod
         {
             try
             {
-                object gm = GameManager.instance;
+                var gm = GameManager.instance;
                 if (gm == null) return false;
 
-                const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-                var t = gm.GetType();
-
-                object? sceneLoad = null;
-                foreach (string name in new[] { "sceneLoad", "SceneLoad" })
+                if (!sceneLoadResolved)
                 {
-                    var prop = t.GetProperty(name, flags);
-                    if (prop != null)
+                    sceneLoadResolved = true;
+                    var t = gm.GetType();
+                    foreach (string name in new[] { "sceneLoad", "SceneLoad" })
                     {
-                        sceneLoad = prop.GetValue(gm, null);
-                        if (sceneLoad != null) break;
-                    }
-
-                    var field = t.GetField(name, flags);
-                    if (field != null)
-                    {
-                        sceneLoad = field.GetValue(gm);
-                        if (sceneLoad != null) break;
+                        sceneLoadProp = t.GetProperty(name, AnyInstance);
+                        if (sceneLoadProp != null) break;
+                        sceneLoadField = t.GetField(name, AnyInstance);
+                        if (sceneLoadField != null) break;
                     }
                 }
 
+                object? sceneLoad = sceneLoadProp != null
+                    ? sceneLoadProp.GetValue(gm, null)
+                    : sceneLoadField?.GetValue(gm);
                 if (sceneLoad == null) return false;
 
-                var slt = sceneLoad.GetType();
-                foreach (string name in new[] { "IsActivationAllowed", "isActivationAllowed" })
+                if (!activationResolved)
                 {
-                    var prop = slt.GetProperty(name, flags);
-                    if (prop != null && prop.PropertyType == typeof(bool))
-                        return (bool)prop.GetValue(sceneLoad, null);
+                    activationResolved = true;
+                    var slt = sceneLoad.GetType();
+                    foreach (string name in new[] { "IsActivationAllowed", "isActivationAllowed" })
+                    {
+                        activationProp = slt.GetProperty(name, AnyInstance);
+                        if (activationProp != null && activationProp.PropertyType == typeof(bool))
+                            break;
+                        activationProp = null;
 
-                    var field = slt.GetField(name, flags);
-                    if (field != null && field.FieldType == typeof(bool))
-                        return (bool)field.GetValue(sceneLoad);
+                        activationField = slt.GetField(name, AnyInstance);
+                        if (activationField != null && activationField.FieldType == typeof(bool))
+                            break;
+                        activationField = null;
+                    }
                 }
+
+                if (activationProp != null)
+                    return (bool)activationProp.GetValue(sceneLoad, null);
+                if (activationField != null)
+                    return (bool)activationField.GetValue(sceneLoad);
             }
             catch { }
 

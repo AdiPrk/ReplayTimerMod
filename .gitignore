@@ -15,7 +15,6 @@
 .config/local/SilksongPath.props
 .config/local/HollowKnightPath1221.props
 .config/local/HollowKnightPath1578.props
-.config/local/HollowKnightPath1432.props
 obj/ss/
 obj/hk/
 bin/
@@ -438,7 +437,3 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
-
-# Thunderstore build artifacts
-thunderstore/dist/
-thunderstore/temp/*.dll

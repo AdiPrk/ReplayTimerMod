@@ -1,0 +1,41 @@
+[
+  {
+    "name": "basic",
+    "kind": "rtm3",
+    "base64": "rY87TsNAGIT/fe961/Y6fmTjR2yiGAokcGQaugiJgoImoiJFhEQ6FArgftyAg3AHTMqkhq\u002Bama\u002Ba1cN9jw3cvO62m9unt/fNojts3fWRWwAsl48AsIZvEtGs4jZAsaEynqlzK2OEE5lX0ayYi7Hv8n7eTq2uE1US3nb9dMTSKNAXqA6vGGmtB0IKIxXhiY8SXRF\u002BSvCkvFzDlzCFm3g8HBHdFCwHFje\u002BPUmYzukYWBa6mIoSpVZ4TBueEgdhhoRgrra\u002BtBSnOjOisKAtCZSnQFFO7VnDwAw/IPcHxDAMn5jA6mNH4e75ZbvfDkHH/MkiTCjjQipP/2/\u002BBQ==",
+    "time": 3,
+    "frames": 90,
+    "modifiers": -1,
+    "scene": "Bone_East_10",
+    "entryFrom": "Bone_East_09",
+    "exitTo": "Bone_East_11"
+  },
+  {
+    "name": "masked",
+    "kind": "rtm3",
+    "base64": "vZA9SgNRHMT/7/vt7su\u002Br31xs9nEbAIJgshGC7ETwcIiTUhhFwTTSSxUMJVX8EiWHsRDWLmmTA6gU83wg2GY\u002BWJ2hhVcPa5Xy\u002Bu7p\u002BfltN5N9cUemwK8X74CwAa\u002BiNFtbYnhGTlyhkLMhOa6VFV/dEIglKPBRAzTcBiLmhLWQcwRW9gsCzxBnXFV6Lh1jD2fKC4tAiyp6ziPTs8HUuPEpNaXLeqHOhQHY40Y1rUmPYxzvIFPQUzXSaEVUZ60PQys6ZrgTEtSOTF5lVrkTDcVmQcetSEYAcpv\u002B0umiJfcs0LnDAVakl6qJctFHKCwaYQVxYImqoohcrakWjCnen2bIIqkI7ppmh9omm\u002BAt\u002BYDNCYwf1lTuLl/WG0/2RXa1x9ShAllXMgoTv7TzxezW0SBbRf9Ag==",
+    "time": 4.5,
+    "frames": 120,
+    "modifiers": 5,
+    "scene": "Bone_East_10",
+    "entryFrom": "Bone_East_09",
+    "exitTo": "Bone_East_11"
+  },
+  {
+    "name": "single-frame",
+    "kind": "rtm3",
+    "base64": "CwrxNWbiYXDKz0uNd00sLok3NEDmGViiyBkyabPbMjIwMDAx3GVmYrjC3sDIzBBUmsfAAAA=",
+    "time": 0.033,
+    "frames": 1,
+    "modifiers": -1,
+    "scene": "Bone_East_10",
+    "entryFrom": "Bone_East_09",
+    "exitTo": "Bone_East_11"
+  },
+  {
+    "name": "collection",
+    "kind": "rtmc",
+    "base64": "lY8/S8NQFMXPfS/Ja/LSNHn512hIFTWliKXVKjgV/DM4dCndi2A3qYN2th/NxdEv4Hdw6\u002BAgxDgU2gqCBy78Lufeyz3D0eCSGIDXsoajwQmzcfEwnYyvbx\u002Bfxt3Oatc5X/O6wLyflWsNLHhktSqkgqYXVPdDHsBu9Q7spJ4mNSc\u002BbuBNaF5mMuYbZqqDHCGqkVSUuDUFafhFUXwxjuFsquHm7n5SHl0VrQvEuKYbomJa8jcvlkEErmY/X58uobeEM\u002BClf1TOtfHBuRmomKJGpDE/amYkGaW6n\u002B3me1ukQIeaUA4jtDRLBm28C1n3dEpDJt3Iq9lyRxqJsrZ5nSGusGoemkHseshD13ec4hN4nv8j2ab9V9AN/gY=",
+    "count": 2
+  }
+]
