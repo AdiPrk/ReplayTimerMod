@@ -24,8 +24,10 @@ namespace ReplayTimerMod
             _skipRunsToggleBg = null;
             _cheatCancelToggleLbl = null;
             _cheatCancelToggleBg = null;
-            _skipTimerToggleLbl = null;
-            _skipTimerToggleBg = null;
+            _skipCheatedToggleLbl = null;
+            _skipCheatedToggleBg = null;
+            _skipGhostReentryToggleLbl = null;
+            _skipGhostReentryToggleBg = null;
             _cfgGhostColorFill = null;
             _cfgGhostAlphaLbl = null;
             _clearAllCfgLbl = null;
@@ -51,44 +53,21 @@ namespace ReplayTimerMod
 
             AddSectionHeader(_rightContent, "Recording");
 
-            var trackRow = AddConfigRow(_rightContent, "Tracking", rowH, labelW);
+            var trackRow = AddConfigRow(_rightContent, "Record runs", rowH, labelW);
             br = MakeButton(trackRow.transform, "TrackToggle", "ON",
                 UIStyle.FontSizeRow, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
                 labelW, (rowH - btnH) / 2, toggleW, btnH, OnTrackingToggle);
             _trackingToggleBg = br.bg;
             _trackingToggleLbl = br.label;
 
-            var saveRow = AddConfigRow(_rightContent, "Save policy", rowH, labelW);
+            var saveRow = AddConfigRow(_rightContent, "Save runs", rowH, labelW);
             br = MakeButton(saveRow.transform, "SaveToggle", "PB only",
                 UIStyle.FontSizeRow, UIStyle.Gold, UIStyle.BtnBg(UIStyle.Gold),
                 labelW, (rowH - btnH) / 2, UIStyle.W(72), btnH, OnSavePolicyToggle);
             _savePolicyBg = br.bg;
             _savePolicyLbl = br.label;
 
-            var skipRunRow = AddConfigRow(_rightContent, "Skip backtrack", rowH, labelW);
-            br = MakeButton(skipRunRow.transform, "SkipBacktrackRuns", "OFF",
-                UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
-                labelW, (rowH - btnH) / 2, toggleW, btnH, OnSkipBacktrackRunsToggle);
-            _skipRunsToggleBg = br.bg;
-            _skipRunsToggleLbl = br.label;
-
-            var cheatRow = AddConfigRow(_rightContent, "Cancel on cheat", rowH, labelW);
-            br = MakeButton(cheatRow.transform, "CheatCancelToggle", "ON",
-                UIStyle.FontSizeRow, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
-                labelW, (rowH - btnH) / 2, toggleW, btnH, OnCheatCancelToggle);
-            _cheatCancelToggleBg = br.bg;
-            _cheatCancelToggleLbl = br.label;
-
-            var cheatHintRow = MakeGO("CheatCancelHint", _rightContent);
-            Img(cheatHintRow, Color.clear);
-            var cheatHintLE = cheatHintRow.AddComponent<LayoutElement>();
-            cheatHintLE.minHeight = cheatHintLE.preferredHeight = UIStyle.H(16);
-            MakeLbl(cheatHintRow.transform,
-                "When off, runs with DebugMod cheats are kept and shown with red stripes.",
-                UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
-                x: UIStyle.W(8), w: UIStyle.W(320), h: UIStyle.H(16));
-
-            var keepRow = AddConfigRow(_rightContent, "Keep per route", rowH, labelW);
+            var keepRow = AddConfigRow(_rightContent, "Runs per route", rowH, labelW);
             int keepX = labelW;
             MakeButton(keepRow.transform, "KeepMinus", "-",
                 UIStyle.FontSizeRow, UIStyle.Text, UIStyle.Overlay,
@@ -103,9 +82,24 @@ namespace ReplayTimerMod
                 UIStyle.FontSizeRow, UIStyle.Text, UIStyle.Overlay,
                 keepX, (rowH - btnH) / 2, stepW, btnH, OnMaxSavedReplaysPlus);
 
+            var skipRunRow = AddConfigRow(_rightContent, "Skip re-entries", rowH, labelW);
+            br = MakeButton(skipRunRow.transform, "SkipBacktrackRuns", "OFF",
+                UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
+                labelW, (rowH - btnH) / 2, toggleW, btnH, OnSkipBacktrackRunsToggle);
+            _skipRunsToggleBg = br.bg;
+            _skipRunsToggleLbl = br.label;
+
+            var cheatRow = AddConfigRow(_rightContent, "Cancel on debug", rowH, labelW);
+            AttachTooltip(cheatRow, "When off, runs that used DebugMod are kept and marked with a small tab on their right edge.");
+            br = MakeButton(cheatRow.transform, "CheatCancelToggle", "ON",
+                UIStyle.FontSizeRow, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
+                labelW, (rowH - btnH) / 2, toggleW, btnH, OnCheatCancelToggle);
+            _cheatCancelToggleBg = br.bg;
+            _cheatCancelToggleLbl = br.label;
+
             AddSectionSeparator(_rightContent);
 
-            AddSectionHeader(_rightContent, "Playback");
+            AddSectionHeader(_rightContent, "Ghost");
 
             var ghostRow = AddConfigRow(_rightContent, "Enable Playback", rowH, labelW);
             br = MakeButton(ghostRow.transform, "GhostToggle", "ON",
@@ -114,26 +108,21 @@ namespace ReplayTimerMod
             _ghostToggleBg = br.bg;
             _ghostToggleLbl = br.label;
 
-            var hudRow = AddConfigRow(_rightContent, "Timer HUD", rowH, labelW);
-            br = MakeButton(hudRow.transform, "HUDToggle", "ON",
-                UIStyle.FontSizeRow, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
-                labelW, (rowH - btnH) / 2, toggleW, btnH, OnTimerToggleClicked);
-            _timerToggleBg = br.bg;
-            _timerToggleLbl = br.label;
-
-            var chainRow = AddConfigRow(_rightContent, "Chain rooms", rowH, labelW);
-            br = MakeButton(chainRow.transform, "ChainToggle", "OFF",
+            var skipCheatedRow = AddConfigRow(_rightContent, "Skip debug runs", rowH, labelW);
+            AttachTooltip(skipCheatedRow, "The ghost uses your best run that didn't use DebugMod. Runs you pick in the Runs tab still play.");
+            br = MakeButton(skipCheatedRow.transform, "SkipCheatedToggle", "OFF",
                 UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
-                labelW, (rowH - btnH) / 2, toggleW, btnH, OnChainTimersToggleClicked);
-            _chainToggleBg = br.bg;
-            _chainToggleLbl = br.label;
+                labelW, (rowH - btnH) / 2, toggleW, btnH, OnSkipCheatedRunsToggle);
+            _skipCheatedToggleBg = br.bg;
+            _skipCheatedToggleLbl = br.label;
 
-            var skipTimerRow = AddConfigRow(_rightContent, "Hide backtrack", rowH, labelW);
-            br = MakeButton(skipTimerRow.transform, "SkipBacktrackTimer", "OFF",
+            var skipReentryRow = AddConfigRow(_rightContent, "Skip re-entries", rowH, labelW);
+            AttachTooltip(skipReentryRow, "The ghost and timer ignore runs that leave through the door you came in. Runs you pick in the Runs tab still play.");
+            br = MakeButton(skipReentryRow.transform, "SkipBacktrackPlayback", "OFF",
                 UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
-                labelW, (rowH - btnH) / 2, toggleW, btnH, OnSkipBacktrackTimerToggle);
-            _skipTimerToggleBg = br.bg;
-            _skipTimerToggleLbl = br.label;
+                labelW, (rowH - btnH) / 2, toggleW, btnH, OnSkipBacktrackPlaybackToggle);
+            _skipGhostReentryToggleBg = br.bg;
+            _skipGhostReentryToggleLbl = br.label;
 
             var colorRow = AddConfigRow(_rightContent, "Ghost color", rowH, labelW);
             int chipW = UIStyle.W(46);
@@ -149,18 +138,27 @@ namespace ReplayTimerMod
             Btn(chip, () => OpenGlobalColorPicker(chip));
             AddButtonHover(chip);
             _cfgGhostAlphaLbl = MakeLbl(colorRow.transform,
-                "alpha " + gc.a.ToString("0.00"),
+                OpacityText(gc.a),
                 UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: labelW + chipW + UIStyle.Gap, w: UIStyle.W(120), h: rowH);
 
-            var colorHintRow = MakeGO("GhostColorHint", _rightContent);
-            Img(colorHintRow, Color.clear);
-            var colorHintLE = colorHintRow.AddComponent<LayoutElement>();
-            colorHintLE.minHeight = colorHintLE.preferredHeight = UIStyle.H(16);
-            MakeLbl(colorHintRow.transform,
-                "Click a run's color swatch in the Runs tab to give it its own color.",
-                UIStyle.FontSizeBtn, UIStyle.Subtext, TextAnchor.MiddleLeft,
-                x: UIStyle.W(8), w: UIStyle.W(320), h: UIStyle.H(16));
+            AddSectionSeparator(_rightContent);
+
+            AddSectionHeader(_rightContent, "Timer");
+
+            var hudRow = AddConfigRow(_rightContent, "Room timer", rowH, labelW);
+            br = MakeButton(hudRow.transform, "HUDToggle", "ON",
+                UIStyle.FontSizeRow, UIStyle.Accent, UIStyle.BtnBgStrong(UIStyle.Accent),
+                labelW, (rowH - btnH) / 2, toggleW, btnH, OnTimerToggleClicked);
+            _timerToggleBg = br.bg;
+            _timerToggleLbl = br.label;
+
+            var chainRow = AddConfigRow(_rightContent, "Chain rooms", rowH, labelW);
+            br = MakeButton(chainRow.transform, "ChainToggle", "OFF",
+                UIStyle.FontSizeRow, UIStyle.Subtext, UIStyle.Overlay,
+                labelW, (rowH - btnH) / 2, toggleW, btnH, OnChainTimersToggleClicked);
+            _chainToggleBg = br.bg;
+            _chainToggleLbl = br.label;
 
             AddSectionSeparator(_rightContent);
 
@@ -169,37 +167,36 @@ namespace ReplayTimerMod
             var dataRow1 = MakeGO("DataRow1", _rightContent);
             Img(dataRow1, Color.clear);
             var d1LE = dataRow1.AddComponent<LayoutElement>();
-            d1LE.minHeight = d1LE.preferredHeight = UIStyle.H(30);
+            d1LE.minHeight = d1LE.preferredHeight = rowH;
 
             int dataBtnW = UIStyle.W(90);
-            int dataBtnH = UIStyle.H(22);
-            int dataY = UIStyle.H(4);
+            int dataY = (rowH - btnH) / 2;
             int dataX = UIStyle.W(8);
 
             br = MakeButton(dataRow1.transform, "CopyAllCfg", "Copy all",
                 UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
-                dataX, dataY, dataBtnW, dataBtnH, OnCopyAllClicked);
+                dataX, dataY, dataBtnW, btnH, OnCopyAllClicked);
             _copyAllCfgBg = br.bg;
             _copyAllCfgLbl = br.label;
             dataX += dataBtnW + gap;
 
             MakeButton(dataRow1.transform, "ExportAllCfg", "Export all",
                 UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
-                dataX, dataY, dataBtnW, dataBtnH, OnExportAllClicked);
+                dataX, dataY, dataBtnW, btnH, OnExportAllClicked);
             dataX += dataBtnW + gap;
 
             MakeButton(dataRow1.transform, "OpenExportsCfg", "Open exports",
                 UIStyle.FontSizeBtn, UIStyle.Text, UIStyle.Overlay with { a = 0.6f },
-                dataX, dataY, dataBtnW, dataBtnH, OnOpenExportFolderClicked);
+                dataX, dataY, dataBtnW, btnH, OnOpenExportFolderClicked);
 
             var dataRow2 = MakeGO("DataRow2", _rightContent);
             Img(dataRow2, Color.clear);
             var d2LE = dataRow2.AddComponent<LayoutElement>();
-            d2LE.minHeight = d2LE.preferredHeight = UIStyle.H(30);
+            d2LE.minHeight = d2LE.preferredHeight = rowH;
 
             br = MakeButton(dataRow2.transform, "ClearAllCfg", "Clear all data",
                 UIStyle.FontSizeBtn, UIStyle.Red, UIStyle.BtnBg(UIStyle.Red),
-                UIStyle.W(8), dataY, UIStyle.W(100), dataBtnH, OnClearAllClicked);
+                UIStyle.W(8), dataY, UIStyle.W(100), btnH, OnClearAllClicked);
             _clearAllCfgBg = br.bg;
             _clearAllCfgLbl = br.label;
 
@@ -247,7 +244,8 @@ namespace ReplayTimerMod
             StyleToggle(_chainToggleLbl, _chainToggleBg, GhostSettings.ChainRoomTimers);
             StyleToggle(_skipRunsToggleLbl, _skipRunsToggleBg, GhostSettings.SkipBacktrackRuns);
             StyleToggle(_cheatCancelToggleLbl, _cheatCancelToggleBg, GhostSettings.CancelRunOnCheats);
-            StyleToggle(_skipTimerToggleLbl, _skipTimerToggleBg, GhostSettings.SkipBacktrackTimer);
+            StyleToggle(_skipCheatedToggleLbl, _skipCheatedToggleBg, GhostSettings.SkipCheatedRuns);
+            StyleToggle(_skipGhostReentryToggleLbl, _skipGhostReentryToggleBg, GhostSettings.SkipBacktrackPlayback);
 
             RefreshGhostColorChip();
         }
@@ -270,7 +268,7 @@ namespace ReplayTimerMod
             var le = row.AddComponent<LayoutElement>();
             le.minHeight = le.preferredHeight = UIStyle.H(22);
             MakeLbl(row.transform, title, UIStyle.FontSizeBtn,
-                UIStyle.Subtext, TextAnchor.LowerLeft,
+                UIStyle.Subtext, TextAnchor.MiddleLeft,
                 x: UIStyle.W(8), w: UIStyle.W(200), h: UIStyle.H(22));
         }
 
@@ -289,9 +287,14 @@ namespace ReplayTimerMod
         private static void AddSectionSeparator(Transform parent)
         {
             var sep = MakeGO("Separator", parent);
-            Img(sep, UIStyle.Overlay with { a = 0.4f });
             var le = sep.AddComponent<LayoutElement>();
-            le.minHeight = le.preferredHeight = 1;
+            le.minHeight = le.preferredHeight = UIStyle.H(11);
+            var line = MakeGO("Line", sep.transform);
+            Img(line, UIStyle.Overlay with { a = 0.4f });
+            var rt = line.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0f, 0.5f);
+            rt.anchorMax = new Vector2(1f, 0.5f);
+            rt.sizeDelta = new Vector2(0f, 1f);
         }
     }
 }

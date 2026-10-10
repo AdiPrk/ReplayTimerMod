@@ -26,6 +26,9 @@ namespace ReplayTimerMod
             ExitToScene = exitToScene;
         }
 
+        public bool IsReentry =>
+            !string.IsNullOrEmpty(EntryFromScene) && ExitToScene == EntryFromScene;
+
         public override string ToString() =>
             $"{SceneName}[{EntryFromScene}->{ExitToScene}]";
 

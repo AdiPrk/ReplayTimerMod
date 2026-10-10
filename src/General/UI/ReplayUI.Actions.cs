@@ -368,9 +368,15 @@ namespace ReplayTimerMod
             if (_activeTab == TabKind.Config) RefreshConfigValues();
         }
 
-        private void OnSkipBacktrackTimerToggle()
+        private void OnSkipCheatedRunsToggle()
         {
-            GhostSettings.SkipBacktrackTimer = !GhostSettings.SkipBacktrackTimer;
+            GhostSettings.SkipCheatedRuns = !GhostSettings.SkipCheatedRuns;
+            if (_activeTab == TabKind.Config) RefreshConfigValues();
+        }
+
+        private void OnSkipBacktrackPlaybackToggle()
+        {
+            GhostSettings.SkipBacktrackPlayback = !GhostSettings.SkipBacktrackPlayback;
             if (_activeTab == TabKind.Config) RefreshConfigValues();
         }
     }

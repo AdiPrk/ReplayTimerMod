@@ -47,9 +47,7 @@ namespace ReplayTimerMod
 
             var key = new RoomKey(sceneName, entryFromScene, exitToScene);
 
-            if (GhostSettings.SkipBacktrackRuns
-                && !string.IsNullOrEmpty(entryFromScene)
-                && exitToScene == entryFromScene)
+            if (GhostSettings.SkipBacktrackRuns && key.IsReentry)
             {
                 _recorder.DiscardRecording();
                 return;

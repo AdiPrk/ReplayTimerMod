@@ -32,6 +32,7 @@ namespace ReplayTimerMod
             string baseDirectory = Path.GetDirectoryName(
                 Assembly.GetExecutingAssembly().Location) ?? ".";
 
+            ManualInstallImport.Run(baseDirectory);
             GhostSettings.Init(baseDirectory);
             QuickWarp.Init();
 

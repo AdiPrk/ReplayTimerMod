@@ -147,15 +147,6 @@ namespace ReplayTimerMod
             Btn(row, () => ToggleSnapshotPlayback(rowKey, rowSnapshotId));
             AddHoverEffect(row);
 
-            RawImage? stripesImg = null;
-            if (snapshot.UsedCheats)
-            {
-                stripesImg = MakeGO("Cheated", row.transform).AddComponent<RawImage>();
-                stripesImg.texture = HazardStripeTexture();
-                stripesImg.color = UIStyle.Red with { a = 0.10f };
-                stripesImg.raycastTarget = false;
-                AttachTooltip(row, "Recorded with DebugMod cheats active");
-            }
 
             int x = M;
             int btnH = UIStyle.H(20);
@@ -218,13 +209,6 @@ namespace ReplayTimerMod
 
             int camW = btnH;
             int camX = cluster.AddButton(camW);
-            if (stripesImg != null)
-            {
-                int stripesW = camX - UIStyle.Gap;
-                float tile = UIStyle.H(12);
-                Rect(stripesImg.gameObject, 0, 0, stripesW, h);
-                stripesImg.uvRect = new UnityEngine.Rect(0f, 0f, stripesW / tile, h / tile);
-            }
             bool followOn =
                 SelectionState?.CameraFollowSnapshotId == snapshot.SnapshotId;
 
@@ -265,6 +249,20 @@ namespace ReplayTimerMod
                 UIStyle.FontSizeRow, labelColor, TextAnchor.MiddleLeft,
                 x: x, w: labelW, h: h);
 
+            if (snapshot.UsedCheats)
+            {
+                var tab = MakeGO("Cheated", row.transform);
+                Img(tab, Color.clear);
+                Rect(tab, RW - M, 0, M, h);
+                AttachTooltip(tab, "Recorded with DebugMod enabled.");
+
+                int markW = UIStyle.W(3);
+                int markH = h / 2;
+                var mark = MakeGO("Mark", tab.transform);
+                Img(mark, UIStyle.Subtext);
+                mark.GetComponent<Graphic>().raycastTarget = false;
+                Rect(mark, M - markW, (h - markH) / 2, markW, markH);
+            }
         }
 
         private static string ColorHex(Color c) =>

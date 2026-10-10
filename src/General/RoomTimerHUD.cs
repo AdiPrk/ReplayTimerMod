@@ -36,6 +36,8 @@ namespace ReplayTimerMod
             public string exitTo    = "";
 
             public float? entryPb;
+            public float? reentryPb;
+            public float? resultPb;
             public float  finishTime;
             public float? deltaVal;
             public bool   isNewPb;
@@ -214,6 +216,7 @@ namespace ReplayTimerMod
                 card.entryFrom   = entry;
                 card.exitTo      = "";
                 card.entryPb     = BestPBForEntry(scene, entry);
+                card.reentryPb   = ReentryPB(scene, entry);
                 card.liveDisplay = false;
             }
             else
@@ -421,6 +424,7 @@ namespace ReplayTimerMod
             card.entryFrom   = entryFrom;
             card.exitTo      = "";
             card.entryPb     = BestPBForEntry(scene, entryFrom);
+            card.reentryPb   = ReentryPB(scene, entryFrom);
             card.deltaVal    = null;
             card.isNewPb     = false;
             card.counts      = true;
@@ -437,14 +441,15 @@ namespace ReplayTimerMod
 
             bool backtrack = IsBacktrack(card.entryFrom, exitTo);
 
-            card.counts = !(backtrack
-                && (GhostSettings.SkipBacktrackTimer || GhostSettings.SkipBacktrackRuns));
-
             card.notSaved = backtrack && GhostSettings.SkipBacktrackRuns;
+            card.counts   = !card.notSaved;
+            card.resultPb = backtrack && GhostSettings.SkipBacktrackPlayback
+                ? card.reentryPb
+                : card.entryPb;
 
-            if (card.entryPb.HasValue)
+            if (card.resultPb.HasValue)
             {
-                card.deltaVal = time - card.entryPb.Value;
+                card.deltaVal = time - card.resultPb.Value;
                 card.isNewPb  = card.counts && card.deltaVal.Value < 0f;
             }
             else
@@ -503,7 +508,7 @@ namespace ReplayTimerMod
                 card.delta.color = UIStyle.Accent;
             }
 
-            float? displayPb = card.isNewPb ? card.finishTime : card.entryPb;
+            float? displayPb = card.isNewPb ? card.finishTime : card.resultPb;
             RefreshPbRow(card, displayPb, highlightGold: card.isNewPb);
 
             SetCardStatus(card, card.notSaved ? "not saved" : null);
@@ -752,9 +757,12 @@ namespace ReplayTimerMod
         private static bool IsBacktrack(string entryFrom, string exitTo)
             => !string.IsNullOrEmpty(entryFrom) && exitTo == entryFrom;
 
+        private static float? ReentryPB(string sceneName, string entryFromScene) =>
+            PBManager.GetPB(new RoomKey(sceneName, entryFromScene, entryFromScene))?.TotalTime;
+
         private static float? BestPBForEntry(string sceneName, string entryFromScene)
         {
-            bool hideBacktrack = GhostSettings.SkipBacktrackTimer;
+            bool hideBacktrack = GhostSettings.SkipBacktrackPlayback;
             float? best = null;
             foreach (var kvp in PBManager.AllPBs())
             {

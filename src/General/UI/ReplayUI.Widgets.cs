@@ -214,7 +214,7 @@ namespace ReplayTimerMod
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
             t.verticalOverflow = VerticalWrapMode.Truncate;
             t.text = text;
-            t.alignByGeometry = true;
+            t.alignByGeometry = anchor == TextAnchor.MiddleCenter;
 
             var rt = go.GetComponent<RectTransform>();
             if (fill)
@@ -279,29 +279,6 @@ namespace ReplayTimerMod
                 _playMarkerTex.Apply();
             }
             return _playMarkerTex;
-        }
-
-        private static Texture2D? _hazardStripeTex;
-
-        private static Texture2D HazardStripeTexture()
-        {
-            if (_hazardStripeTex == null)
-            {
-                const int n = 16;
-                _hazardStripeTex = new Texture2D(n, n, TextureFormat.RGBA32, false);
-                _hazardStripeTex.wrapMode = TextureWrapMode.Repeat;
-                var px = new Color[n * n];
-                for (int y = 0; y < n; y++)
-                    for (int x = 0; x < n; x++)
-                    {
-                        int t = (x + y) % n;
-                        float a = t < n / 2 ? Mathf.Clamp01(Mathf.Min(t + 1f, n / 2f - t)) : 0f;
-                        px[y * n + x] = new Color(1f, 1f, 1f, a);
-                    }
-                _hazardStripeTex.SetPixels(px);
-                _hazardStripeTex.Apply();
-            }
-            return _hazardStripeTex;
         }
 
         private static Texture2D? _cameraMarkerTex;

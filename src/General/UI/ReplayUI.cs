@@ -77,8 +77,10 @@ namespace ReplayTimerMod
         private Image? _skipRunsToggleBg;
         private Text? _cheatCancelToggleLbl;
         private Image? _cheatCancelToggleBg;
-        private Text? _skipTimerToggleLbl;
-        private Image? _skipTimerToggleBg;
+        private Text? _skipCheatedToggleLbl;
+        private Image? _skipCheatedToggleBg;
+        private Text? _skipGhostReentryToggleLbl;
+        private Image? _skipGhostReentryToggleBg;
         private Image? _cfgGhostColorFill;
         private Text? _cfgGhostAlphaLbl;
         private Text? _clearAllCfgLbl;

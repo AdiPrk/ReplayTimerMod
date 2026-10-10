@@ -20,10 +20,11 @@ namespace ReplayTimerMod
         public bool  SaveAllRunsEnabled      = false;
         public int   MaxSavedReplaysPerRoute = 5;
         public bool  TimerHudEnabled         = true;
-        public bool  ChainRoomTimers         = false;
+        public bool  ChainRoomTimers         = true;
         public bool  SkipBacktrackRuns       = false;
         public bool  SkipBacktrackTimer      = false;
         public bool  CancelRunOnCheats       = true;
+        public bool  SkipCheatedRuns         = false;
         public bool  ReeseEnabled            = false;
     }
 
@@ -110,7 +111,7 @@ namespace ReplayTimerMod
             set { _d.SkipBacktrackRuns = value; Save(); }
         }
 
-        public static bool SkipBacktrackTimer
+        public static bool SkipBacktrackPlayback
         {
             get => _d.SkipBacktrackTimer;
             set { _d.SkipBacktrackTimer = value; Save(); }
@@ -120,6 +121,12 @@ namespace ReplayTimerMod
         {
             get => _d.CancelRunOnCheats;
             set { _d.CancelRunOnCheats = value; Save(); }
+        }
+
+        public static bool SkipCheatedRuns
+        {
+            get => _d.SkipCheatedRuns;
+            set { _d.SkipCheatedRuns = value; Save(); }
         }
 
         public static void Init(string baseDirectory)

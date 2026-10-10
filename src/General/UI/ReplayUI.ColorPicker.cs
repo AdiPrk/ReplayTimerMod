@@ -38,6 +38,8 @@ namespace ReplayTimerMod
             new Color(0.40f, 0.85f, 0.40f),
             new Color(0.93f, 0.53f, 0.59f),
             new Color(0.75f, 0.55f, 1.00f),
+            new Color(1.00f, 0.67f, 0.35f),
+            new Color(1.00f, 0.92f, 0.47f),
         };
 
         private const float DefaultGhostAlpha = 0.4f;
@@ -47,6 +49,8 @@ namespace ReplayTimerMod
         private Text? _pickerContextLbl;
         private Text? _pickerAlphaValueLbl;
         private Image? _pickerPreviewFill;
+        private Image? _pickerPreviewAlphaFill;
+        private GameObject?[] _pickerPresetRings = new GameObject?[0];
         private RawImage? _pickerSVImg;
         private RawImage? _pickerAlphaImg;
         private RectTransform? _pickerSVRect;
@@ -254,7 +258,7 @@ namespace ReplayTimerMod
             if (_cfgGhostColorFill != null)
                 _cfgGhostColorFill.color = new Color(g.r, g.g, g.b, 1f);
             if (_cfgGhostAlphaLbl != null)
-                _cfgGhostAlphaLbl.text = "alpha " + g.a.ToString("0.00");
+                _cfgGhostAlphaLbl.text = OpacityText(g.a);
         }
 
         private void UpdatePickerVisuals()
@@ -281,10 +285,23 @@ namespace ReplayTimerMod
 
             if (_pickerPreviewFill != null)
                 _pickerPreviewFill.color = new Color(rgb.r, rgb.g, rgb.b, 1f);
+            if (_pickerPreviewAlphaFill != null)
+                _pickerPreviewAlphaFill.color = new Color(rgb.r, rgb.g, rgb.b, _pickerA);
 
             if (_pickerAlphaValueLbl != null)
-                _pickerAlphaValueLbl.text = _pickerA.ToString("0.00");
+                _pickerAlphaValueLbl.text = Mathf.RoundToInt(_pickerA * 100f) + "%";
+
+            for (int i = 0; i < _pickerPresetRings.Length; i++)
+            {
+                Color p = GhostColorPresets[i];
+                bool selected = Mathf.Abs(p.r - rgb.r) < 0.01f
+                    && Mathf.Abs(p.g - rgb.g) < 0.01f
+                    && Mathf.Abs(p.b - rgb.b) < 0.01f;
+                _pickerPresetRings[i]?.SetActive(selected);
+            }
         }
+
+        private static string OpacityText(float a) => Mathf.RoundToInt(a * 100f) + "% opacity";
 
         private const int SVTexSize = 48;
 
@@ -378,21 +395,24 @@ namespace ReplayTimerMod
 
             int hdrH = UIStyle.H(18);
             int closeW = UIStyle.W(44);
-            int prevS = hdrH;
+            int prevW = UIStyle.W(30);
 
             _pickerContextLbl = MakeLbl(_pickerGO.transform, "",
                 UIStyle.FontSizeTiny, UIStyle.Subtext, TextAnchor.MiddleLeft,
-                x: pad, y: y, w: innerW - prevS - closeW - UIStyle.Gap * 2,
+                x: pad, y: y, w: innerW - prevW - closeW - UIStyle.Gap * 2,
                 h: hdrH);
 
             var preview = MakeGO("Preview", _pickerGO.transform);
             Img(preview, UIStyle.Overlay with { a = 0.9f });
-            Rect(preview, pw - pad - closeW - UIStyle.Gap - prevS, y, prevS, hdrH);
-            var prevFill = MakeGO("Fill", preview.transform);
-            Img(prevFill, Color.white);
-            Rect(prevFill, 1, 1, prevS - 2, hdrH - 2);
-            prevFill.GetComponent<Graphic>().raycastTarget = false;
-            _pickerPreviewFill = prevFill.GetComponent<Image>();
+            Rect(preview, pw - pad - closeW - UIStyle.Gap - prevW, y, prevW, hdrH);
+            preview.GetComponent<Graphic>().raycastTarget = false;
+            int prevInW = prevW - 2, prevInH = hdrH - 2, halfW = prevInW / 2;
+            var prevChecker = MakeGO("Checker", preview.transform);
+            AddChecker(prevChecker, prevInW, prevInH);
+            Rect(prevChecker, 1, 1, prevInW, prevInH);
+            _pickerPreviewFill = AddPlainFill(preview.transform, "Solid", 1, 1, halfW, prevInH);
+            _pickerPreviewAlphaFill = AddPlainFill(preview.transform, "Alpha",
+                1 + halfW, 1, prevInW - halfW, prevInH);
 
             MakeButton(_pickerGO.transform, "Close", "Close",
                 UIStyle.FontSizeBtn, UIStyle.Text, UIStyle.Overlay with { a = 0.6f },
@@ -405,8 +425,7 @@ namespace ReplayTimerMod
                 OnPickerSV, CommitPickerColor);
             RegenSVTexture();
             _pickerSVImg.texture = _pickerSVTex;
-            _pickerSVHandle = MakePickerMarker(_pickerSVRect,
-                UIStyle.H(10), UIStyle.H(10));
+            _pickerSVHandle = MakePickerRing(_pickerSVRect, UIStyle.H(12));
             y += svH + UIStyle.H(8);
 
             int barH = UIStyle.H(12);
@@ -418,29 +437,44 @@ namespace ReplayTimerMod
                 UIStyle.W(5), barH + UIStyle.H(4));
             y += barH + UIStyle.H(8);
 
-            int alphaLblW = UIStyle.W(40);
+            int alphaLblW = UIStyle.W(32);
             int alphaBarW = innerW - alphaLblW - UIStyle.Gap;
             _pickerAlphaRect = AddPickerSurface(_pickerGO.transform, "Alpha",
                 pad, y, alphaBarW, barH, out _pickerAlphaImg,
-                OnPickerAlpha, CommitPickerColor);
+                OnPickerAlpha, CommitPickerColor, checker: true);
             _pickerAlphaImg.texture = EnsureAlphaTexture();
             _pickerAlphaHandle = MakePickerMarker(_pickerAlphaRect,
                 UIStyle.W(5), barH + UIStyle.H(4));
-            _pickerAlphaValueLbl = MakeLbl(_pickerGO.transform, "0.40",
+            _pickerAlphaValueLbl = MakeLbl(_pickerGO.transform, "40%",
                 UIStyle.FontSizeBtn, UIStyle.Text, TextAnchor.MiddleRight,
                 x: pad + alphaBarW + UIStyle.Gap, y: y,
                 w: alphaLblW, h: barH);
             y += barH + UIStyle.H(10);
 
-            int swS = UIStyle.H(16);
-            int swStep = (innerW - swS) / (GhostColorPresets.Length - 1);
-            for (int i = 0; i < GhostColorPresets.Length; i++)
+            int presetCount = GhostColorPresets.Length;
+            int swGap = UIStyle.W(6);
+            int swS = Mathf.Min(UIStyle.H(18), (innerW - swGap * (presetCount - 1)) / presetCount);
+            _pickerPresetRings = new GameObject?[presetCount];
+            for (int i = 0; i < presetCount; i++)
             {
                 Color c = GhostColorPresets[i];
+                int sx = pad + i * (swS + swGap);
+
+                var ring = MakeGO("Ring", _pickerGO.transform);
+                Img(ring, UIStyle.Text);
+                Rect(ring, sx - 3, y - 3, swS + 6, swS + 6);
+                ring.GetComponent<Graphic>().raycastTarget = false;
+                var ringGap = MakeGO("Gap", ring.transform);
+                Img(ringGap, UIStyle.Base);
+                Rect(ringGap, 1, 1, swS + 4, swS + 4);
+                ringGap.GetComponent<Graphic>().raycastTarget = false;
+                ring.SetActive(false);
+                _pickerPresetRings[i] = ring;
+
                 var sw = MakeGO("Preset", _pickerGO.transform);
                 Img(sw, UIStyle.Overlay with { a = 0.9f });
                 Btn(sw, () => OnPickerPreset(c));
-                Rect(sw, pad + i * swStep, y, swS, swS);
+                Rect(sw, sx, y, swS, swS);
                 var fill = MakeGO("Fill", sw.transform);
                 Img(fill, c);
                 Rect(fill, 1, 1, swS - 2, swS - 2);
@@ -468,7 +502,8 @@ namespace ReplayTimerMod
 
         private static RectTransform AddPickerSurface(Transform parent,
             string name, int x, int y, int w, int h, out RawImage img,
-            System.Action<float, float> onValue, System.Action onRelease)
+            System.Action<float, float> onValue, System.Action onRelease,
+            bool checker = false)
         {
             var border = MakeGO(name + "Border", parent);
             Img(border, UIStyle.Overlay with { a = 0.9f });
@@ -476,7 +511,10 @@ namespace ReplayTimerMod
             border.GetComponent<Graphic>().raycastTarget = false;
 
             var back = MakeGO("Back", border.transform);
-            Img(back, UIStyle.Base);
+            if (checker)
+                AddChecker(back, w - 2, h - 2);
+            else
+                Img(back, UIStyle.Base);
             Rect(back, 1, 1, w - 2, h - 2);
             back.GetComponent<Graphic>().raycastTarget = false;
 
@@ -489,6 +527,73 @@ namespace ReplayTimerMod
             drag.onRelease = () => onRelease();
 
             return surf.GetComponent<RectTransform>();
+        }
+
+        private static Image AddPlainFill(Transform parent, string name,
+            int x, int y, int w, int h)
+        {
+            var go = MakeGO(name, parent);
+            Img(go, Color.white);
+            Rect(go, x, y, w, h);
+            var img = go.GetComponent<Image>();
+            img.raycastTarget = false;
+            return img;
+        }
+
+        private static Texture2D? _checkerTex;
+
+        private static void AddChecker(GameObject go, float w, float h)
+        {
+            if (_checkerTex == null)
+            {
+                _checkerTex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                _checkerTex.wrapMode = TextureWrapMode.Repeat;
+                _checkerTex.filterMode = FilterMode.Point;
+                Color light = new Color(0.60f, 0.61f, 0.65f), dark = new Color(0.42f, 0.43f, 0.47f);
+                _checkerTex.SetPixels(new[] { light, dark, dark, light });
+                _checkerTex.Apply();
+            }
+            var img = go.AddComponent<RawImage>();
+            img.texture = _checkerTex;
+            img.raycastTarget = false;
+            float cells = UIStyle.H(4) * 2f;
+            img.uvRect = new UnityEngine.Rect(0f, 0f, w / cells, h / cells);
+        }
+
+        private static Texture2D? _pickerRingTex;
+
+        private static RectTransform MakePickerRing(Transform parent, float size)
+        {
+            if (_pickerRingTex == null)
+            {
+                const int n = 32;
+                const float r = n / 2f;
+                _pickerRingTex = new Texture2D(n, n, TextureFormat.RGBA32, true);
+                _pickerRingTex.wrapMode = TextureWrapMode.Clamp;
+                _pickerRingTex.filterMode = FilterMode.Trilinear;
+                var px = new Color[n * n];
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++)
+                    {
+                        float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(r, r));
+                        float light = Mathf.Clamp01(r - 3f - d) * Mathf.Clamp01(d - (r - 7f));
+                        Color c = Color.Lerp(UIStyle.Base, UIStyle.Text, light);
+                        c.a = Mathf.Clamp01(r - d) * Mathf.Clamp01(d - (r - 9f));
+                        px[y * n + x] = c;
+                    }
+                _pickerRingTex.SetPixels(px);
+                _pickerRingTex.Apply();
+            }
+
+            var go = MakeGO("Marker", parent);
+            var img = go.AddComponent<RawImage>();
+            img.texture = _pickerRingTex;
+            img.raycastTarget = false;
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = Vector2.zero;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(size, size);
+            return rt;
         }
 
         private static RectTransform MakePickerMarker(Transform parent,

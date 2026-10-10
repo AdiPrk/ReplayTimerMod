@@ -164,7 +164,14 @@ namespace ReplayTimerMod
                 return selected;
             }
 
-            var best = candidates[0];
+            var best = candidates.FirstOrDefault(s =>
+                !(GhostSettings.SkipCheatedRuns && s.UsedCheats)
+                && !(GhostSettings.SkipBacktrackPlayback && s.Key.IsReentry));
+            if (best == null)
+            {
+                Log.LogInfo($"[GhostPlayback] No eligible runs for {sceneName} <- {entryFromScene} - skipping");
+                return new List<ReplaySnapshot>();
+            }
             Log.LogInfo($"[GhostPlayback] Using fallback best PB {best.Key}#{best.SnapshotId} for {sceneName} <- {entryFromScene}");
             return new List<ReplaySnapshot> { best };
         }
