@@ -9,9 +9,7 @@ namespace ReplayTimerMod
     {
         Noclip,
         Invincible,
-        InfiniteHP,
         InfiniteSilk,
-        InfiniteTools,
         InfiniteJump,
         HeroColliderDisabled,
         TimeFrozen,
@@ -38,9 +36,7 @@ namespace ReplayTimerMod
 
         private static FieldInfo? _noclipField;
         private static FieldInfo? _invincibleField;
-        private static FieldInfo? _infiniteHpField;
         private static FieldInfo? _infiniteSilkField;
-        private static FieldInfo? _infiniteToolsField;
         private static FieldInfo? _heroColliderDisabledField;
 
         private static PropertyInfo? _customTimeScaleProp;
@@ -105,9 +101,7 @@ namespace ReplayTimerMod
                     {
                         _noclipField               = GetField(debugModType, "noclip");
                         _invincibleField           = GetField(debugModType, "playerInvincible");
-                        _infiniteHpField           = GetField(debugModType, "infiniteHP");
                         _infiniteSilkField         = GetField(debugModType, "infiniteSilk", "infiniteSoul");
-                        _infiniteToolsField        = GetField(debugModType, "infiniteTools");
                         _heroColliderDisabledField = GetField(debugModType, "heroColliderDisabled");
 
                         _hkFrozenField           = GetField(debugModType, "PauseGameNoUIActive");
@@ -218,9 +212,7 @@ namespace ReplayTimerMod
             {
                 if (GetBool(_noclipField)) return DebugAbilityKind.Noclip;
                 if (GetBool(_invincibleField)) return DebugAbilityKind.Invincible;
-                if (GetBool(_infiniteHpField)) return DebugAbilityKind.InfiniteHP;
                 if (GetBool(_infiniteSilkField)) return DebugAbilityKind.InfiniteSilk;
-                if (GetBool(_infiniteToolsField)) return DebugAbilityKind.InfiniteTools;
                 if (GetBool(_heroColliderDisabledField)) return DebugAbilityKind.HeroColliderDisabled;
 
                 if (IsTimeFrozen()) return DebugAbilityKind.TimeFrozen;

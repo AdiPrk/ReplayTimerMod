@@ -11,9 +11,7 @@ namespace ReplayTimerMod
             {
                 { DebugAbilityKind.Noclip,               "Run cancelled (noclip)" },
                 { DebugAbilityKind.Invincible,           "Run cancelled (invincibility)" },
-                { DebugAbilityKind.InfiniteHP,           "Run cancelled (inf hp)" },
                 { DebugAbilityKind.InfiniteSilk,         "Run cancelled (inf silk)" },
-                { DebugAbilityKind.InfiniteTools,        "Run cancelled (inf tools)" },
                 { DebugAbilityKind.InfiniteJump,         "Run cancelled (inf jump)" },
                 { DebugAbilityKind.HeroColliderDisabled, "Run cancelled (collider disabled)" },
                 { DebugAbilityKind.TimeFrozen,           "Run cancelled (timescale)" },
