@@ -1,318 +1,364 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 using BepInEx.Logging;
-using GlobalEnums;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace ReplayTimerMod
 {
+    public enum TabKind { Runs, Config }
+
     public partial class ReplayUI
     {
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("ReplayUI");
 
-        private const string GlobalSettingsContextText = "Edit: Global";
+        private bool _isSetup;
+        private bool _expanded;
+        private bool _rebuildPending;
+        private bool _wasPaused;
+        private bool _clearAllPending;
 
-        private bool isSetup = false;
-        private bool expanded = false;
-        private string? selectedScene = null;
-        private bool rebuildPending = false;
-        private bool wasPaused = false;
-        private bool clearAllPending = false;
+        private string? _selectedScene;
+        private string _searchFilter = "";
+        private TabKind _activeTab = TabKind.Runs;
+        private string? _deleteConfirmId;
+        private string? _routeClearConfirmKey;
+        private bool _sceneClearPending;
 
-        private RoomTimerHUD? timerHud;
+        private RoomTimerHUD? _timerHud;
 
-        private Image? clearAllBtnImg;
-        private Text? clearAllBtnLbl;
-        private Image? exportAllBtnImg;
-        private Text? exportAllBtnLbl;
-        private Image? downloadAllBtnImg;
-        private Text? downloadAllBtnLbl;
+        private GameObject _canvasGO = null!;
+        private GameObject _tabGO = null!;
+        private GameObject _panelGO = null!;
 
-        private GameObject? canvasGO;
-        private GameObject? tabGO;
-        private GameObject? panelGO;
+        private Transform _sceneListContent = null!;
+        private ScrollRect _sceneListScroll = null!;
+        private Text? _jumpCurrentLbl;
+        private Image? _jumpCurrentBg;
+        private Text? _jumpPreviousLbl;
+        private Image? _jumpPreviousBg;
 
-        private Transform? leftContent;
-        private Transform? rightContent;
-        private Text? rightHeader;          
-        private Text? pasteStatus;          
-        private ScrollRect? leftScrollRect;
+        private readonly Dictionary<TabKind, ButtonRef> _tabButtons =
+            new Dictionary<TabKind, ButtonRef>();
 
-        // Jump Buttons
-        private Text? jumpToCurrentBtnLbl;
-        private Image? jumpToCurrentBtnImg;
-        private Text? jumpToLastBtnLbl;
-        private Image? jumpToLastBtnImg;
+        private Text? _rightHeaderLbl;
+        private Text? _pasteStatusLbl;
+        private GameObject? _runsActionButtons;
+        private Text? _sceneClearLbl;
+        private Image? _sceneClearBg;
 
-        private int PW, PH;    
-        private int LW, RW;    
-        private int RH;        
-        private int M;         
-        private int TW, TH;    
-        private int HDR;       
-        private int SUBHDR;    
-        private int STGSH;     
+        private Transform? _rightContent;
 
-        private Text? ghostToggleLbl;
-        private Image? ghostToggleBtnImg;
-        private Text? alphaLbl;
-        private Text? trackingToggleLbl;
-        private Image? trackingToggleBtnImg;
-        private Text? savePolicyLbl;
-        private Image? savePolicyBtnImg;
-        private Text? maxSavedReplaysLbl;
-        private Text? settingsContextLbl;
-        private Image? settingsContextBtnImg;
-        
-        private Text? timerToggleLbl;
-        private Image? timerToggleBtnImg;
+        private ScrollRect? _rightScroll;
+        private ScrollRect? RightScroll
+        {
+            get
+            {
+                if (_rightScroll == null && _rightContent != null)
+                    _rightScroll = _rightContent.parent.parent.GetComponent<ScrollRect>();
+                return _rightScroll;
+            }
+        }
+
+        private Text? _ghostToggleLbl;
+        private Image? _ghostToggleBg;
+        private Text? _reeseToggleLbl;
+        private Image? _reeseToggleBg;
+        private Text? _trackingToggleLbl;
+        private Image? _trackingToggleBg;
+        private Text? _savePolicyLbl;
+        private Image? _savePolicyBg;
+        private Text? _maxSavedLbl;
+        private Text? _timerToggleLbl;
+        private Image? _timerToggleBg;
+        private Text? _chainToggleLbl;
+        private Image? _chainToggleBg;
+        private Text? _skipRunsToggleLbl;
+        private Image? _skipRunsToggleBg;
+        private Text? _cheatCancelToggleLbl;
+        private Image? _cheatCancelToggleBg;
+        private Text? _skipCheatedToggleLbl;
+        private Image? _skipCheatedToggleBg;
+        private Text? _skipGhostReentryToggleLbl;
+        private Image? _skipGhostReentryToggleBg;
+        private Image? _cfgGhostColorFill;
+        private Text? _cfgGhostAlphaLbl;
+        private Text? _clearAllCfgLbl;
+        private Image? _clearAllCfgBg;
+        private Text? _copyAllCfgLbl;
+        private Image? _copyAllCfgBg;
+
+        private int PW, PH, LW, RW, M, RH;
+
+        private TabKind _lastContentTab = (TabKind)(-1);
+        private string? _lastContentScene;
 
         public void Setup()
         {
             UIStyle.LoadFonts();
 
-            M = UIStyle.H(8);
-            RH = UIStyle.H(26);
-            TW = UIStyle.W(44);
-            TH = UIStyle.H(28);
-            HDR = UIStyle.H(34);
-            SUBHDR = UIStyle.H(28);
-            STGSH = UIStyle.H(64);
-            PW = UIStyle.W(680);
-            PH = UIStyle.H(576);
-            LW = UIStyle.W(200);
+            M = UIStyle.Margin;
+            RH = UIStyle.RowHeight;
+            PW = UIStyle.PanelWidth;
+            PH = UIStyle.PanelHeight;
+            LW = UIStyle.LeftWidth;
             RW = PW - LW - 1;
 
-            canvasGO = new GameObject("ReplayModCanvas");
-            UnityEngine.Object.DontDestroyOnLoad(canvasGO);
-            var canvas = canvasGO.AddComponent<Canvas>();
+            _canvasGO = new GameObject("ReplayModCanvas");
+            ScenePersistence.Apply(_canvasGO);
+            var canvas = _canvasGO.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 32767;
-            canvasGO.AddComponent<CanvasScaler>().uiScaleMode =
+            _canvasGO.AddComponent<CanvasScaler>().uiScaleMode =
                 CanvasScaler.ScaleMode.ConstantPixelSize;
-            canvasGO.AddComponent<GraphicRaycaster>();
-            canvasGO.SetActive(false);
+            _canvasGO.AddComponent<GraphicRaycaster>();
+            _canvasGO.SetActive(false);
 
             BuildTab();
             BuildPanel();
 
-            isSetup = true;
+            _isSetup = true;
             Log.LogInfo("[ReplayUI] Setup complete");
         }
 
-        public void SetTimerHUD(RoomTimerHUD hud)
-        {
-            timerHud = hud;
-        }
+        public void SetTimerHUD(RoomTimerHUD hud) => _timerHud = hud;
 
         public void Tick()
         {
-            if (!isSetup) return;
-            UnityEngine.Object.DontDestroyOnLoad(canvasGO);
+            if (!_isSetup) return;
 
-            bool paused = IsPaused();
-
-            if (paused && !wasPaused)
+            if (_canvasGO == null)
             {
-                canvasGO!.SetActive(true);
-                tabGO!.SetActive(true);
-                wasPaused = true;
-                
-                RefreshSettingsBar();
-                
-                // Keep data fresh if the panel was left open from last pause
-                if (expanded)
-                {
-                    RebuildLeft();
-                    if (selectedScene != null) RebuildRight(selectedScene);
-                }
+                Log.LogWarning("[ReplayUI] Canvas was destroyed externally - rebuilding");
+                _expanded = false;
+                _wasPaused = false;
+                _rebuildPending = false;
+                _rightScroll = null;
+                _lastContentTab = (TabKind)(-1);
+                _lastContentScene = null;
+                ClearConfigRefs();
+                Setup();
+                if (_canvasGO == null) return;
             }
 
-            if (!paused && wasPaused)
+            bool paused = GameUiState.IsPaused();
+
+            if (paused && !_wasPaused)
             {
-                canvasGO!.SetActive(false);
+                _canvasGO.SetActive(true);
+                _tabGO.SetActive(true);
+                _wasPaused = true;
+
+                if (_expanded)
+                    RefreshCurrentView();
+            }
+
+            if (!paused && _wasPaused)
+            {
+                _canvasGO.SetActive(false);
                 ResetClearAllConfirm();
-                wasPaused = false;
+                ClosePicker();
+                GhostSettings.Flush();
+                _wasPaused = false;
                 return;
             }
 
             if (!paused) return;
 
-            // Maintain visibility state
-            panelGO!.SetActive(expanded);
+            _panelGO.SetActive(_expanded);
 
-            if (expanded && rebuildPending)
+            if (_expanded && _rebuildPending)
             {
-                rebuildPending = false;
-                RebuildLeft();
-                if (selectedScene != null) RebuildRight(selectedScene);
+                _rebuildPending = false;
+                RefreshCurrentView();
             }
+
+            TickTooltip();
         }
 
-        private static bool IsPaused()
+        public void RefreshConfigTab()
         {
-            try
-            {
-                return GameManager.instance != null
-                    && GameManager.instance.ui != null
-                    && GameManager.instance.ui.uiState == UIState.PAUSED;
-            }
-            catch { return false; }
+            if (_activeTab == TabKind.Config)
+                RefreshConfigValues();
         }
 
-        public void OnPBUpdated() => rebuildPending = true;
+        public void OnPBUpdated() => _rebuildPending = true;
 
         private void TogglePanel()
         {
-            expanded = !expanded;
-            panelGO!.SetActive(expanded);
-            if (expanded)
-            {
-                RebuildLeft();
-                RefreshSettingsBar();
-            }
+            _expanded = !_expanded;
+            _panelGO.SetActive(_expanded);
+            _deleteConfirmId = null;
+            _routeClearConfirmKey = null;
+            ResetSceneClearConfirm();
+            ClosePicker();
+            if (_expanded)
+                RefreshCurrentView();
             else
                 ResetClearAllConfirm();
         }
 
-        private ReplaySelectionState? SelectionState => PBManager.SelectionState;
-        private string? SelectedSnapshotId => SelectionState?.SelectedSnapshotId;
-        private static Color CurrentGlobalGhostColor => GhostSettings.GhostColor;
-
-        private bool IsEditingSnapshot(out ReplaySnapshot? snapshot)
+        private void SwitchTab(TabKind tab)
         {
-            snapshot = null;
-            return TryGetSelectedSnapshot(out _, out snapshot);
+            if (_activeTab == tab) return;
+            _activeTab = tab;
+            _deleteConfirmId = null;
+            _routeClearConfirmKey = null;
+            ClosePicker();
+            UpdateTabBarVisuals();
+            UpdateRightSubHeader();
+            RebuildRightContent();
         }
 
-        private bool TryGetSelectedSnapshot(out RoomKey key, out ReplaySnapshot? snapshot)
+        private void UpdateTabBarVisuals()
         {
-            key = default;
-            snapshot = null;
-
-            string? snapshotId = SelectedSnapshotId;
-            if (string.IsNullOrEmpty(snapshotId)) return false;
-
-            foreach (var route in PBManager.AllHistories())
+            foreach (var kvp in _tabButtons)
             {
-                snapshot = PBManager.GetSnapshot(route.Key, snapshotId);
-                if (snapshot == null) continue;
-
-                key = route.Key;
-                return true;
+                bool active = kvp.Key == _activeTab;
+                kvp.Value.bg.color = active
+                    ? UIStyle.BtnBg(UIStyle.Accent)
+                    : Color.clear;
+                kvp.Value.label.color = active ? UIStyle.Accent : UIStyle.Subtext;
             }
-            return false;
         }
+
+        private void UpdateRightSubHeader()
+        {
+            if (_rightHeaderLbl == null) return;
+
+            switch (_activeTab)
+            {
+                case TabKind.Runs:
+                    _rightHeaderLbl.text = _selectedScene ?? "Select a room";
+                    _rightHeaderLbl.color = _selectedScene != null ? UIStyle.Text : UIStyle.Subtext;
+                    break;
+                case TabKind.Config:
+                    _rightHeaderLbl.text = "Settings";
+                    _rightHeaderLbl.color = UIStyle.Text;
+                    break;
+            }
+
+            if (_pasteStatusLbl != null)
+                _pasteStatusLbl.text = "";
+
+            if (_runsActionButtons != null)
+                _runsActionButtons.SetActive(_activeTab == TabKind.Runs);
+
+            ResetSceneClearConfirm();
+        }
+
+        private void ResetSceneClearConfirm()
+        {
+            _sceneClearPending = false;
+            if (_sceneClearLbl != null)
+            {
+                _sceneClearLbl.text = "Clear";
+                _sceneClearLbl.color = UIStyle.Red;
+            }
+            if (_sceneClearBg != null)
+                _sceneClearBg.color = UIStyle.BtnBgStrong(UIStyle.Red);
+        }
+
+        private void RefreshCurrentView()
+        {
+            RebuildSceneList();
+            UpdateTabBarVisuals();
+            UpdateRightSubHeader();
+            RebuildRightContent();
+        }
+
+        private void RebuildRightContent()
+        {
+            if (_rightContent == null) return;
+
+            bool sameView = _activeTab == _lastContentTab
+                && _selectedScene == _lastContentScene;
+            float keepOffset = 0f;
+            var scroll = RightScroll;
+            if (sameView && scroll != null)
+                keepOffset = ScrollOffsetFromTop(scroll);
+
+            ClearContentDetached(_rightContent);
+
+            ClearConfigRefs();
+
+            switch (_activeTab)
+            {
+                case TabKind.Runs:
+                    if (_selectedScene != null)
+                        BuildRunsContent(_selectedScene);
+                    else
+                        AddCenteredMessage(_rightContent, "Select a room to view runs.");
+                    break;
+
+                case TabKind.Config:
+                    BuildConfigContent();
+                    RefreshConfigValues();
+                    break;
+            }
+
+            ForceLayout(_rightContent);
+
+            if (scroll != null)
+            {
+                if (sameView)
+                    RestoreScrollOffsetFromTop(scroll, keepOffset);
+                else
+                    scroll.verticalNormalizedPosition = 1f;
+            }
+
+            _lastContentTab = _activeTab;
+            _lastContentScene = _selectedScene;
+        }
+
+        private void SelectScene(string scene)
+        {
+            _selectedScene = scene;
+            _deleteConfirmId = null;
+            _routeClearConfirmKey = null;
+            ClosePicker();
+
+            RebuildSceneList();
+            UpdateTabBarVisuals();
+            UpdateRightSubHeader();
+            RebuildRightContent();
+        }
+
+        private void ClearSelectedScene()
+        {
+            _selectedScene = null;
+            UpdateRightSubHeader();
+            if (_rightContent != null)
+            {
+                ClearContentDetached(_rightContent);
+                AddCenteredMessage(_rightContent, "Select a room to view runs.");
+                ForceLayout(_rightContent);
+            }
+        }
+
+        private static void ClearContentDetached(Transform t)
+        {
+            for (int i = t.childCount - 1; i >= 0; i--)
+            {
+                var child = t.GetChild(i);
+                child.SetParent(null, false);
+                Object.Destroy(child.gameObject);
+            }
+        }
+
+        private ReplaySelectionState? SelectionState => PBManager.SelectionState;
 
         private static Color GetResolvedSnapshotColor(ReplaySnapshot snapshot) =>
-            snapshot.ResolveGhostColor(CurrentGlobalGhostColor);
+            snapshot.ResolveGhostColor(GhostSettings.GhostColor);
 
-        private static string SavePolicyLabel() =>
-            GhostSettings.SaveAllRunsEnabled ? "Save all" : "PB only";
-
-        private static string MaxSavedReplaysString() =>
-            GhostSettings.MaxSavedReplaysPerRoute.ToString();
-
-        private void OnMaxSavedReplaysMinus() => AdjustMaxSavedReplays(-1);
-        private void OnMaxSavedReplaysPlus() => AdjustMaxSavedReplays(1);
-
-        private void AdjustMaxSavedReplays(int delta)
+        private static void AddCenteredMessage(Transform parent, string msg)
         {
-            GhostSettings.MaxSavedReplaysPerRoute += delta;
-            int newLimit = GhostSettings.MaxSavedReplaysPerRoute;
-            PBManager.PruneAllHistories(newLimit, persist: true);
-            RefreshSettingsBar();
-            if (selectedScene != null) RebuildRight(selectedScene);
-        }
-
-        private void RefreshSettingsBar()
-        {
-            if (trackingToggleLbl != null)
-            {
-                bool trackingEnabled = GhostSettings.TrackingEnabled;
-                trackingToggleLbl.text = trackingEnabled ? "ON" : "OFF";
-                trackingToggleLbl.color = trackingEnabled ? UIStyle.Accent : UIStyle.Red;
-                if (trackingToggleBtnImg != null)
-                    trackingToggleBtnImg.color = trackingEnabled
-                        ? UIStyle.Accent with { a = 0.22f }
-                        : UIStyle.Red with { a = 0.22f };
-            }
-
-            if (ghostToggleLbl != null)
-            {
-                bool ghostEnabled = GhostSettings.GhostEnabled;
-                ghostToggleLbl.text = ghostEnabled ? "ON" : "OFF";
-                ghostToggleLbl.color = ghostEnabled ? UIStyle.Accent : UIStyle.Subtext;
-                if (ghostToggleBtnImg != null)
-                    ghostToggleBtnImg.color = ghostEnabled
-                        ? UIStyle.Accent with { a = 0.22f }
-                        : UIStyle.Overlay;
-            }
-
-            if (savePolicyLbl != null)
-            {
-                bool saveAllRunsEnabled = GhostSettings.SaveAllRunsEnabled;
-                savePolicyLbl.text = SavePolicyLabel();
-                savePolicyLbl.color = saveAllRunsEnabled ? UIStyle.Accent : UIStyle.Gold;
-                if (savePolicyBtnImg != null)
-                    savePolicyBtnImg.color = saveAllRunsEnabled
-                        ? UIStyle.Accent with { a = 0.22f }
-                        : UIStyle.Gold with { a = 0.18f };
-            }
-
-            if (maxSavedReplaysLbl != null)
-                maxSavedReplaysLbl.text = MaxSavedReplaysString();
-
-            if (IsEditingSnapshot(out var snapshot))
-            {
-                if (settingsContextLbl != null)
-                {
-                    settingsContextLbl.text = FindSnapshotContextLabel(snapshot!);
-                    settingsContextLbl.color = UIStyle.Accent;
-                }
-                if (settingsContextBtnImg != null)
-                    settingsContextBtnImg.color = UIStyle.Accent with { a = 0.22f };
-                if (alphaLbl != null)
-                    alphaLbl.text = snapshot!.ResolveGhostColor(CurrentGlobalGhostColor).a.ToString("0.00");
-            }
-            else
-            {
-                if (settingsContextLbl != null)
-                {
-                    settingsContextLbl.text = GlobalSettingsContextText;
-                    settingsContextLbl.color = UIStyle.Text;
-                }
-                if (settingsContextBtnImg != null)
-                    settingsContextBtnImg.color = UIStyle.Overlay with { a = 0.55f };
-                if (alphaLbl != null)
-                    alphaLbl.text = AlphaString();
-            }
-
-            if (timerToggleLbl != null)
-            {
-                bool timerEnabled = GhostSettings.TimerHudEnabled;
-                timerToggleLbl.text = timerEnabled ? "ON" : "OFF";
-                timerToggleLbl.color = timerEnabled ? UIStyle.Accent : UIStyle.Subtext;
-                if (timerToggleBtnImg != null)
-                    timerToggleBtnImg.color = timerEnabled
-                        ? UIStyle.Accent with { a = 0.22f }
-                        : UIStyle.Overlay;
-            }
-        }
-
-        private string FindSnapshotContextLabel(ReplaySnapshot snapshot)
-        {
-            foreach (var route in PBManager.AllHistories())
-            {
-                for (int i = 0; i < route.Snapshots.Count; i++)
-                {
-                    if (route.Snapshots[i].SnapshotId == snapshot.SnapshotId)
-                        return $"Edit: {SnapshotLabel(route.Snapshots[i], i)}";
-                }
-            }
-            return "Edit: Snapshot";
+            var row = MakeGO("MsgRow", parent);
+            Img(row, Color.clear);
+            var le = row.AddComponent<LayoutElement>();
+            le.minHeight = le.preferredHeight = UIStyle.H(40);
+            MakeLbl(row.transform, msg, UIStyle.FontSizeSm,
+                UIStyle.Subtext, TextAnchor.MiddleCenter, fill: true);
         }
     }
 }

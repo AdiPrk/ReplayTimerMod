@@ -27,25 +27,20 @@ The ghost follows the route that matches your current entry and exit scene. If m
 
 ## Config
 
-Settings are saved to `BepInEx/config/io.github.adiprk.replaytimermod.cfg`
-
-```ini
-[Ghost]
-Enabled = true
-ColorR  = 1
-ColorG  = 1
-ColorB  = 1
-Alpha   = 0.4
-```
+Everything is configurable from the in-game panel (Config tab). Settings
+persist as `key=value` lines in `ReplayMod/settings.txt` next to the plugin
+DLL - there is no BepInEx `.cfg` file.
 
 ## Build for Hollow Knight
 
-This repository now includes a Hollow Knight build target:
+This repository includes two Hollow Knight build targets:
 
-- Project: `src/HollowKnight/ReplayTimerMod.HK.csproj`
-- Local path config: `.config/local/HollowKnightPath.props`
+- Projects: `src/HollowKnight/ReplayTimerMod.HK.1578.csproj` and
+  `src/HollowKnight/ReplayTimerMod.HK.1221.csproj`
+- Local path config: `.config/local/HollowKnightPath1578.props` /
+  `.config/local/HollowKnightPath1221.props`
 
-Steps for building 1221: (For 1578, replace all 1221 occurances with 1578)
+Steps for building 1221 (for 1578, replace all 1221 occurrences with 1578):
 
 1. Edit `.config/local/HollowKnightPath1221.props` to point at your HK install and `hollow_knight_Data/Managed` folder.
 2. Build with: `dotnet build src/HollowKnight/ReplayTimerMod.HK.1221.csproj -c Release`

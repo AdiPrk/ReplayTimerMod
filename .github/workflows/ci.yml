@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  dotnet-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Run unit tests
+        run: dotnet test tests/ReplayTimerMod.Tests/ReplayTimerMod.Tests.csproj -c Release --nologo
+
+  silksong-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Build Silksong plugin
+        run: dotnet build src/Silksong/ReplayTimerMod.SS.csproj -c Debug --nologo /p:SkipModPackaging=true

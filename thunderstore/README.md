@@ -1,39 +1,34 @@
 # ReplayTimerMod
 
-A BepInEx mod for Hollow Knight: Silksong that records your best time through each room and allows replaying it as a ghost.
+Times every room you pass through in Hollow Knight: Silksong and replays your best run through it as a ghost, so you can race yourself room by room.
 
 ## Features
 
-- Records Hornet's position and animation at 30fps per room, up to 180s.
-- Displays a ghost of your best run on subsequent attempts
-- Import/export replays and collections via clipboard or file
-- UI for managing replays and configuring the ghost
+- A timer for every room, with your PB and the difference shown as you exit.
+- A ghost of your best run through each room, matched to the door you came in and the door you leave by.
+- Pick any saved runs to play at once, and give each ghost its own color.
+- Warp to the start of any saved route.
+- Point the camera at a ghost to watch its route.
+- Copy or export runs to share them, and paste runs from others.
+- Runs that use DebugMod are cancelled by default, or kept and marked if you prefer.
+- Reese.
 
-Todo:
-- Website for improved sharing, visualizations, and more is still under works.
-- Triggers for starting/stopping/recording replays (like pink dot)
+## Usage
+
+Pause the game and click the menu icon (`≡`) in the bottom-left corner to open the panel. Pick a room on the left to see its runs; everything else is in the Config tab.
+
+Settings and runs are saved in a `ReplayMod` folder next to the plugin.
 
 ## Installation
 
-Drop the `ReplayTimerMod` folder from [releases](https://github.com/adiprk/replaytimermod/releases) into `BepInEx/plugins/`
+Install with a mod manager, or manually extract the zip into `BepInEx/plugins/ReplayTimerMod`.
 
-## UI
+### Switching from a manual install
 
-Open the panel in game by pausing and clicking the menu icon (`≡`) in the bottom-left corner.
+If you previously placed a manually downloaded copy in the same profile's `BepInEx/plugins` folder, the first launch after installing through a mod manager copies your runs and settings over automatically. Your old copy is left untouched.
 
-## Ghost behaviour
+Once you've checked your runs are there, delete the old manual folder; only one copy should be installed. If your runs didn't come across (for example, with more than one manual copy), close the game and copy the old folder's `ReplayMod` folder into `BepInEx/plugins/AdiPrk-ReplayTimerMod` yourself, replacing the one there.
 
-The ghost follows the route that matches your current entry and exit scene. If multiple routes exist for the same entry scene, the fastest one is shown.
+## Links
 
-## Config
-
-Settings are saved to `BepInEx/config/io.github.adiprk.replaytimermod.cfg`
-
-```ini
-[Ghost]
-Enabled = true
-ColorR  = 1
-ColorG  = 1
-ColorB  = 1
-Alpha   = 0.4
-```
+Source, issues and Hollow Knight builds: https://github.com/AdiPrk/ReplayTimerMod
