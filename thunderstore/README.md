@@ -1,3 +1,5 @@
+![ReplayTimerMod](https://raw.githubusercontent.com/AdiPrk/ReplayTimerMod/main/thunderstore/logo.png)
+
 # ReplayTimerMod
 
 Times every room you pass through in Hollow Knight: Silksong and replays your best run through it as a ghost, so you can race yourself room by room.
