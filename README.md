@@ -1,35 +1,26 @@
 # ReplayTimerMod
 
-A BepInEx mod for Hollow Knight: Silksong that records your best time through each room and allows replaying it as a ghost.
+A BepInEx mod for Hollow Knight and Silksong that records your best time through each room and allows replaying it as a ghost.
 
 ## Features
 
 - Records Hornet's position and animation at 30fps per room, up to 180s.
 - Displays a ghost of your best run on subsequent attempts
 - Import/export replays and collections via clipboard or file
-- UI for managing replays and configuring the ghost
+- UI for managing replays and settings
 
 Todo:
-- Website for improved sharing, visualizations, and more is still under works.
 - Triggers for starting/stopping/recording replays (like pink dot)
-
-## Installation
-
-Drop the `ReplayTimerMod` folder from [releases](https://github.com/adiprk/replaytimermod/releases) into `BepInEx/plugins/`
 
 ## UI
 
-Open the panel in game by pausing and clicking the menu icon (`≡`) in the bottom-left corner.
+Open the panel in game by pausing and clicking the **Replays** button in the bottom-left corner.
 
-## Ghost behaviour
+## Installation
 
-The ghost follows the route that matches your current entry and exit scene. If multiple routes exist for the same entry scene, the fastest one is shown.
+Use a mod manager such as Cogfly.
 
-## Config
-
-Everything is configurable from the in-game panel (Config tab). Settings
-persist as `key=value` lines in `ReplayMod/settings.txt` next to the plugin
-DLL - there is no BepInEx `.cfg` file.
+For manual installation, drop the `ReplayTimerMod` folder from [releases](https://github.com/adiprk/replaytimermod/releases) into `BepInEx/plugins/`
 
 ## Build for Hollow Knight
 
