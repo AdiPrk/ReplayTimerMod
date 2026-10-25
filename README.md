@@ -1,3 +1,5 @@
+![ReplayTimerMod](thunderstore/logo.png)
+
 # ReplayTimerMod
 
 A BepInEx mod for Hollow Knight and Silksong that records your best time through each room and allows replaying it as a ghost.
