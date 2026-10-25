@@ -23,8 +23,10 @@ namespace ReplayTimerMod
         private static Color RGB(int r, int g, int b) =>
             new Color(r / 255f, g / 255f, b / 255f);
 
-        public static int W(int px) => (int)(px * Screen.width / 1920f);
-        public static int H(int px) => (int)(px * Screen.height / 1080f);
+        private static float Scale => Mathf.Min(Screen.width / 1920f, Screen.height / 1080f);
+
+        public static int W(int px) => Mathf.RoundToInt(px * Scale);
+        public static int H(int px) => Mathf.RoundToInt(px * Scale);
 
         public static int PanelWidth => W(680);
         public static int PanelHeight => H(576);
@@ -33,7 +35,7 @@ namespace ReplayTimerMod
         public static int HeaderHeight => H(34);
         public static int SubHeaderHeight => H(28);
         public static int TabBarHeight => H(28);
-        public static int SearchBarHeight => H(26);
+        public static int SearchBarHeight => H(28);
         public static int FooterHeight => H(46);
 
         public static int Margin => W(6);

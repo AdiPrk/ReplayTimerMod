@@ -164,39 +164,34 @@ namespace ReplayTimerMod
 
             AddSectionHeader(_rightContent, "Data");
 
-            var dataRow1 = MakeGO("DataRow1", _rightContent);
-            Img(dataRow1, Color.clear);
-            var d1LE = dataRow1.AddComponent<LayoutElement>();
-            d1LE.minHeight = d1LE.preferredHeight = rowH;
-
             int dataBtnW = UIStyle.W(90);
             int dataY = (rowH - btnH) / 2;
             int dataX = UIStyle.W(8);
 
-            br = MakeButton(dataRow1.transform, "CopyAllCfg", "Copy all",
+            var dataRows = MakeGO("DataRows", _rightContent);
+            Img(dataRows, Color.clear);
+            var dataLE = dataRows.AddComponent<LayoutElement>();
+            dataLE.minHeight = dataLE.preferredHeight = dataY * 2 + btnH * 2 + gap;
+
+            br = MakeButton(dataRows.transform, "CopyAllCfg", "Copy all",
                 UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
                 dataX, dataY, dataBtnW, btnH, OnCopyAllClicked);
             _copyAllCfgBg = br.bg;
             _copyAllCfgLbl = br.label;
             dataX += dataBtnW + gap;
 
-            MakeButton(dataRow1.transform, "ExportAllCfg", "Export all",
+            MakeButton(dataRows.transform, "ExportAllCfg", "Export all",
                 UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
                 dataX, dataY, dataBtnW, btnH, OnExportAllClicked);
             dataX += dataBtnW + gap;
 
-            MakeButton(dataRow1.transform, "OpenExportsCfg", "Open exports",
+            MakeButton(dataRows.transform, "OpenExportsCfg", "Open exports",
                 UIStyle.FontSizeBtn, UIStyle.Text, UIStyle.Overlay with { a = 0.6f },
                 dataX, dataY, dataBtnW, btnH, OnOpenExportFolderClicked);
 
-            var dataRow2 = MakeGO("DataRow2", _rightContent);
-            Img(dataRow2, Color.clear);
-            var d2LE = dataRow2.AddComponent<LayoutElement>();
-            d2LE.minHeight = d2LE.preferredHeight = rowH;
-
-            br = MakeButton(dataRow2.transform, "ClearAllCfg", "Clear all data",
+            br = MakeButton(dataRows.transform, "ClearAllCfg", "Clear all data",
                 UIStyle.FontSizeBtn, UIStyle.Red, UIStyle.BtnBg(UIStyle.Red),
-                UIStyle.W(8), dataY, UIStyle.W(100), btnH, OnClearAllClicked);
+                UIStyle.W(8), dataY + btnH + gap, dataBtnW, btnH, OnClearAllClicked);
             _clearAllCfgBg = br.bg;
             _clearAllCfgLbl = br.label;
 

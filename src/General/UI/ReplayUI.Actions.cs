@@ -319,7 +319,7 @@ namespace ReplayTimerMod
 
         private void ResetJumpLatestFeedback()
         {
-            if (_jumpLatestLbl != null) { _jumpLatestLbl.text = "Latest run"; _jumpLatestLbl.color = UIStyle.Green; }
+            if (_jumpLatestLbl != null) { _jumpLatestLbl.text = "Last run"; _jumpLatestLbl.color = UIStyle.Green; }
             if (_jumpLatestBg != null) _jumpLatestBg.color = UIStyle.BtnBg(UIStyle.Green);
         }
 
