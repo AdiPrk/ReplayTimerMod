@@ -8,29 +8,6 @@ using BepInEx.Logging;
 
 namespace ReplayTimerMod
 {
-    // ── RTM3 format ───────────────────────────────────────────────────────────
-    // RecordedRoom -> RTM3 binary -> Deflate -> Base64.
-    //
-    // Binary layout (before Deflate):
-    //   [4]     magic "RTM3"
-    //   [1]     version = 0x02
-    //   [2+N]   sceneName       (uint16 length prefix + UTF-8)
-    //   [2+N]   entryFromScene
-    //   [2+N]   exitToScene
-    //   [4]     totalTime       float32
-    //   [4]     frameCount N    int32
-    //   [2+xL]  x 2nd-order SVLQ stream
-    //   [2+yL]  y 2nd-order SVLQ stream
-    //   [⌈N/8⌉] facing bitfield  MSB-first, 1 = facingRight
-    //   [1]     clipCount C     uint8  (0 = no animation data)
-    //   if C > 0:
-    //     C × [2+N]  clipName  (uint16 len + UTF-8)
-    //     [N]  clipIndex[]     uint8  (0xFF = no clip for this frame)
-    //     [N]  animFrame[]     uint8  (saturated at 255)
-    //
-    // SVLQ = ZigZag(n) -> ULEB128. See FrameCodec.cs.
-    // ─────────────────────────────────────────────────────────────────────────
-
     public static class ReplayShareEncoder
     {
         private static readonly ManualLogSource Log =
@@ -41,14 +18,16 @@ namespace ReplayTimerMod
 
         private const byte Version = 0x02;
 
-        // ── Public API ────────────────────────────────────────────────────────
+        private const int MaxFrames = 20000;
+
+        private const int MaxShareStringLength = 16 * 1024 * 1024;
 
         public static string Encode(RecordedRoom room)
         {
             byte[] binary = WriteBinary(room);
             byte[] compressed = Compress.CompressData(binary);
             string result = Convert.ToBase64String(compressed);
-            Log.LogInfo($"[RTM3] {room.Key}: {room.FrameCount} frames -> " +
+            Log.LogInfo($"[ShareEncoder] RTM3 {room.Key}: {room.FrameCount} frames -> " +
                         $"binary={binary.Length}B deflate={compressed.Length}B str={result.Length}ch");
             return result;
         }
@@ -66,8 +45,6 @@ namespace ReplayTimerMod
             }
         }
 
-        // ── Write ─────────────────────────────────────────────────────────────
-
         private static byte[] WriteBinary(RecordedRoom room)
         {
             int n = room.FrameCount;
@@ -75,8 +52,8 @@ namespace ReplayTimerMod
             byte[] yStream = FrameCodec.Encode2ndOrder(room.Frames, getX: false);
             int facingBytes = (n + 7) / 8;
 
-            // Build deduplicated clip table.
             var clipTable = new List<string>();
+            var clipLookup = new Dictionary<string, int>();
             var clipIndex = new byte[n];
             var animFrames = new byte[n];
             bool hasAnim = false;
@@ -91,9 +68,20 @@ namespace ReplayTimerMod
                 else
                 {
                     hasAnim = true;
-                    int idx = clipTable.IndexOf(clip);
-                    if (idx < 0) { idx = clipTable.Count; clipTable.Add(clip); }
-                    clipIndex[i] = (byte)Math.Min(idx, 254); // 0xFF reserved
+                    if (!clipLookup.TryGetValue(clip, out int idx))
+                    {
+                        if (clipTable.Count < 255)
+                        {
+                            idx = clipTable.Count;
+                            clipTable.Add(clip);
+                        }
+                        else
+                        {
+                            idx = 254;
+                        }
+                        clipLookup[clip] = idx;
+                    }
+                    clipIndex[i] = (byte)Math.Min(idx, 254);
                 }
                 animFrames[i] = (byte)Math.Min(room.Frames[i].animFrame, 255);
             }
@@ -136,8 +124,6 @@ namespace ReplayTimerMod
             return ms.ToArray();
         }
 
-        // ── Read ──────────────────────────────────────────────────────────────
-
         private static RecordedRoom ReadBinary(byte[] raw)
         {
             using var ms = new MemoryStream(raw);
@@ -156,6 +142,8 @@ namespace ReplayTimerMod
             string exitToScene = FrameCodec.ReadString(r);
             float totalTime = r.ReadSingle();
             int n = r.ReadInt32();
+            if (n < 0 || n > MaxFrames)
+                throw new Exception($"Implausible frame count: {n}");
 
             short[] xs = FrameCodec.Decode2ndOrder(r.ReadBytes(r.ReadUInt16()), n);
             short[] ys = FrameCodec.Decode2ndOrder(r.ReadBytes(r.ReadUInt16()), n);
@@ -201,17 +189,6 @@ namespace ReplayTimerMod
                 totalTime, frames);
         }
 
-        // ── Collection API ────────────────────────────────────────────────────
-        //
-        // RTMC1 binary layout (before Deflate):
-        //   [4]  magic "RTMC"
-        //   [1]  version = 0x01
-        //   [4]  count N   int32
-        //   N ×  [4] blobLength + RTM3 binary blob (uncompressed)
-        //
-        // The collection is Deflate-compressed as a whole, so repeated clips
-        // and similar motion patterns across rooms compress well together.
-
         private static readonly byte[] MagicCollection =
             { (byte)'R', (byte)'T', (byte)'M', (byte)'C' };
         private const byte VersionCollection = 0x01;
@@ -233,7 +210,7 @@ namespace ReplayTimerMod
                 }
             }
             string result = Convert.ToBase64String(Compress.CompressData(ms.ToArray()));
-            Log.LogInfo($"[RTMC1] Encoded {list.Count} rooms -> {result.Length} chars");
+            Log.LogInfo($"[ShareEncoder] RTMC1 encoded {list.Count} rooms -> {result.Length} chars");
             return result;
         }
 
@@ -245,13 +222,11 @@ namespace ReplayTimerMod
             }
             catch (Exception ex)
             {
-                Log.LogError($"[RTMC1] Decode failed: {ex.Message}");
+                Log.LogError($"[ShareEncoder] RTMC1 decode failed: {ex.Message}");
                 return null;
             }
         }
 
-        // Parses a decompressed RTMC byte array. Extracted so DecodeShareString
-        // can call it without going through base64 -> decompress again.
         private static List<RecordedRoom> ReadCollection(byte[] raw)
         {
             using var ms = new MemoryStream(raw);
@@ -277,22 +252,23 @@ namespace ReplayTimerMod
                 rooms.Add(ReadBinary(blob));
             }
 
-            Log.LogInfo($"[RTMC1] Decoded {rooms.Count} rooms");
+            Log.LogInfo($"[ShareEncoder] RTMC1 decoded {rooms.Count} rooms");
             return rooms;
         }
 
-        // Works for a single RTM3 string, a single RTMC string, and any number
-        // of either format concatenated (e.g. a .rtmc.txt file pasted as text,
-        // or two clipboard strings merged).
         public static List<RecordedRoom> DecodeShareString(string str)
         {
             var result = new List<RecordedRoom>();
 
+            if (str.Length > MaxShareStringLength)
+            {
+                Log.LogWarning("[ShareEncoder] Share string too large -- ignoring");
+                return result;
+            }
+
             string raw = Regex.Replace(str, @"\s+", "");
             if (raw.Length == 0) return result;
 
-            // Split after each padding '=' that is immediately followed by a
-            // base64 character. The lookbehind keeps the '=' with the blob before it.
             string[] chunks = Regex.Split(raw, @"(?<==)(?=[A-Za-z0-9+/])");
 
             foreach (string chunk in chunks)
@@ -331,7 +307,5 @@ namespace ReplayTimerMod
 
             return result;
         }
-
     }
 }
-

@@ -1,4 +1,9 @@
-﻿using System.Reflection;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Reflection;
+using BepInEx.Logging;
 using UnityEngine;
 
 namespace ReplayTimerMod
@@ -15,14 +20,25 @@ namespace ReplayTimerMod
         public bool  SaveAllRunsEnabled      = false;
         public int   MaxSavedReplaysPerRoute = 5;
         public bool  TimerHudEnabled         = true;
+        public bool  ChainRoomTimers         = true;
+        public bool  SkipBacktrackRuns       = false;
+        public bool  SkipBacktrackTimer      = false;
+        public bool  CancelRunOnCheats       = true;
+        public bool  SkipCheatedRuns         = false;
+        public bool  ReeseEnabled            = false;
     }
 
     public static class GhostSettings
     {
+        private static readonly ManualLogSource Log =
+            BepInEx.Logging.Logger.CreateLogSource("GhostSettings");
+
         private static string _filePath = "";
         private static readonly GhostSettingsData _d = new GhostSettingsData();
 
-        // ── Properties ────────────────────────────────────────────────────────
+        private const float MinSaveIntervalSec = 0.5f;
+        private static bool _dirty;
+        private static float _lastSaveRealtime = float.NegativeInfinity;
 
         public static bool TrackingEnabled
         {
@@ -34,6 +50,12 @@ namespace ReplayTimerMod
         {
             get => _d.GhostEnabled;
             set { _d.GhostEnabled = value; Save(); }
+        }
+
+        public static bool ReeseEnabled
+        {
+            get => _d.ReeseEnabled;
+            set { _d.ReeseEnabled = value; Save(); }
         }
 
         public static bool MultiReplayEnabled
@@ -57,13 +79,18 @@ namespace ReplayTimerMod
         public static Color GhostColor
         {
             get => new Color(_d.ColorR, _d.ColorG, _d.ColorB, _d.Alpha);
-            set { _d.ColorR = value.r; _d.ColorG = value.g; _d.ColorB = value.b; _d.Alpha = value.a; Save(); }
+            set
+            {
+                _d.ColorR = value.r; _d.ColorG = value.g; _d.ColorB = value.b;
+                _d.Alpha = value.a;
+                SaveThrottled();
+            }
         }
 
         public static float GhostAlpha
         {
             get => _d.Alpha;
-            set { _d.Alpha = Mathf.Clamp01(value); Save(); }
+            set { _d.Alpha = Mathf.Clamp01(value); SaveThrottled(); }
         }
 
         public static bool TimerHudEnabled
@@ -72,40 +99,83 @@ namespace ReplayTimerMod
             set { _d.TimerHudEnabled = value; Save(); }
         }
 
-        // ── Init ─────────────────────────────────────────────────────────────
+        public static bool ChainRoomTimers
+        {
+            get => _d.ChainRoomTimers;
+            set { _d.ChainRoomTimers = value; Save(); }
+        }
+
+        public static bool SkipBacktrackRuns
+        {
+            get => _d.SkipBacktrackRuns;
+            set { _d.SkipBacktrackRuns = value; Save(); }
+        }
+
+        public static bool SkipBacktrackPlayback
+        {
+            get => _d.SkipBacktrackTimer;
+            set { _d.SkipBacktrackTimer = value; Save(); }
+        }
+
+        public static bool CancelRunOnCheats
+        {
+            get => _d.CancelRunOnCheats;
+            set { _d.CancelRunOnCheats = value; Save(); }
+        }
+
+        public static bool SkipCheatedRuns
+        {
+            get => _d.SkipCheatedRuns;
+            set { _d.SkipCheatedRuns = value; Save(); }
+        }
 
         public static void Init(string baseDirectory)
         {
-            _filePath = System.IO.Path.Combine(
-                System.IO.Path.Combine(baseDirectory, "ReplayMod"), "settings.txt");
+            _filePath = Path.Combine(
+                Path.Combine(baseDirectory, "ReplayMod"), "settings.txt");
             Load();
         }
-
-        // ── Save / Load ───────────────────────────────────────────────────────
 
         public static void Save()
         {
             if (string.IsNullOrEmpty(_filePath)) return;
             try
             {
-                var lines = new System.Collections.Generic.List<string>();
+                var lines = new List<string>();
                 foreach (var f in typeof(GhostSettingsData).GetFields(BindingFlags.Public | BindingFlags.Instance))
-                    lines.Add($"{f.Name}={System.Convert.ToString(f.GetValue(_d), System.Globalization.CultureInfo.InvariantCulture)}");
-                System.IO.File.WriteAllLines(_filePath, lines.ToArray());
+                    lines.Add($"{f.Name}={Convert.ToString(f.GetValue(_d), CultureInfo.InvariantCulture)}");
+                File.WriteAllLines(_filePath, lines.ToArray());
+                _dirty = false;
+                _lastSaveRealtime = Time.realtimeSinceStartup;
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-                UnityEngine.Debug.LogError($"[GhostSettings] Save failed: {ex.Message}");
+                Log.LogError($"[GhostSettings] Save failed: {ex.Message}");
             }
+        }
+
+        private static void SaveThrottled()
+        {
+            if (Time.realtimeSinceStartup - _lastSaveRealtime >= MinSaveIntervalSec)
+            {
+                Save();
+                return;
+            }
+            _dirty = true;
+        }
+
+        public static void Flush()
+        {
+            if (_dirty) Save();
         }
 
         private static void Load()
         {
-            if (!System.IO.File.Exists(_filePath)) return;
+            if (!File.Exists(_filePath)) return;
             try
             {
                 var defaults = new GhostSettingsData();
-                foreach (string line in System.IO.File.ReadAllLines(_filePath))
+                foreach (string line in File.ReadAllLines(_filePath))
                 {
                     int sep = line.IndexOf('=');
                     if (sep < 0) continue;
@@ -117,22 +187,23 @@ namespace ReplayTimerMod
                     if (f == null) continue;
 
                     try { f.SetValue(_d, ParseField(f.FieldType, val, f.GetValue(defaults))); }
-                    catch { /* leave default */ }
+                    catch { }
                 }
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-                UnityEngine.Debug.LogError($"[GhostSettings] Load failed: {ex.Message}");
+                Log.LogError($"[GhostSettings] Load failed: {ex.Message}");
             }
         }
 
-        private static object ParseField(System.Type t, string val, object fallback)
+        private static object ParseField(Type t, string val, object fallback)
         {
             try
             {
-                if (t == typeof(bool))  return bool.Parse(val);
-                if (t == typeof(int))   return int.Parse(val, System.Globalization.CultureInfo.InvariantCulture);
-                if (t == typeof(float)) return float.Parse(val, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture);
+                if (t == typeof(bool))   return bool.Parse(val);
+                if (t == typeof(int))    return int.Parse(val, CultureInfo.InvariantCulture);
+                if (t == typeof(float))  return float.Parse(val, NumberStyles.Float, CultureInfo.InvariantCulture);
+                if (t == typeof(string)) return val;
             }
             catch { }
             return fallback;

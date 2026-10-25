@@ -10,6 +10,8 @@ namespace ReplayTimerMod
         public string? SelectedSnapshotId { get; private set; }
         public ICollection<string> PlaybackSnapshotIds => playbackSnapshotIds;
 
+        public string? CameraFollowSnapshotId { get; private set; }
+
         public void SelectSnapshot(string? snapshotId)
         {
             SelectedSnapshotId = string.IsNullOrEmpty(snapshotId)
@@ -43,6 +45,21 @@ namespace ReplayTimerMod
             return true;
         }
 
+        public bool ToggleCameraFollow(string snapshotId)
+        {
+            if (string.IsNullOrEmpty(snapshotId))
+                return false;
+
+            if (CameraFollowSnapshotId == snapshotId)
+            {
+                CameraFollowSnapshotId = null;
+                return false;
+            }
+
+            CameraFollowSnapshotId = snapshotId;
+            return true;
+        }
+
         public bool RemoveSnapshot(string snapshotId)
         {
             if (string.IsNullOrEmpty(snapshotId))
@@ -52,6 +69,11 @@ namespace ReplayTimerMod
             if (SelectedSnapshotId == snapshotId)
             {
                 SelectedSnapshotId = null;
+                changed = true;
+            }
+            if (CameraFollowSnapshotId == snapshotId)
+            {
+                CameraFollowSnapshotId = null;
                 changed = true;
             }
 
@@ -85,12 +107,19 @@ namespace ReplayTimerMod
                 removed++;
             }
 
+            if (CameraFollowSnapshotId != null && !validIds.Contains(CameraFollowSnapshotId))
+            {
+                CameraFollowSnapshotId = null;
+                removed++;
+            }
+
             return removed;
         }
 
         public void ClearAll()
         {
             SelectedSnapshotId = null;
+            CameraFollowSnapshotId = null;
             playbackSnapshotIds.Clear();
         }
 

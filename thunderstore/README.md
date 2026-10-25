@@ -1,39 +1,26 @@
+![ReplayTimerMod](https://raw.githubusercontent.com/AdiPrk/ReplayTimerMod/main/thunderstore/logo.png)
+
 # ReplayTimerMod
 
-A BepInEx mod for Hollow Knight: Silksong that records your best time through each room and allows replaying it as a ghost.
+Times every room you pass through in Hollow Knight: Silksong and replays your best run through it as a ghost, so you can race yourself room by room.
 
 ## Features
 
-- Records Hornet's position and animation at 30fps per room, up to 180s.
-- Displays a ghost of your best run on subsequent attempts
-- Import/export replays and collections via clipboard or file
-- UI for managing replays and configuring the ghost
+- A timer for every room, with your PB and the difference shown as you exit.
+- A ghost of your best run through each room, matched by entry/exit transitions.
+- Pick any saved runs to play at once, and give each ghost its own color.
+- Copy or export runs to share them, and paste runs from others.
+- Runs that use DebugMod cheats such as noclip/timescale are cancelled by default to avoid filling up replays with debug spam.
+- Reese?
 
-Todo:
-- Website for improved sharing, visualizations, and more is still under works.
-- Triggers for starting/stopping/recording replays (like pink dot)
+## Usage
+
+Pause the game and click the **Replays** button in the bottom-left corner to open the UI. Pick a room on the left to see its runs; everything else is in the Settings tab.
 
 ## Installation
 
-Drop the `ReplayTimerMod` folder from [releases](https://github.com/adiprk/replaytimermod/releases) into `BepInEx/plugins/`
+Install with a mod manager like Cogfly, or manually extract the zip into `BepInEx/plugins/ReplayTimerMod`.
 
-## UI
+## Links
 
-Open the panel in game by pausing and clicking the menu icon (`≡`) in the bottom-left corner.
-
-## Ghost behaviour
-
-The ghost follows the route that matches your current entry and exit scene. If multiple routes exist for the same entry scene, the fastest one is shown.
-
-## Config
-
-Settings are saved to `BepInEx/config/io.github.adiprk.replaytimermod.cfg`
-
-```ini
-[Ghost]
-Enabled = true
-ColorR  = 1
-ColorG  = 1
-ColorB  = 1
-Alpha   = 0.4
-```
+Source, issues and Hollow Knight builds: https://github.com/AdiPrk/ReplayTimerMod

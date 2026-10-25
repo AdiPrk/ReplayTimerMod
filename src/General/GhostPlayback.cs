@@ -5,32 +5,20 @@ using UnityEngine;
 
 namespace ReplayTimerMod
 {
-    // Plays back previously recorded runs as world-space ghosts.
-    //
-    // Lifecycle:
-    //   RoomTracker.OnRoomEnter  → StartPlayback(scene, entryFromScene)
-    //   LateUpdate               → Tick() advances playback in LR time
-    //   RoomTracker.OnRoomExit / OnRecordingDiscarded → StopPlayback()
-    //
-    // Sprite rendering:
-    //   We create sprite GOs inactive so tk2dSprite.Awake() fires after Collection
-    //   is assigned - this prevents the pink-rectangle bug.
-    //   Clip name → spriteId is resolved via a Dictionary built once at init so
-    //   the hot tick path is a single hash lookup, not GetClipByName().
     public class GhostPlayback
     {
         private static readonly ManualLogSource Log =
             BepInEx.Logging.Logger.CreateLogSource("GhostPlayback");
 
-        private readonly List<PlaybackInstance> activeInstances =
+        private readonly List<PlaybackInstance> _activeInstances =
             new List<PlaybackInstance>();
 
-        private Dictionary<string, tk2dSpriteAnimationClip>? clipCache;
-        private tk2dSpriteCollectionData? spriteCollection;
-        private int defaultSpriteId = -1;
-        private bool spriteInitDone = false;
-        private ReplaySelectionState? selectionState;
-        private bool playing = false;
+        private Dictionary<string, tk2dSpriteAnimationClip>? _clipCache;
+        private tk2dSpriteCollectionData? _spriteCollection;
+        private int _defaultSpriteId = -1;
+        private bool _spriteInitDone = false;
+        private ReplaySelectionState? _selectionState;
+        private bool _playing = false;
 
         private sealed class PlaybackInstance
         {
@@ -41,6 +29,10 @@ namespace ReplayTimerMod
             public GameObject? DiamondGo { get; set; }
             public LineRenderer? DiamondLine { get; set; }
             public Material? DiamondMat { get; set; }
+            public GameObject? AnchorGo { get; set; }
+            public GameObject? ReeseGo { get; set; }
+            public SpriteRenderer? Reese { get; set; }
+            public bool FacingRight { get; set; } = true;
 
             public RecordedRoom Room => Snapshot.Room;
 
@@ -50,14 +42,9 @@ namespace ReplayTimerMod
             }
         }
 
-        public void Setup()
-        {
-            Log.LogInfo("[Ghost] Setup complete");
-        }
-
         public void SetSelectionState(ReplaySelectionState? state)
         {
-            selectionState = state;
+            _selectionState = state;
         }
 
         public void StartPlayback(string sceneName, string entryFromScene)
@@ -70,7 +57,7 @@ namespace ReplayTimerMod
             var snapshots = SelectSnapshots(sceneName, entryFromScene);
             if (snapshots.Count == 0)
             {
-                Log.LogInfo($"[Ghost] No playback candidates for {sceneName} <- {entryFromScene}");
+                Log.LogInfo($"[GhostPlayback] No playback candidates for {sceneName} <- {entryFromScene}");
                 return;
             }
 
@@ -80,33 +67,31 @@ namespace ReplayTimerMod
             {
                 var instance = new PlaybackInstance(snapshot);
                 CreateVisuals(instance);
-                activeInstances.Add(instance);
+                _activeInstances.Add(instance);
             }
 
-            playing = activeInstances.Count > 0;
-            if (playing)
+            _playing = _activeInstances.Count > 0;
+            if (_playing)
             {
-                Log.LogInfo($"[Ghost] Playing {activeInstances.Count} snapshot(s) for {sceneName} <- {entryFromScene}");
+                Log.LogInfo($"[GhostPlayback] Playing {_activeInstances.Count} snapshot(s) for {sceneName} <- {entryFromScene}");
             }
         }
 
         public void StopPlayback()
         {
-            playing = false;
+            _playing = false;
 
-            foreach (var instance in activeInstances)
+            CameraFollow.SetTarget(null);
+
+            foreach (var instance in _activeInstances)
                 DestroyVisuals(instance);
 
-            activeInstances.Clear();
+            _activeInstances.Clear();
         }
 
-        // Accepts the pre-computed shouldTick value from the plugin so that
-        // LoadRemover.ShouldTick() is only called once per LateUpdate across
-        // all subsystems. Calling it multiple times per frame causes incorrect
-        // state transitions because it writes prevGameState on every call.
         public void Tick(bool shouldTick)
         {
-            if (!playing || activeInstances.Count == 0)
+            if (!_playing || _activeInstances.Count == 0)
                 return;
 
             if (!GhostSettings.GhostEnabled)
@@ -125,18 +110,43 @@ namespace ReplayTimerMod
                 : 0f;
             Color globalColor = GhostSettings.GhostColor;
 
-            for (int i = activeInstances.Count - 1; i >= 0; i--)
+            for (int i = _activeInstances.Count - 1; i >= 0; i--)
             {
-                var instance = activeInstances[i];
+                var instance = _activeInstances[i];
                 if (!TickInstance(instance, deltaTime, interval, z, globalColor))
                 {
                     DestroyVisuals(instance);
-                    activeInstances.RemoveAt(i);
+                    _activeInstances.RemoveAt(i);
                 }
             }
 
-            if (activeInstances.Count == 0)
-                playing = false;
+            if (_activeInstances.Count == 0)
+                _playing = false;
+
+            UpdateCameraFollow();
+        }
+
+        private void UpdateCameraFollow()
+        {
+            Transform? target = null;
+            bool facingRight = true;
+
+            string? followId = _selectionState?.CameraFollowSnapshotId;
+            if (!string.IsNullOrEmpty(followId))
+            {
+                foreach (var instance in _activeInstances)
+                {
+                    if (instance.Snapshot.SnapshotId != followId)
+                        continue;
+                    target = instance.AnchorGo != null
+                        ? instance.AnchorGo.transform
+                        : null;
+                    facingRight = instance.FacingRight;
+                    break;
+                }
+            }
+
+            CameraFollow.SetTarget(target, facingRight);
         }
 
         private List<ReplaySnapshot> SelectSnapshots(string sceneName, string entryFromScene)
@@ -146,16 +156,23 @@ namespace ReplayTimerMod
                 return new List<ReplaySnapshot>();
 
             var selected = candidates
-                .Where(snapshot => selectionState?.IsPlaybackSelected(snapshot.SnapshotId) == true)
+                .Where(snapshot => _selectionState?.IsPlaybackSelected(snapshot.SnapshotId) == true)
                 .ToList();
             if (selected.Count > 0)
             {
-                Log.LogInfo($"[Ghost] Using selected playback subset ({selected.Count}/{candidates.Count}) for {sceneName} <- {entryFromScene}");
+                Log.LogInfo($"[GhostPlayback] Using selected playback subset ({selected.Count}/{candidates.Count}) for {sceneName} <- {entryFromScene}");
                 return selected;
             }
 
-            var best = candidates[0];
-            Log.LogInfo($"[Ghost] Using fallback best PB {best.Key}#{best.SnapshotId} for {sceneName} <- {entryFromScene}");
+            var best = candidates.FirstOrDefault(s =>
+                !(GhostSettings.SkipCheatedRuns && s.UsedCheats)
+                && !(GhostSettings.SkipBacktrackPlayback && s.Key.IsReentry));
+            if (best == null)
+            {
+                Log.LogInfo($"[GhostPlayback] No eligible runs for {sceneName} <- {entryFromScene} - skipping");
+                return new List<ReplaySnapshot>();
+            }
+            Log.LogInfo($"[GhostPlayback] Using fallback best PB {best.Key}#{best.SnapshotId} for {sceneName} <- {entryFromScene}");
             return new List<ReplaySnapshot> { best };
         }
 
@@ -196,6 +213,15 @@ namespace ReplayTimerMod
             Vector3 pos = new Vector3(x, y, z);
             Color color = instance.Snapshot.ResolveGhostColor(globalColor);
 
+            if (instance.AnchorGo != null)
+                instance.AnchorGo.transform.position = pos;
+            instance.FacingRight = animFrame.facingRight;
+
+            if (GhostSettings.ReeseEnabled && RenderReese(instance, pos, animFrame.facingRight, color))
+                return;
+            if (instance.ReeseGo != null)
+                instance.ReeseGo.SetActive(false);
+
             if (!string.IsNullOrEmpty(animFrame.animClip) && instance.Sprite != null)
                 RenderSprite(instance, pos, animFrame, color);
             else
@@ -204,30 +230,30 @@ namespace ReplayTimerMod
 
         private void EnsureSpriteResources()
         {
-            if (spriteInitDone)
+            if (_spriteInitDone)
                 return;
-
-            spriteInitDone = true;
 
             try
             {
                 if (HeroController.instance == null)
                 {
-                    Log.LogWarning("[Ghost] HeroController null - using diamond");
+                    Log.LogWarning("[GhostPlayback] HeroController null - using diamond for now");
                     return;
                 }
+
+                _spriteInitDone = true;
 
                 var heroSprite = HeroController.instance.GetComponent<tk2dSprite>()
                     ?? HeroController.instance.GetComponentInChildren<tk2dSprite>();
                 if (heroSprite?.Collection == null)
                 {
-                    Log.LogWarning("[Ghost] No tk2dSprite/Collection on hero - using diamond");
+                    Log.LogWarning("[GhostPlayback] No tk2dSprite/Collection on hero - using diamond");
                     return;
                 }
 
-                spriteCollection = heroSprite.Collection;
-                defaultSpriteId = heroSprite.spriteId;
-                Log.LogInfo($"[Ghost] Sprite ready - collection='{heroSprite.Collection.name}'");
+                _spriteCollection = heroSprite.Collection;
+                _defaultSpriteId = heroSprite.spriteId;
+                Log.LogInfo($"[GhostPlayback] Sprite ready - collection='{heroSprite.Collection.name}'");
 
                 var heroAnim = heroSprite.GetComponent<tk2dSpriteAnimator>()
                     ?? heroSprite.GetComponentInParent<tk2dSpriteAnimator>()
@@ -236,37 +262,46 @@ namespace ReplayTimerMod
                     ?? HeroController.instance.GetComponentInChildren<tk2dSpriteAnimator>();
                 if (heroAnim?.Library != null)
                 {
-                    clipCache = new Dictionary<string, tk2dSpriteAnimationClip>(
+                    _clipCache = new Dictionary<string, tk2dSpriteAnimationClip>(
                         heroAnim.Library.clips.Length);
                     foreach (var clip in heroAnim.Library.clips)
                         if (!string.IsNullOrEmpty(clip.name))
-                            clipCache[clip.name] = clip;
-                    Log.LogInfo($"[Ghost] Clip cache: {clipCache.Count} clips");
+                            _clipCache[clip.name] = clip;
+                    Log.LogInfo($"[GhostPlayback] Clip cache: {_clipCache.Count} clips");
                 }
                 else
                 {
-                    Log.LogWarning("[Ghost] No animator library - sprite will show default frame");
+                    Log.LogWarning("[GhostPlayback] No animator library - sprite will show default frame");
                 }
             }
             catch (System.Exception ex)
             {
-                Log.LogWarning($"[Ghost] Sprite init failed: {ex.Message} - using diamond");
-                spriteCollection = null;
-                clipCache = null;
-                defaultSpriteId = -1;
+                Log.LogWarning($"[GhostPlayback] Sprite init failed: {ex.Message} - using diamond");
+                _spriteCollection = null;
+                _clipCache = null;
+                _defaultSpriteId = -1;
             }
         }
 
         private void CreateVisuals(PlaybackInstance instance)
         {
+            instance.AnchorGo = new GameObject($"ReplayGhost_Anchor_{instance.Snapshot.SnapshotId}");
+            ScenePersistence.Apply(instance.AnchorGo);
+
             instance.DiamondGo = new GameObject($"ReplayGhost_Diamond_{instance.Snapshot.SnapshotId}");
-            Object.DontDestroyOnLoad(instance.DiamondGo);
+            ScenePersistence.Apply(instance.DiamondGo);
             instance.DiamondGo.SetActive(false);
 
             var diamondLine = instance.DiamondGo.AddComponent<LineRenderer>();
             diamondLine.useWorldSpace = true;
+#if V1221
             diamondLine.SetVertexCount(5);
             diamondLine.SetWidth(0.06f, 0.06f);
+#else
+            diamondLine.positionCount = 5;
+            diamondLine.startWidth = 0.06f;
+            diamondLine.endWidth = 0.06f;
+#endif
             diamondLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             diamondLine.receiveShadows = false;
 
@@ -275,25 +310,25 @@ namespace ReplayTimerMod
             instance.DiamondLine = diamondLine;
             instance.DiamondMat = diamondMat;
 
-            if (spriteCollection == null || defaultSpriteId < 0)
+            if (_spriteCollection == null || _defaultSpriteId < 0)
                 return;
 
             try
             {
                 instance.SpriteGo = new GameObject($"ReplayGhost_Sprite_{instance.Snapshot.SnapshotId}");
                 instance.SpriteGo.SetActive(false);
-                Object.DontDestroyOnLoad(instance.SpriteGo);
+                ScenePersistence.Apply(instance.SpriteGo);
 
                 var sprite = instance.SpriteGo.AddComponent<tk2dSprite>();
-                sprite.Collection = spriteCollection;
-                sprite.spriteId = defaultSpriteId;
+                sprite.Collection = _spriteCollection;
+                sprite.spriteId = _defaultSpriteId;
                 instance.Sprite = sprite;
 
                 instance.SpriteGo.SetActive(true);
             }
             catch (System.Exception ex)
             {
-                Log.LogWarning($"[Ghost] Sprite instance init failed: {ex.Message} - using diamond");
+                Log.LogWarning($"[GhostPlayback] Sprite instance init failed: {ex.Message} - using diamond");
                 if (instance.SpriteGo != null)
                 {
                     Object.Destroy(instance.SpriteGo);
@@ -311,12 +346,42 @@ namespace ReplayTimerMod
                 Object.Destroy(instance.DiamondGo);
             if (instance.DiamondMat != null)
                 Object.Destroy(instance.DiamondMat);
+            if (instance.AnchorGo != null)
+                Object.Destroy(instance.AnchorGo);
+            if (instance.ReeseGo != null)
+                Object.Destroy(instance.ReeseGo);
 
             instance.SpriteGo = null;
             instance.Sprite = null;
             instance.DiamondGo = null;
             instance.DiamondLine = null;
             instance.DiamondMat = null;
+            instance.AnchorGo = null;
+            instance.ReeseGo = null;
+            instance.Reese = null;
+        }
+
+        private static bool RenderReese(PlaybackInstance instance, Vector3 pos,
+            bool facingRight, Color color)
+        {
+            if (instance.Reese == null)
+            {
+                Sprite? sprite = ReeseImages.Random();
+                if (sprite == null)
+                    return false;
+                instance.ReeseGo = new GameObject($"ReplayGhost_Reese_{instance.Snapshot.SnapshotId}");
+                ScenePersistence.Apply(instance.ReeseGo);
+                instance.Reese = instance.ReeseGo.AddComponent<SpriteRenderer>();
+                instance.Reese.sprite = sprite;
+            }
+
+            instance.Reese.color = color;
+            instance.ReeseGo!.transform.position = pos;
+            instance.ReeseGo.transform.localScale = new Vector3(facingRight ? 1f : -1f, 1f, 1f);
+            instance.ReeseGo.SetActive(true);
+            if (instance.SpriteGo != null) instance.SpriteGo.SetActive(false);
+            instance.DiamondGo?.SetActive(false);
+            return true;
         }
 
         private void RenderSprite(PlaybackInstance instance, Vector3 pos,
@@ -325,7 +390,7 @@ namespace ReplayTimerMod
             if (instance.Sprite == null || instance.SpriteGo == null)
                 return;
 
-            if (clipCache != null && clipCache.TryGetValue(fd.animClip, out var clip)
+            if (_clipCache != null && _clipCache.TryGetValue(fd.animClip, out var clip)
                 && clip.frames.Length > 0)
             {
                 instance.Sprite.spriteId = clip.frames[fd.animFrame % clip.frames.Length].spriteId;
@@ -347,7 +412,7 @@ namespace ReplayTimerMod
         private static void RenderDiamond(PlaybackInstance instance, Vector3 center,
             Color color)
         {
-            if (instance.SpriteGo != null) instance.SpriteGo?.SetActive(false);
+            if (instance.SpriteGo != null) instance.SpriteGo.SetActive(false);
             if (instance.DiamondGo == null || instance.DiamondLine == null)
                 return;
 

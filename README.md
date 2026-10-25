@@ -1,51 +1,39 @@
+![ReplayTimerMod](thunderstore/logo.png)
+
 # ReplayTimerMod
 
-A BepInEx mod for Hollow Knight: Silksong that records your best time through each room and allows replaying it as a ghost.
+A BepInEx mod for Hollow Knight and Silksong that records your best time through each room and allows replaying it as a ghost.
 
 ## Features
 
 - Records Hornet's position and animation at 30fps per room, up to 180s.
 - Displays a ghost of your best run on subsequent attempts
 - Import/export replays and collections via clipboard or file
-- UI for managing replays and configuring the ghost
+- UI for managing replays and settings
 
 Todo:
-- Website for improved sharing, visualizations, and more is still under works.
 - Triggers for starting/stopping/recording replays (like pink dot)
-
-## Installation
-
-Drop the `ReplayTimerMod` folder from [releases](https://github.com/adiprk/replaytimermod/releases) into `BepInEx/plugins/`
 
 ## UI
 
-Open the panel in game by pausing and clicking the menu icon (`≡`) in the bottom-left corner.
+Open the panel in game by pausing and clicking the **Replays** button in the bottom-left corner.
 
-## Ghost behaviour
+## Installation
 
-The ghost follows the route that matches your current entry and exit scene. If multiple routes exist for the same entry scene, the fastest one is shown.
+Use a mod manager such as Cogfly.
 
-## Config
-
-Settings are saved to `BepInEx/config/io.github.adiprk.replaytimermod.cfg`
-
-```ini
-[Ghost]
-Enabled = true
-ColorR  = 1
-ColorG  = 1
-ColorB  = 1
-Alpha   = 0.4
-```
+For manual installation, drop the `ReplayTimerMod` folder from [releases](https://github.com/adiprk/replaytimermod/releases) into `BepInEx/plugins/`
 
 ## Build for Hollow Knight
 
-This repository now includes a Hollow Knight build target:
+This repository includes two Hollow Knight build targets:
 
-- Project: `src/HollowKnight/ReplayTimerMod.HK.csproj`
-- Local path config: `.config/local/HollowKnightPath.props`
+- Projects: `src/HollowKnight/ReplayTimerMod.HK.1578.csproj` and
+  `src/HollowKnight/ReplayTimerMod.HK.1221.csproj`
+- Local path config: `.config/local/HollowKnightPath1578.props` /
+  `.config/local/HollowKnightPath1221.props`
 
-Steps for building 1221: (For 1578, replace all 1221 occurances with 1578)
+Steps for building 1221 (for 1578, replace all 1221 occurrences with 1578):
 
 1. Edit `.config/local/HollowKnightPath1221.props` to point at your HK install and `hollow_knight_Data/Managed` folder.
 2. Build with: `dotnet build src/HollowKnight/ReplayTimerMod.HK.1221.csproj -c Release`
