@@ -115,21 +115,28 @@ namespace ReplayTimerMod
             Rect(footer, 0, y, LW, h);
 
             int btnH = UIStyle.H(18);
-            int btnY = (h - btnH) / 2;
+            int rowGap = UIStyle.H(4);
+            int btnY = (h - btnH * 2 - rowGap) / 2;
             int gap = UIStyle.Gap;
             int btnW = (LW - M * 2 - gap) / 2;
 
-            var curRef = MakeButton(footer.transform, "JumpCurrent", "Current",
+            var curRef = MakeButton(footer.transform, "JumpCurrent", "Current room",
                 UIStyle.FontSizeBtn, UIStyle.Gold, UIStyle.BtnBg(UIStyle.Gold),
                 M, btnY, btnW, btnH, OnJumpToCurrentClicked);
             _jumpCurrentBg = curRef.bg;
             _jumpCurrentLbl = curRef.label;
 
-            var prevRef = MakeButton(footer.transform, "JumpPrevious", "Previous",
+            var prevRef = MakeButton(footer.transform, "JumpPrevious", "Previous room",
                 UIStyle.FontSizeBtn, UIStyle.Accent, UIStyle.BtnBg(UIStyle.Accent),
                 M + btnW + gap, btnY, btnW, btnH, OnJumpToLastClicked);
             _jumpPreviousBg = prevRef.bg;
             _jumpPreviousLbl = prevRef.label;
+
+            var latestRef = MakeButton(footer.transform, "JumpLatest", "Latest run",
+                UIStyle.FontSizeBtn, UIStyle.Green, UIStyle.BtnBg(UIStyle.Green),
+                M, btnY + btnH + rowGap, LW - M * 2, btnH, OnJumpToLatestClicked);
+            _jumpLatestBg = latestRef.bg;
+            _jumpLatestLbl = latestRef.label;
         }
 
         private void BuildTabBar(int y, int h)
@@ -146,7 +153,7 @@ namespace ReplayTimerMod
                 () => SwitchTab(TabKind.Runs));
             x += btnW;
 
-            _tabButtons[TabKind.Config] = AddTabButton(bar.transform, "Config", x, h, btnW,
+            _tabButtons[TabKind.Config] = AddTabButton(bar.transform, "Settings", x, h, btnW,
                 () => SwitchTab(TabKind.Config));
         }
 

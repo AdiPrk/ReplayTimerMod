@@ -16,13 +16,15 @@ namespace ReplayTimerMod
         private static readonly Dictionary<string, string> _map =
             new Dictionary<string, string>();
 
+        private static readonly bool Enabled = false;
+
         private static bool _loaded;
 
         public static bool IsWarping { get; private set; }
 
         public static void Init()
         {
-            if (_loaded) return;
+            if (_loaded || !Enabled) return;
             _loaded = true;
 
             const string resourceSuffix = "transitions.json";

@@ -34,7 +34,7 @@ namespace ReplayTimerMod
         public static int SubHeaderHeight => H(28);
         public static int TabBarHeight => H(28);
         public static int SearchBarHeight => H(26);
-        public static int FooterHeight => H(24);
+        public static int FooterHeight => H(46);
 
         public static int Margin => W(6);
 

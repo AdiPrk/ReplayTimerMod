@@ -83,6 +83,7 @@ namespace ReplayTimerMod
 
             ResetJumpFeedback();
             ResetJumpLastFeedback();
+            ResetJumpLatestFeedback();
         }
 
         private static void ShowButtonFeedback(Text? label, string msg, Color color)
@@ -237,7 +238,9 @@ namespace ReplayTimerMod
 
         private void ToggleSnapshotPlayback(RoomKey key, string snapshotId)
         {
-            SelectionState?.TogglePlayback(snapshotId);
+            if (SelectionState != null && !SelectionState.TogglePlayback(snapshotId)
+                && SelectionState.CameraFollowSnapshotId == snapshotId)
+                SelectionState.ToggleCameraFollow(snapshotId);
             if (_activeTab == TabKind.Runs && _selectedScene == key.SceneName)
                 RebuildRunsContentOnly();
         }
@@ -263,7 +266,7 @@ namespace ReplayTimerMod
             }
             if (!PBManager.AllPBs().Any(p => p.Key.SceneName == scene))
             {
-                ShowButtonFeedback(_jumpCurrentLbl, "No PB", UIStyle.Subtext);
+                ShowButtonFeedback(_jumpCurrentLbl, "No PB in room", UIStyle.Subtext);
                 return;
             }
 
@@ -284,7 +287,7 @@ namespace ReplayTimerMod
             }
             if (!PBManager.AllPBs().Any(p => p.Key.SceneName == scene))
             {
-                ShowButtonFeedback(_jumpPreviousLbl, "No PB", UIStyle.Subtext);
+                ShowButtonFeedback(_jumpPreviousLbl, "No PB in room", UIStyle.Subtext);
                 return;
             }
 
@@ -295,15 +298,40 @@ namespace ReplayTimerMod
             ScrollToScene(scene);
         }
 
+        private void OnJumpToLatestClicked()
+        {
+            var latest = PBManager.LatestSaved;
+            if (latest == null || PBManager.GetSnapshot(latest.Key, latest.SnapshotId) == null)
+            {
+                ShowButtonFeedback(_jumpLatestLbl, "None yet", UIStyle.Subtext);
+                return;
+            }
+
+            ResetJumpLatestFeedback();
+            _flashSnapshotId = latest.SnapshotId;
+            _flashStart = Time.unscaledTime;
+            if (_activeTab != TabKind.Runs)
+                SwitchTab(TabKind.Runs);
+            SelectScene(latest.Key.SceneName);
+            ScrollToScene(latest.Key.SceneName);
+            ScrollToFlashRow();
+        }
+
+        private void ResetJumpLatestFeedback()
+        {
+            if (_jumpLatestLbl != null) { _jumpLatestLbl.text = "Latest run"; _jumpLatestLbl.color = UIStyle.Green; }
+            if (_jumpLatestBg != null) _jumpLatestBg.color = UIStyle.BtnBg(UIStyle.Green);
+        }
+
         private void ResetJumpFeedback()
         {
-            if (_jumpCurrentLbl != null) { _jumpCurrentLbl.text = "Current"; _jumpCurrentLbl.color = UIStyle.Gold; }
+            if (_jumpCurrentLbl != null) { _jumpCurrentLbl.text = "Current room"; _jumpCurrentLbl.color = UIStyle.Gold; }
             if (_jumpCurrentBg != null) _jumpCurrentBg.color = UIStyle.BtnBg(UIStyle.Gold);
         }
 
         private void ResetJumpLastFeedback()
         {
-            if (_jumpPreviousLbl != null) { _jumpPreviousLbl.text = "Previous"; _jumpPreviousLbl.color = UIStyle.Accent; }
+            if (_jumpPreviousLbl != null) { _jumpPreviousLbl.text = "Previous room"; _jumpPreviousLbl.color = UIStyle.Accent; }
             if (_jumpPreviousBg != null) _jumpPreviousBg.color = UIStyle.BtnBg(UIStyle.Accent);
         }
 

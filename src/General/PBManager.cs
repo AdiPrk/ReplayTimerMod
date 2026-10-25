@@ -18,6 +18,8 @@ namespace ReplayTimerMod
 
         private static ReplaySelectionState? _selectionState;
 
+        public static ReplaySnapshot? LatestSaved { get; private set; }
+
         public static IEnumerable<KeyValuePair<RoomKey, RecordedRoom>> AllPBs() =>
             _currentPbs.Select(kvp =>
                 new KeyValuePair<RoomKey, RecordedRoom>(kvp.Key, kvp.Value.Room));
@@ -143,6 +145,7 @@ namespace ReplayTimerMod
                         return new EvaluationResult(ResultKind.DuplicateRun, newTime, existing.TotalTime, improvement);
                     }
 
+                    LatestSaved = snapshot;
                     Log.LogInfo($"[PBManager] New PB! {run.Key} {TimeUtil.Format(newTime)} " +
                                 $"(was {TimeUtil.Format(existing.TotalTime)}, -{TimeUtil.Format(improvement)})");
                     return new EvaluationResult(ResultKind.NewPB, newTime, existing.TotalTime, improvement);
@@ -161,6 +164,7 @@ namespace ReplayTimerMod
                     return new EvaluationResult(ResultKind.DuplicateRun, newTime, existing.TotalTime, delta);
                 }
 
+                LatestSaved = snapshot;
                 Log.LogInfo($"[PBManager] Saved history for {run.Key}: {TimeUtil.Format(newTime)} (+{TimeUtil.Format(delta)})");
                 return new EvaluationResult(ResultKind.SavedHistory, newTime, existing.TotalTime, delta);
             }
@@ -171,6 +175,7 @@ namespace ReplayTimerMod
                 return new EvaluationResult(ResultKind.DuplicateRun, newTime, null, null);
             }
 
+            LatestSaved = snapshot;
             Log.LogInfo($"[PBManager] First run for {run.Key}: {TimeUtil.Format(newTime)}");
             return new EvaluationResult(ResultKind.FirstRun, newTime, null, null);
         }

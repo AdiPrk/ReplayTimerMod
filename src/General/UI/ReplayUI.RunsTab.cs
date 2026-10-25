@@ -146,6 +146,8 @@ namespace ReplayTimerMod
             string rowSnapshotId = snapshot.SnapshotId;
             Btn(row, () => ToggleSnapshotPlayback(rowKey, rowSnapshotId));
             AddHoverEffect(row);
+            if (snapshot.SnapshotId == _flashSnapshotId)
+                AddFlash(row, h);
 
 
             int x = M;
@@ -231,9 +233,7 @@ namespace ReplayTimerMod
             RoomKey camKey = route.Key;
             Btn(camBtn, () => OnCameraFollowClicked(camKey, camId));
             AddButtonHover(camBtn);
-            AttachTooltip(camBtn, followOn
-                ? "Camera following this run"
-                : "Follow with camera. For full ghost visibility, use \"Deactivate Visual Masks\" in debug mod.");
+            AttachTooltip(camBtn, "Follow with camera. For full ghost visibility, use \"Deactivate Visual Masks\" in debug mod.");
 
             int timeX = cluster.AddTime(timeColW);
             MakeLbl(row.transform, TimeUtil.Format(snapshot.TotalTime),
@@ -263,6 +263,82 @@ namespace ReplayTimerMod
                 mark.GetComponent<Graphic>().raycastTarget = false;
                 Rect(mark, M - markW, (h - markH) / 2, markW, markH);
             }
+        }
+
+        private const float FlashDuration = 1.2f;
+        private const float FlashSweep = 0.7f;
+
+        private string? _flashSnapshotId;
+        private float _flashStart;
+        private Image? _flashTint;
+        private RectTransform? _flashBand;
+
+        private void AddFlash(GameObject row, int h)
+        {
+            var tint = MakeGO("Flash", row.transform);
+            Img(tint, Color.clear);
+            Rect(tint, 0, 0, RW, h);
+            _flashTint = tint.GetComponent<Image>();
+            _flashTint.raycastTarget = false;
+
+            var band = MakeGO("Sweep", tint.transform);
+            var bandImg = band.AddComponent<RawImage>();
+            bandImg.texture = SweepTexture();
+            bandImg.color = UIStyle.Accent with { a = 0.35f };
+            bandImg.raycastTarget = false;
+            Rect(band, 0, 0, RW * 0.35f, h);
+            _flashBand = band.GetComponent<RectTransform>();
+            TickFlash();
+        }
+
+        private void TickFlash()
+        {
+            if (_flashTint == null || _flashBand == null) return;
+
+            float t = (Time.unscaledTime - _flashStart) / FlashDuration;
+            if (t >= 1f)
+            {
+                Object.Destroy(_flashTint.gameObject);
+                _flashTint = null;
+                _flashSnapshotId = null;
+                return;
+            }
+
+            float fade = 1f - t;
+            _flashTint.color = UIStyle.Accent with { a = 0.16f * fade * fade };
+            float bandW = _flashBand.sizeDelta.x;
+            float sweep = Mathf.SmoothStep(0f, 1f, t * FlashDuration / FlashSweep);
+            _flashBand.anchoredPosition = new Vector2(
+                Mathf.Lerp(-bandW, RW, sweep), _flashBand.anchoredPosition.y);
+        }
+
+        private void ScrollToFlashRow()
+        {
+            var scroll = RightScroll;
+            if (scroll == null || _flashTint == null || _rightContent == null) return;
+
+            var row = _flashTint.transform.parent;
+            float rowTop = -_rightContent.InverseTransformPoint(row.position).y;
+            float viewportH = scroll.viewport != null ? scroll.viewport.rect.height : 0f;
+            RestoreScrollOffsetFromTop(scroll, rowTop - (viewportH - RH) / 2f);
+        }
+
+        private static Texture2D? _sweepTex;
+
+        private static Texture2D SweepTexture()
+        {
+            if (_sweepTex == null)
+            {
+                const int n = 32;
+                _sweepTex = new Texture2D(n, 1, TextureFormat.RGBA32, false);
+                _sweepTex.wrapMode = TextureWrapMode.Clamp;
+                var px = new Color[n];
+                for (int x = 0; x < n; x++)
+                    px[x] = new Color(1f, 1f, 1f, Mathf.Sin(Mathf.PI * (x + 0.5f) / n));
+                _sweepTex.SetPixels(px);
+                _sweepTex.Apply();
+            }
+            return _sweepTex;
         }
 
         private static string ColorHex(Color c) =>

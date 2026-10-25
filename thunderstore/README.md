@@ -7,7 +7,6 @@ Times every room you pass through in Hollow Knight: Silksong and replays your be
 - A timer for every room, with your PB and the difference shown as you exit.
 - A ghost of your best run through each room, matched to the door you came in and the door you leave by.
 - Pick any saved runs to play at once, and give each ghost its own color.
-- Warp to the start of any saved route.
 - Point the camera at a ghost to watch its route.
 - Copy or export runs to share them, and paste runs from others.
 - Runs that use DebugMod are cancelled by default, or kept and marked if you prefer.

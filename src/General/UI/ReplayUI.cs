@@ -37,6 +37,8 @@ namespace ReplayTimerMod
         private Image? _jumpCurrentBg;
         private Text? _jumpPreviousLbl;
         private Image? _jumpPreviousBg;
+        private Text? _jumpLatestLbl;
+        private Image? _jumpLatestBg;
 
         private readonly Dictionary<TabKind, ButtonRef> _tabButtons =
             new Dictionary<TabKind, ButtonRef>();
@@ -174,6 +176,7 @@ namespace ReplayTimerMod
             }
 
             TickTooltip();
+            TickFlash();
         }
 
         public void RefreshConfigTab()
